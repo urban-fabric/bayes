@@ -1,11 +1,12 @@
-//! Phase 6 — closed-form Bayesian layer + numerical-stability surface, exercised
-//! through the public crate API.
+//! Closed-form Bayesian layer and numerical-stability surface, exercised through
+//! the public crate API.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use bayes::{
     Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Conjugate, Continuous,
-    ContinuousCdf, Dirichlet, DirichletCategorical, Discrete, Ecdf, Exponential, ExponentialFamily,
-    Gamma, GammaPoisson, MeanVar, Mixture, Moments, Normal, NormalInverseGamma,
+    ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt, ContinuousFn, Dirichlet,
+    DirichletCategorical, Discrete, DiscreteDistributionExt, DiscreteFn, Ecdf, Exponential,
+    ExponentialFamily, Gamma, GammaPoisson, MeanVar, Mixture, Moments, Normal, NormalInverseGamma,
     NormalKnownVariance, Poisson, StudentT, SufficientStatistic, histogram,
 };
 
@@ -168,7 +169,7 @@ fn confidence_intervals_and_association_public_surface() {
 }
 
 #[test]
-fn phase6_distributions_round_trip() {
+fn public_distribution_surface_round_trips() {
     use bayes::{Frechet, Logistic, Lomax, Wald};
     let logi = Logistic::new(0.0, 1.0).unwrap();
     let lom = Lomax::new(3.0, 2.0).unwrap();
@@ -246,6 +247,42 @@ fn exponential_family_fit_and_streaming_merge_agree() {
     close(
         Poisson::fit(&[2u64, 4, 6, 0, 3]).unwrap().lambda(),
         3.0,
+        1e-12,
+    );
+}
+
+#[test]
+fn functional_distribution_adapters_are_public_and_composable() {
+    let unit = ContinuousFn::new(
+        0.0,
+        1.0,
+        |x| if (0.0..=1.0).contains(&x) { 1.0 } else { 0.0 },
+        |x: f64| x.clamp(0.0, 1.0),
+        |p: f64| p.clamp(0.0, 1.0),
+    )
+    .unwrap();
+
+    close(unit.ln_likelihood(&[0.1, 0.4, 0.9]), 0.0, 1e-12);
+    close(unit.probability_between(0.2, 0.7), 0.5, 1e-12);
+    close(unit.ln_probability_between(0.2, 0.7).exp(), 0.5, 1e-12);
+
+    let shifted = unit.affine(2.0, -1.0).unwrap();
+    close(shifted.pdf(0.0), 0.5, 1e-12);
+
+    let coin = DiscreteFn::new(
+        0u64,
+        1u64,
+        |k: u64| match k {
+            0 => 0.25,
+            1 => 0.75,
+            _ => 0.0,
+        },
+        |k: u64| if k == 0 { 0.25 } else { 1.0 },
+        |p: f64| if p <= 0.25 { 0 } else { 1 },
+    );
+    close(
+        coin.ln_likelihood(&[1, 1, 0]).exp(),
+        0.75 * 0.75 * 0.25,
         1e-12,
     );
 }

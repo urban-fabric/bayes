@@ -1,7 +1,7 @@
 //! Contingency-table tests: **χ² goodness-of-fit**, **χ² independence**, and
 //! **Fisher's exact** test.
 
-use super::{TestResult, chi2_upper, nan_result};
+use super::{TestResult, binomial_two_sided_p_value, chi2_upper, nan_result};
 use crate::function::factorial::ln_binomial;
 
 fn valid_table(table: &[Vec<f64>]) -> Option<(usize, usize)> {
@@ -104,6 +104,32 @@ pub fn fishers_exact(a: u64, b: u64, c: u64, d: u64) -> TestResult {
     }
 }
 
+/// Exact two-sided binomial test for `successes ~ Binomial(n, p0)`.
+pub fn binomial_test(successes: u64, n: u64, p0: f64) -> TestResult {
+    if successes > n || p0.is_nan() || !(0.0..=1.0).contains(&p0) {
+        return nan_result();
+    }
+    TestResult {
+        statistic: successes as f64,
+        p_value: binomial_two_sided_p_value(successes, n, p0),
+    }
+}
+
+/// McNemar's test for paired binary outcomes. Inputs are the discordant counts:
+/// `b` for `A=1,B=0` and `c` for `A=0,B=1`.
+pub fn mcnemar(b: u64, c: u64) -> TestResult {
+    let n = b + c;
+    if n == 0 {
+        return nan_result();
+    }
+    let diff = b.abs_diff(c) as f64;
+    let statistic = (diff - 1.0).max(0.0).powi(2) / n as f64;
+    TestResult {
+        statistic,
+        p_value: binomial_two_sided_p_value(b, n, 0.5),
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -160,5 +186,13 @@ mod tests {
                 .p_value
                 .is_nan()
         );
+    }
+
+    #[test]
+    fn exact_binomial_and_mcnemar_tests() {
+        assert!(binomial_test(9, 10, 0.5).p_value < 0.05);
+        assert!(binomial_test(5, 10, 0.5).p_value > 0.9);
+        assert!(mcnemar(12, 2).p_value < 0.05);
+        assert!(mcnemar(5, 5).p_value > 0.9);
     }
 }

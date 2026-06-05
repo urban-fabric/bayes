@@ -4,6 +4,8 @@
 //! absolute derivative of the *inverse* (the Jacobian term in the change of
 //! variables). All maps here are strictly monotone, so the density is well-defined.
 
+use crate::error::BayesError;
+
 /// A strictly monotone, invertible map `g: ℝ → S`.
 pub trait Bijector {
     /// `y = g(x)`.
@@ -23,8 +25,25 @@ pub struct Affine {
 }
 
 impl Affine {
-    pub fn new(scale: f64, shift: f64) -> Self {
-        Self { scale, shift }
+    pub fn new(scale: f64, shift: f64) -> Result<Self, BayesError> {
+        if !scale.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "scale",
+                value: scale,
+            });
+        }
+        if !shift.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "shift",
+                value: shift,
+            });
+        }
+        if scale == 0.0 {
+            return Err(BayesError::Malformed {
+                what: "affine scale must be non-zero",
+            });
+        }
+        Ok(Self { scale, shift })
     }
 }
 
@@ -92,9 +111,16 @@ mod tests {
 
     #[test]
     fn bijectors_round_trip() {
-        round_trips(&Affine::new(2.0, -1.0), 3.3);
+        round_trips(&Affine::new(2.0, -1.0).unwrap(), 3.3);
         round_trips(&Exp, 1.7);
         round_trips(&Sigmoid, -0.8);
+    }
+
+    #[test]
+    fn affine_rejects_noninvertible_or_nonfinite_parameters() {
+        assert!(Affine::new(0.0, 0.0).is_err());
+        assert!(Affine::new(f64::NAN, 0.0).is_err());
+        assert!(Affine::new(1.0, f64::INFINITY).is_err());
     }
 
     #[test]

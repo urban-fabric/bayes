@@ -45,6 +45,25 @@ pub fn ln_sum_exp(xs: &[f64]) -> f64 {
     max + sum.ln()
 }
 
+/// `ln(eᵃ − eᵇ)`, stable when `a ≥ b`.
+///
+/// Returns `NaN` if `a < b`, and `-∞` when the two terms are exactly equal.
+pub fn ln_sub_exp(a: f64, b: f64) -> f64 {
+    if a < b {
+        return f64::NAN;
+    }
+    if a == b {
+        return f64::NEG_INFINITY;
+    }
+    if b == f64::NEG_INFINITY {
+        return a;
+    }
+    if a == f64::INFINITY {
+        return f64::INFINITY;
+    }
+    a + ln_1m_exp(b - a)
+}
+
 /// Softplus `ln(1 + eˣ)`, accurate and overflow-free across the whole range
 /// (Mächler's branch points).
 pub fn ln_1p_exp(x: f64) -> f64 {
@@ -135,6 +154,18 @@ mod tests {
     fn ln_add_exp_basic() {
         close(ln_add_exp(0.0, 0.0), 2.0_f64.ln(), 1e-12);
         assert_eq!(ln_add_exp(3.0, f64::NEG_INFINITY), 3.0);
+    }
+
+    #[test]
+    fn ln_sub_exp_basic() {
+        close(
+            ln_sub_exp(2.0, 1.0).exp(),
+            2.0_f64.exp() - 1.0_f64.exp(),
+            1e-12,
+        );
+        assert_eq!(ln_sub_exp(3.0, f64::NEG_INFINITY), 3.0);
+        assert_eq!(ln_sub_exp(3.0, 3.0), f64::NEG_INFINITY);
+        assert!(ln_sub_exp(1.0, 2.0).is_nan());
     }
 
     #[test]

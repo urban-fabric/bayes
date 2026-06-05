@@ -6,6 +6,11 @@
 //! maps back, correcting the density by the transform's log-Jacobian. The maps here
 //! are the standard ones (exp for positive, logit/sigmoid for bounded). All
 //! closed-form — in scope per the dividing principle.
+//!
+//! Support membership and smooth reparameterization are not identical. Closed
+//! boundaries such as `0` for [`Constraint::NonNegative`] are valid support points,
+//! but the smooth unconstraining map uses the positive interior and reaches the
+//! boundary only at an infinite unconstrained coordinate.
 
 /// The domain of a scalar random variable.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -14,7 +19,7 @@ pub enum Constraint {
     Real,
     /// `(0, ∞)`.
     Positive,
-    /// `[0, ∞)`.
+    /// `[0, ∞)`. The smooth unconstraining map uses the positive interior.
     NonNegative,
     /// `(0, 1)`.
     UnitInterval,
@@ -41,35 +46,59 @@ impl Constraint {
         }
     }
 
+    /// Whether this constraint has a smooth continuous map to and from
+    /// unconstrained real coordinates.
+    pub fn has_continuous_transform(&self) -> bool {
+        !matches!(self, Constraint::Integer)
+    }
+
+    /// Whether `x` is a finite, interior point where the smooth unconstraining map
+    /// is defined. For closed supports, this is narrower than [`contains`](Self::contains).
+    pub fn contains_interior(&self, x: f64) -> bool {
+        match *self {
+            Constraint::Real => x.is_finite(),
+            Constraint::Positive | Constraint::NonNegative => x > 0.0,
+            Constraint::UnitInterval => x > 0.0 && x < 1.0,
+            Constraint::Interval { lo, hi } => x > lo && x < hi,
+            Constraint::Integer => false,
+        }
+    }
+
     /// Map a constrained value to **unconstrained ℝ** (the inverse of
-    /// [`to_constrained`](Self::to_constrained)).
+    /// [`to_constrained`](Self::to_constrained)) for constraints with a continuous
+    /// transform. Boundary support points map to infinities; discrete constraints
+    /// return `NaN`.
     pub fn to_unconstrained(&self, x: f64) -> f64 {
         match *self {
-            Constraint::Real | Constraint::Integer => x,
+            Constraint::Real => x,
             Constraint::Positive | Constraint::NonNegative => x.ln(),
             Constraint::UnitInterval => (x / (1.0 - x)).ln(),
             Constraint::Interval { lo, hi } => {
                 let u = (x - lo) / (hi - lo);
                 (u / (1.0 - u)).ln()
             }
+            Constraint::Integer => f64::NAN,
         }
     }
 
-    /// Map an unconstrained `y ∈ ℝ` into the constrained domain.
+    /// Map an unconstrained `y ∈ ℝ` into the constrained domain for constraints
+    /// with a continuous transform. Discrete constraints return `NaN`.
     pub fn to_constrained(&self, y: f64) -> f64 {
         match *self {
-            Constraint::Real | Constraint::Integer => y,
+            Constraint::Real => y,
             Constraint::Positive | Constraint::NonNegative => y.exp(),
             Constraint::UnitInterval => sigmoid(y),
             Constraint::Interval { lo, hi } => lo + (hi - lo) * sigmoid(y),
+            Constraint::Integer => f64::NAN,
         }
     }
 
     /// `ln |d to_constrained(y) / dy|` — the Jacobian correction for transforming a
-    /// density between constrained and unconstrained space.
+    /// density between constrained and unconstrained space. Discrete constraints
+    /// return `NaN`.
     pub fn log_abs_det_jacobian(&self, y: f64) -> f64 {
         match *self {
-            Constraint::Real | Constraint::Integer => 0.0,
+            Constraint::Real => 0.0,
             // d exp(y)/dy = exp(y) ⇒ ln = y.
             Constraint::Positive | Constraint::NonNegative => y,
             // d σ(y)/dy = σ(1-σ).
@@ -81,6 +110,7 @@ impl Constraint {
                 let s = sigmoid(y);
                 (hi - lo).ln() + (s * (1.0 - s)).ln()
             }
+            Constraint::Integer => f64::NAN,
         }
     }
 }
@@ -104,6 +134,7 @@ mod tests {
     fn membership() {
         assert!(Constraint::Positive.contains(2.0));
         assert!(!Constraint::Positive.contains(0.0));
+        assert!(Constraint::NonNegative.contains(0.0));
         assert!(Constraint::UnitInterval.contains(0.5));
         assert!(!Constraint::UnitInterval.contains(1.0));
         assert!(Constraint::Integer.contains(3.0));
@@ -112,20 +143,49 @@ mod tests {
     }
 
     #[test]
+    fn continuous_transform_metadata_distinguishes_boundaries_and_discrete_supports() {
+        assert!(Constraint::NonNegative.has_continuous_transform());
+        assert!(Constraint::NonNegative.contains(0.0));
+        assert!(!Constraint::NonNegative.contains_interior(0.0));
+        assert!(Constraint::NonNegative.contains_interior(1.0));
+        assert!(!Constraint::Integer.has_continuous_transform());
+        assert!(!Constraint::Integer.contains_interior(3.0));
+    }
+
+    #[test]
     fn transforms_round_trip_into_the_domain() {
         let cases = [
             Constraint::Real,
             Constraint::Positive,
+            Constraint::NonNegative,
             Constraint::UnitInterval,
             Constraint::Interval { lo: -2.0, hi: 5.0 },
         ];
         for c in cases {
             for &y in &[-3.0, -0.5, 0.0, 1.2, 4.0] {
                 let x = c.to_constrained(y);
-                assert!(c.contains(x), "{c:?}: to_constrained({y})={x} not in domain");
+                assert!(
+                    c.contains(x),
+                    "{c:?}: to_constrained({y})={x} not in domain"
+                );
                 close(c.to_unconstrained(x), y, 1e-9); // round trips
             }
         }
+    }
+
+    #[test]
+    fn nonnegative_boundary_maps_to_infinite_unconstrained_coordinate() {
+        assert_eq!(
+            Constraint::NonNegative.to_unconstrained(0.0),
+            f64::NEG_INFINITY
+        );
+    }
+
+    #[test]
+    fn integer_constraints_do_not_claim_a_continuous_transform() {
+        assert!(Constraint::Integer.to_unconstrained(3.0).is_nan());
+        assert!(Constraint::Integer.to_constrained(3.0).is_nan());
+        assert!(Constraint::Integer.log_abs_det_jacobian(3.0).is_nan());
     }
 
     #[test]

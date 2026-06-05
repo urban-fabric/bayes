@@ -1,7 +1,7 @@
 //! Rank-based non-parametric tests: **Mann–Whitney U** (independent samples) and
 //! **Wilcoxon signed-rank** (paired samples).
 
-use super::{TestResult, nan_result, z_two_sided};
+use super::{TestResult, binomial_two_sided_p_value, nan_result, z_two_sided};
 use crate::statistics::ranks;
 
 /// **Mann–Whitney U** test (rank-sum) for whether two samples come from the same
@@ -72,6 +72,31 @@ pub fn wilcoxon_signed_rank(a: &[f64], b: &[f64]) -> TestResult {
     }
 }
 
+/// Exact two-sided sign test for paired samples, dropping zero differences.
+pub fn sign_test(a: &[f64], b: &[f64]) -> TestResult {
+    if a.len() != b.len() || a.is_empty() {
+        return nan_result();
+    }
+    let mut positive = 0u64;
+    let mut nonzero = 0u64;
+    for (&x, &y) in a.iter().zip(b) {
+        let d = x - y;
+        if d > 0.0 {
+            positive += 1;
+            nonzero += 1;
+        } else if d < 0.0 {
+            nonzero += 1;
+        }
+    }
+    if nonzero == 0 {
+        return nan_result();
+    }
+    TestResult {
+        statistic: positive as f64,
+        p_value: binomial_two_sided_p_value(positive, nonzero, 0.5),
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -91,5 +116,13 @@ mod tests {
         assert!(wilcoxon_signed_rank(&a, &b).p_value < 0.05);
         // Identical samples ⇒ all-zero diffs ⇒ NaN (no signed ranks).
         assert!(wilcoxon_signed_rank(&a, &a).p_value.is_nan());
+    }
+
+    #[test]
+    fn sign_test_uses_exact_binomial_tail() {
+        let a = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0];
+        let b = [8.0, 9.0, 10.0, 11.0, 12.0, 13.0];
+        assert!(sign_test(&a, &b).p_value < 0.05);
+        assert!(sign_test(&a, &a).p_value.is_nan());
     }
 }

@@ -76,6 +76,31 @@ pub fn median_abs_deviation(data: &[f64]) -> f64 {
     median(&dev)
 }
 
+/// Tukey outlier fences `(lower, upper)` using `Q1 - k*IQR` and `Q3 + k*IQR`.
+/// The common choice is `k = 1.5`.
+pub fn tukey_fences(data: &[f64], k: f64) -> (f64, f64) {
+    if !k.is_finite() || k < 0.0 {
+        return (f64::NAN, f64::NAN);
+    }
+    let v = sorted(data);
+    if v.is_empty() {
+        return (f64::NAN, f64::NAN);
+    }
+    let q1 = quantile_sorted(&v, 0.25);
+    let q3 = quantile_sorted(&v, 0.75);
+    let spread = q3 - q1;
+    (q1 - k * spread, q3 + k * spread)
+}
+
+/// Boolean flags for values outside Tukey fences.
+pub fn tukey_outlier_flags(data: &[f64], k: f64) -> Vec<bool> {
+    let (lo, hi) = tukey_fences(data, k);
+    if lo.is_nan() || hi.is_nan() {
+        return vec![false; data.len()];
+    }
+    data.iter().map(|&x| x < lo || x > hi).collect()
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -118,5 +143,12 @@ mod tests {
         let d = [3.0, 1.0, 2.0];
         let _ = median(&d);
         assert_eq!(d, [3.0, 1.0, 2.0]); // unchanged — we sort a copy
+    }
+
+    #[test]
+    fn tukey_flags_extreme_values() {
+        let data = [1.0, 2.0, 2.0, 3.0, 100.0];
+        let flags = tukey_outlier_flags(&data, 1.5);
+        assert_eq!(flags, vec![false, false, false, false, true]);
     }
 }

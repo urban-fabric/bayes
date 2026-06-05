@@ -5,8 +5,9 @@
 //! resolution in the tails — so extreme quantiles stay accurate.
 //!
 //! It is approximate, but with a *bounded* error controlled by the compression
-//! `δ`, and it **merges** exactly (two digests combine into one), which is why it
-//! belongs in the closed-form/streaming foundation rather than the iterative layer.
+//! `δ`, and it merges directly (two digests combine into one without iterative
+//! fitting), which is why it belongs in the direct/streaming foundation rather than
+//! the inference layer.
 //!
 //! Construction/update lives here; the `quantile`/`cdf` queries are in `query`.
 

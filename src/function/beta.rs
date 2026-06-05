@@ -1,6 +1,6 @@
 //! The beta function family: `ln_beta` / `beta`, and the regularized incomplete
 //! beta `beta_reg` `Iₓ(a, b)` (the CDF kernel for the Beta, Student's-t, and F
-//! distributions — Phase 1). Continued fraction from Numerical Recipes.
+//! distributions). Continued fraction from Numerical Recipes.
 
 use super::gamma::ln_gamma;
 

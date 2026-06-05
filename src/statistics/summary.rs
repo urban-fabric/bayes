@@ -44,6 +44,15 @@ pub fn std_dev(data: &[f64]) -> f64 {
     variance(data).sqrt()
 }
 
+/// Coefficient of variation `s / x̄`. `NaN` if the mean is zero or undefined.
+pub fn coefficient_of_variation(data: &[f64]) -> f64 {
+    let m = mean(data);
+    if m == 0.0 || m.is_nan() {
+        return f64::NAN;
+    }
+    std_dev(data) / m.abs()
+}
+
 /// `k`-th standardized central moment about the mean (population form).
 fn standardized_moment(data: &[f64], k: i32) -> f64 {
     let (m, m2) = mean_and_m2(data);
@@ -91,6 +100,91 @@ pub fn harmonic_mean(data: &[f64]) -> f64 {
     data.len() as f64 / data.iter().map(|&x| 1.0 / x).sum::<f64>()
 }
 
+/// Mean absolute deviation around the arithmetic mean.
+pub fn mean_abs_deviation(data: &[f64]) -> f64 {
+    if data.is_empty() {
+        return f64::NAN;
+    }
+    let m = mean(data);
+    data.iter().map(|&x| (x - m).abs()).sum::<f64>() / data.len() as f64
+}
+
+fn sorted_finite(data: &[f64]) -> Vec<f64> {
+    let mut v: Vec<f64> = data.iter().copied().filter(|x| x.is_finite()).collect();
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    v
+}
+
+/// Trimmed mean after dropping `proportion` from each tail.
+pub fn trimmed_mean(data: &[f64], proportion: f64) -> f64 {
+    if !(0.0..0.5).contains(&proportion) {
+        return f64::NAN;
+    }
+    let v = sorted_finite(data);
+    let n = v.len();
+    let k = (n as f64 * proportion).floor() as usize;
+    if n == 0 || 2 * k >= n {
+        return f64::NAN;
+    }
+    mean(&v[k..(n - k)])
+}
+
+/// Winsorized mean after clamping `proportion` from each tail to the nearest
+/// retained values.
+pub fn winsorized_mean(data: &[f64], proportion: f64) -> f64 {
+    if !(0.0..0.5).contains(&proportion) {
+        return f64::NAN;
+    }
+    let v = sorted_finite(data);
+    let n = v.len();
+    let k = (n as f64 * proportion).floor() as usize;
+    if n == 0 || 2 * k >= n {
+        return f64::NAN;
+    }
+    let lo = v[k];
+    let hi = v[n - k - 1];
+    let total = v
+        .iter()
+        .enumerate()
+        .map(|(i, &x)| {
+            if i < k {
+                lo
+            } else if i >= n - k {
+                hi
+            } else {
+                x
+            }
+        })
+        .sum::<f64>();
+    total / n as f64
+}
+
+/// Gini mean difference: average absolute difference between all unordered pairs.
+pub fn gini_mean_difference(data: &[f64]) -> f64 {
+    let v = sorted_finite(data);
+    let n = v.len();
+    if n < 2 {
+        return f64::NAN;
+    }
+    let weighted_sum = v
+        .iter()
+        .enumerate()
+        .map(|(i, &x)| (2.0 * (i as f64 + 1.0) - n as f64 - 1.0) * x)
+        .sum::<f64>();
+    2.0 * weighted_sum / (n as f64 * (n as f64 - 1.0))
+}
+
+/// Standardize each value to a z-score using the sample mean and sample standard
+/// deviation. Returns an empty vector for degenerate input.
+pub fn z_scores(data: &[f64]) -> Vec<f64> {
+    let m = mean(data);
+    let s = std_dev(data);
+    if data.is_empty() || s <= 0.0 || s.is_nan() {
+        return Vec::new();
+    }
+    data.iter().map(|&x| (x - m) / s).collect()
+}
+
 /// Sample covariance between paired samples (Bessel's `n-1`). `NaN` if the lengths
 /// differ or fewer than 2 pairs.
 pub fn covariance(a: &[f64], b: &[f64]) -> f64 {
@@ -136,6 +230,23 @@ mod tests {
         close(geometric_mean(&d), 2.0, 1e-12); // (1·2·4)^{1/3} = 2
         close(harmonic_mean(&d), 3.0 / (1.0 + 0.5 + 0.25), 1e-12);
         assert!(geometric_mean(&[1.0, -1.0]).is_nan());
+    }
+
+    #[test]
+    fn robust_summaries_reduce_outlier_influence() {
+        let d = [1.0, 2.0, 3.0, 4.0, 100.0];
+        close(trimmed_mean(&d, 0.2), 3.0, 1e-12);
+        close(winsorized_mean(&d, 0.2), 3.0, 1e-12);
+        assert!(mean_abs_deviation(&d) > 0.0);
+        assert!(coefficient_of_variation(&d) > 0.0);
+    }
+
+    #[test]
+    fn gini_difference_and_z_scores_match_known_values() {
+        close(gini_mean_difference(&[1.0, 2.0, 3.0]), 4.0 / 3.0, 1e-12);
+        let z = z_scores(&[1.0, 2.0, 3.0]);
+        close(z.iter().sum::<f64>(), 0.0, 1e-12);
+        close(z.iter().map(|x| x * x).sum::<f64>(), 2.0, 1e-12);
     }
 
     #[test]

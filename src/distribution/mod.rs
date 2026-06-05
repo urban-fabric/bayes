@@ -11,10 +11,12 @@
 
 pub mod combinator;
 pub mod conjugate;
+pub mod constraint;
 pub mod continuous;
 pub mod discrete;
 mod divergence;
 pub mod exponential_family;
+pub mod functional;
 pub mod multivariate;
 mod numeric;
 pub mod transformed;
@@ -26,6 +28,7 @@ pub use conjugate::{
     BetaBernoulli, BetaBinomialModel, Conjugate, DirichletCategorical, DirichletMultinomial,
     GammaExponential, GammaPoisson, NormalInverseGamma, NormalKnownVariance,
 };
+pub use constraint::{Constrained, Constraint};
 pub use continuous::{
     Beta, Cauchy, ChiSquared, Exponential, FisherSnedecor, Frechet, Gamma, Gumbel, HalfNormal,
     InverseGamma, Laplace, LogNormal, Logistic, Lomax, Normal, Pareto, Rayleigh, StudentT,
@@ -37,6 +40,10 @@ pub use discrete::{
 };
 pub use divergence::KlDivergence;
 pub use exponential_family::{CountSum, ExponentialFamily, MeanVar, SufficientStatistic, Trials};
+pub use functional::{
+    ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt, ContinuousFn,
+    DiscreteDistributionExt, DiscreteFn, DiscreteMass,
+};
 pub use multivariate::{
     Dirichlet, Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
 };

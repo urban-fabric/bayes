@@ -1,27 +1,34 @@
 //! **Hypothesis tests** — each returns a [`TestResult`] (test statistic + two-sided
-//! p-value, computed from `bayes`'s own distribution CDFs). They *test data against a
-//! null hypothesis* — descriptive/frequentist statistics, not the iterative parameter
-//! inference that is out of scope.
+//! p-value, computed from `bayes`'s own distribution CDFs or exact finite sums).
+//! They *test data against a null hypothesis* — descriptive/frequentist statistics,
+//! not the iterative parameter inference that is out of scope.
 //!
-//! Grouped by family: `parametric` (z / t / Welch / ANOVA), `contingency`
-//! (χ² goodness-of-fit & independence, Fisher's exact), `nonparametric`
-//! (Mann–Whitney, Wilcoxon), and `goodness_of_fit` (Kolmogorov–Smirnov,
+//! Grouped by family: `parametric` (z / t / paired t / Welch / F / ANOVA /
+//! Pearson correlation), `contingency` (χ² goodness-of-fit & independence,
+//! Fisher's exact, exact binomial, McNemar), `nonparametric` (Mann–Whitney,
+//! Wilcoxon, sign test), and `goodness_of_fit` (Kolmogorov–Smirnov,
 //! Jarque–Bera). Shared p-value helpers live here and are used across the groups.
 
 use std::f64::consts::SQRT_2;
 
 use crate::distribution::{ChiSquared, ContinuousCdf, StudentT};
 use crate::function::erf::erfc;
+use crate::function::factorial::ln_binomial;
 
 mod contingency;
 mod goodness_of_fit;
 mod nonparametric;
 mod parametric;
 
-pub use contingency::{chi_squared_goodness_of_fit, chi_squared_independence, fishers_exact};
+pub use contingency::{
+    binomial_test, chi_squared_goodness_of_fit, chi_squared_independence, fishers_exact, mcnemar,
+};
 pub use goodness_of_fit::{jarque_bera, ks_one_sample, ks_two_sample};
-pub use nonparametric::{mann_whitney_u, wilcoxon_signed_rank};
-pub use parametric::{one_sample_t, one_sample_z, one_way_anova, two_sample_t, welch_t};
+pub use nonparametric::{mann_whitney_u, sign_test, wilcoxon_signed_rank};
+pub use parametric::{
+    one_sample_t, one_sample_z, one_way_anova, paired_t, pearson_correlation_test, two_sample_t,
+    variance_ratio_f, welch_t,
+};
 
 /// The outcome of a hypothesis test: the test statistic and its p-value.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,4 +70,35 @@ fn chi2_upper(x: f64, df: f64) -> f64 {
         Ok(d) => d.sf(x),
         Err(_) => f64::NAN,
     }
+}
+
+fn binomial_pmf(n: u64, k: u64, p: f64) -> f64 {
+    if k > n || p.is_nan() || !(0.0..=1.0).contains(&p) {
+        return f64::NAN;
+    }
+    if p == 0.0 {
+        return if k == 0 { 1.0 } else { 0.0 };
+    }
+    if p == 1.0 {
+        return if k == n { 1.0 } else { 0.0 };
+    }
+    (ln_binomial(n, k) + k as f64 * p.ln() + (n - k) as f64 * (1.0 - p).ln()).exp()
+}
+
+fn binomial_two_sided_p_value(successes: u64, n: u64, p: f64) -> f64 {
+    if successes > n || p.is_nan() || !(0.0..=1.0).contains(&p) {
+        return f64::NAN;
+    }
+    let observed = binomial_pmf(n, successes, p);
+    if observed.is_nan() {
+        return f64::NAN;
+    }
+    let mut p_value = 0.0;
+    for k in 0..=n {
+        let pk = binomial_pmf(n, k, p);
+        if pk <= observed * (1.0 + 1e-12) {
+            p_value += pk;
+        }
+    }
+    p_value.min(1.0)
 }

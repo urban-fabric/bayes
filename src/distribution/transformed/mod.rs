@@ -86,7 +86,10 @@ mod tests {
     #[test]
     fn affine_shifts_and_scales_a_normal() {
         // Transformed(Normal(0,1), 2·x + 3) ≡ Normal(3, 2).
-        let t = Transformed::new(Normal::new(0.0, 1.0).unwrap(), Affine::new(2.0, 3.0));
+        let t = Transformed::new(
+            Normal::new(0.0, 1.0).unwrap(),
+            Affine::new(2.0, 3.0).unwrap(),
+        );
         let target = Normal::new(3.0, 2.0).unwrap();
         for &y in &[-1.0, 1.0, 3.0, 5.0] {
             close(t.pdf(y), target.pdf(y), 1e-10);

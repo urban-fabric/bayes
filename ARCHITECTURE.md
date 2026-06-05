@@ -6,11 +6,13 @@ them, and the statistics that can be computed directly from data.
 
 The governing boundary is:
 
-- In scope: direct formulas, exact sampling, closed-form posterior updates,
-  sufficient statistics, and descriptive or frequentist statistics.
+- In scope: direct formulas, finite-sample algorithms, exact/direct sampling,
+  closed-form posterior updates, sufficient statistics, descriptive or
+  frequentist statistics, direct resampling utilities, and bounded streaming
+  summaries.
 - Out of scope: MCMC, variational inference, iterative optimization-based fitting,
-  probabilistic-programming DSLs, graph/routing/domain types, and approximate
-  inference engines.
+  probabilistic-programming DSLs, graph/routing/domain types, and iterative or
+  approximate inference engines.
 
 If a capability is "run a loop until convergence", it belongs in a higher layer
 that depends on `bayes`.
@@ -30,7 +32,9 @@ src/
 
 `lib.rs` exposes the crate-level ergonomic surface. Distribution types and common
 traits are re-exported at the root, as are the main statistics and process types.
-Specialized helpers remain available under their modules.
+Most statistics helpers are also re-exported flat from `bayes::statistics`; the
+`statistics::hypothesis` subgroup remains public because tests are naturally
+organized by family. Function helpers remain grouped under `bayes::function`.
 
 `error.rs` contains one shared `BayesError`. Constructors return
 `Result<Self, BayesError>` when invalid parameters are ordinary user input.
@@ -52,6 +56,8 @@ Core scalar traits:
 - `ContinuousCdf` and `DiscreteCdf`: CDF, survival, inverse CDF, log CDF, log
   survival, and inverse survival.
 - `Support`: support bounds.
+- `Constraint` / `Constrained`: support-domain metadata and smooth maps between
+  constrained and unconstrained scalar coordinates for inference layers.
 - `Moments`: optional analytic moments and summary points.
 - `Estimate`: batch closed-form parameter fitting when available.
 
@@ -63,13 +69,25 @@ The concrete distributions are grouped by kind:
   Hypergeometric, NegativeBinomial, BetaBinomial, and related count families.
 - `multivariate/`: MultivariateNormal, Dirichlet, Multinomial, with a small
   multivariate trait spine.
+- `constraint.rs`: Scalar support constraints and unconstraining transforms.
 - `combinator/`: Mixture and Truncated.
 - `transformed/`: Bijectors and `Transformed<D, B>`.
+- `functional.rs`: closure-backed density/mass/CDF adapters plus extension traits
+  for log-likelihoods, interval probabilities, truncation, and bijective
+  composition.
 - `exponential_family/`: mergeable sufficient statistics and closed-form fits.
 - `conjugate/`: closed-form conjugate prior/posterior updates and predictives.
 
 Every distribution should validate constructor parameters, implement the relevant
 spine traits, and implement `rand::distr::Distribution` for sampling.
+
+The functional surface follows the lessons from `statrs`, Haskell `statistics`,
+OCaml `pareto`, `kixi.stats`, and `statistex`: keep probability evaluation as
+small traits (`pdf`/`pmf`, CDF/quantile, support), make log-probability a first
+class operation, expose sample/statistical functions as pure total functions, and
+represent optional analytic quantities with `Option` instead of sentinel values.
+Named distributions and closure-backed distributions must compose through the
+same traits.
 
 ## Function Layer
 
@@ -79,6 +97,7 @@ spine traits, and implement `rand::distr::Distribution` for sampling.
 - error functions and inverse error functions;
 - factorial/binomial helpers;
 - Bessel helpers for circular distributions;
+- multivariate gamma and beta functions;
 - stable log-domain helpers such as log-sum-exp and `xlogy`.
 
 These functions are dependency-light and `f64`-first. More general numeric
@@ -86,16 +105,26 @@ abstractions should wait for a concrete consumer.
 
 ## Statistics Layer
 
-`statistics/` is organized by statistical task:
+`statistics/` is organized by statistical task. Most module files are private
+implementation groups with their public functions re-exported from
+`bayes::statistics`; `hypothesis` is public as a grouped namespace.
 
-- `summary`: mean, variance, covariance, correlation, shape statistics;
-- `order`: quantiles, percentiles, five-number summary, MAD;
+- `summary`: mean, variance, covariance, correlation, shape statistics, robust
+  summaries, z-scores, and Gini mean difference;
+- `order`: quantiles, percentiles, five-number summary, MAD, Tukey fences;
 - `correlation`: Spearman, Kendall, Cramer's V;
-- `regression`: simple OLS and explicit-design least squares;
+- `effect`: standardized mean effects, ANOVA effect sizes, and 2x2 risk/odds
+  effects;
+- `weighted`: weighted means, variance, covariance, correlation, quantiles, and
+  effective sample size;
+- `multivariate`: mean/covariance/correlation matrices, pooled covariance,
+  Mahalanobis distance, and Hotelling's T-squared;
+- `regression`: simple OLS diagnostics and explicit-design least squares;
 - `resampling`: bootstrap, jackknife, percentile intervals;
-- `hypothesis`: z/t/Welch, chi-squared, Fisher exact, KS, Jarque-Bera, ANOVA,
-  Mann-Whitney, Wilcoxon;
-- `confidence`: closed-form confidence intervals;
+- `hypothesis`: z/t/Welch/F, chi-squared, Fisher exact, exact binomial, McNemar,
+  KS, Jarque-Bera, ANOVA, Mann-Whitney, Wilcoxon, sign test;
+- `confidence`: closed-form confidence intervals for means, proportions, rates,
+  variance/standard deviation, and mean/proportion differences;
 - `empirical`: ECDF and histograms;
 - `kde`: Gaussian kernel density estimates;
 - `online`: mergeable running statistics and covariance;
@@ -115,8 +144,8 @@ module convention. It should not panic for user-provided sample shape issues.
 - Gaussian random walks and Wiener paths;
 - finite-state Markov chains.
 
-These are still closed-form/generative. Markov chains here are random processes,
-not MCMC inference machinery.
+These are direct/generative APIs. Markov chains here are random processes, not
+MCMC inference machinery.
 
 ## Current Invariants
 
@@ -128,16 +157,18 @@ not MCMC inference machinery.
 - Matrix-like public inputs must validate rectangular shape before indexing.
 - Kernel and Gaussian-process inputs must not silently ignore mismatched point
   dimensions.
-- `cargo fmt --check`, `cargo test`, `cargo clippy --all-targets`, and
-  `cargo doc --no-deps` should pass before merge.
+- `cargo fmt --check`, `cargo test`, `cargo clippy --all-targets`,
+  `cargo doc --no-deps`, and `cargo package --list --allow-dirty` should pass
+  before merge.
 
 ## Backlog
 
 Near-term improvements that fit the current structure:
 
-- Add a small public matrix/input validation helper if more multivariate APIs land.
+- Consider a small public matrix/input validation helper if matrix-shaped APIs
+  keep expanding.
 - Decide whether kernel constructors should gain fallible `try_new` variants.
-- Expand root-level examples for the process and conjugate-update surfaces.
+- Expand root-level examples for process and conjugate-update surfaces.
 - Add package/readme examples as doctests where practical.
 - Revisit optional features only when a consumer needs them, especially larger
   linear algebra backends or scalar-generic numerics.

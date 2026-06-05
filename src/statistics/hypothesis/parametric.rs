@@ -3,7 +3,7 @@
 
 use super::{TestResult, nan_result, t_two_sided, z_two_sided};
 use crate::distribution::{ContinuousCdf, FisherSnedecor};
-use crate::statistics::{mean, variance};
+use crate::statistics::{correlation, mean, variance};
 
 /// One-sample **z-test** that the mean of `data` equals `mu0`, with a *known*
 /// population standard deviation `sigma`.
@@ -22,6 +22,32 @@ pub fn one_sample_t(data: &[f64], mu0: f64) -> TestResult {
     let n = data.len() as f64;
     let s = variance(data).sqrt();
     let t = (mean(data) - mu0) / (s / n.sqrt());
+    TestResult {
+        statistic: t,
+        p_value: t_two_sided(t, n - 1.0),
+    }
+}
+
+/// Paired **t-test** for equal means of paired observations.
+pub fn paired_t(a: &[f64], b: &[f64]) -> TestResult {
+    if a.len() != b.len() || a.len() < 2 {
+        return nan_result();
+    }
+    let diffs: Vec<f64> = a.iter().zip(b).map(|(&x, &y)| x - y).collect();
+    let n = diffs.len() as f64;
+    let m = mean(&diffs);
+    let s = variance(&diffs).sqrt();
+    if s == 0.0 {
+        return if m == 0.0 {
+            nan_result()
+        } else {
+            TestResult {
+                statistic: m.signum() * f64::INFINITY,
+                p_value: 0.0,
+            }
+        };
+    }
+    let t = m / (s / n.sqrt());
     TestResult {
         statistic: t,
         p_value: t_two_sided(t, n - 1.0),
@@ -48,6 +74,49 @@ pub fn welch_t(a: &[f64], b: &[f64]) -> TestResult {
     let (sea, seb) = (va / na, vb / nb);
     let t = (mean(a) - mean(b)) / (sea + seb).sqrt();
     let df = (sea + seb).powi(2) / (sea * sea / (na - 1.0) + seb * seb / (nb - 1.0));
+    TestResult {
+        statistic: t,
+        p_value: t_two_sided(t, df),
+    }
+}
+
+/// Two-sided F-test for equality of two normal variances.
+pub fn variance_ratio_f(a: &[f64], b: &[f64]) -> TestResult {
+    if a.len() < 2 || b.len() < 2 {
+        return nan_result();
+    }
+    let (va, vb) = (variance(a), variance(b));
+    if va <= 0.0 || vb <= 0.0 || va.is_nan() || vb.is_nan() {
+        return nan_result();
+    }
+    let f = va / vb;
+    let p = match FisherSnedecor::new(a.len() as f64 - 1.0, b.len() as f64 - 1.0) {
+        Ok(d) => 2.0 * d.cdf(f).min(d.sf(f)),
+        Err(_) => f64::NAN,
+    };
+    TestResult {
+        statistic: f,
+        p_value: p.min(1.0),
+    }
+}
+
+/// Test whether the Pearson correlation is zero.
+pub fn pearson_correlation_test(a: &[f64], b: &[f64]) -> TestResult {
+    if a.len() != b.len() || a.len() < 3 {
+        return nan_result();
+    }
+    let r = correlation(a, b);
+    if r.is_nan() {
+        return nan_result();
+    }
+    if r.abs() >= 1.0 {
+        return TestResult {
+            statistic: r.signum() * f64::INFINITY,
+            p_value: 0.0,
+        };
+    }
+    let df = a.len() as f64 - 2.0;
+    let t = r * (df / (1.0 - r * r)).sqrt();
     TestResult {
         statistic: t,
         p_value: t_two_sided(t, df),
@@ -114,6 +183,21 @@ mod tests {
         let b = [20.0, 21.0, 19.0, 20.5, 19.5];
         let res = welch_t(&a, &b);
         assert!(res.p_value < 0.01);
+    }
+
+    #[test]
+    fn paired_t_detects_within_pair_shift() {
+        let a = [10.0, 11.0, 12.0, 13.0, 14.0];
+        let b = [8.0, 9.0, 10.0, 11.0, 12.0];
+        assert_eq!(paired_t(&a, &b).p_value, 0.0);
+    }
+
+    #[test]
+    fn variance_ratio_and_correlation_tests_behave() {
+        let a = [1.0, 2.0, 3.0, 4.0, 5.0];
+        let b = [1.0, 1.5, 2.0, 2.5, 3.0];
+        assert!(variance_ratio_f(&a, &b).p_value > 0.05);
+        assert!(pearson_correlation_test(&a, &b).p_value < 0.01);
     }
 
     #[test]
