@@ -1,0 +1,178 @@
+//! Numerically **stable log-domain helpers** — the small building blocks that keep
+//! likelihoods, mixtures, and tail probabilities accurate when ordinary arithmetic
+//! would underflow or cancel.
+//!
+//! * [`ln_sum_exp`] / [`ln_add_exp`] — `ln Σ eˣⁱ` via the max-shift, for mixture and
+//!   categorical log-densities.
+//! * [`ln_1p_exp`] (softplus) / [`ln_1m_exp`] — `ln(1 ± eˣ)` without losing digits.
+//! * [`xlogy`] — `x·ln y` with the `0·ln 0 = 0` convention (entropy / KL terms).
+//! * [`erfcx`] — the scaled complementary error function `eˣ² erfc(x)`, which stays
+//!   finite and accurate in the right tail where `erfc` underflows to zero.
+
+use super::erf::erfc;
+use std::f64::consts::PI;
+
+/// `ln(eᵃ + eᵇ)`, computed without overflow by factoring out the larger term.
+///
+/// Treats `-∞` as the log of zero, so `ln_add_exp(x, -∞) == x`.
+pub fn ln_add_exp(a: f64, b: f64) -> f64 {
+    if a == f64::NEG_INFINITY {
+        return b;
+    }
+    if b == f64::NEG_INFINITY {
+        return a;
+    }
+    let (hi, lo) = if a >= b { (a, b) } else { (b, a) };
+    hi + (lo - hi).exp().ln_1p()
+}
+
+/// The **log-sum-exp** `ln Σᵢ eˣⁱ`, stable via the max-shift
+/// `m + ln Σᵢ e^{xᵢ − m}`. Empty input and all-`-∞` input both give `-∞`.
+pub fn ln_sum_exp(xs: &[f64]) -> f64 {
+    let mut max = f64::NEG_INFINITY;
+    for &x in xs {
+        if x > max {
+            max = x;
+        }
+    }
+    if max == f64::NEG_INFINITY {
+        return f64::NEG_INFINITY;
+    }
+    if max == f64::INFINITY {
+        return f64::INFINITY;
+    }
+    let sum: f64 = xs.iter().map(|&x| (x - max).exp()).sum();
+    max + sum.ln()
+}
+
+/// Softplus `ln(1 + eˣ)`, accurate and overflow-free across the whole range
+/// (Mächler's branch points).
+pub fn ln_1p_exp(x: f64) -> f64 {
+    if x <= -37.0 {
+        x.exp()
+    } else if x <= 18.0 {
+        x.exp().ln_1p()
+    } else if x <= 33.3 {
+        x + (-x).exp()
+    } else {
+        x
+    }
+}
+
+/// `ln(1 − eˣ)` for `x < 0`, via Mächler's two-region split (returns `NaN` for
+/// `x ≥ 0`, where the argument is non-positive).
+pub fn ln_1m_exp(x: f64) -> f64 {
+    if x >= 0.0 {
+        return f64::NAN;
+    }
+    if x > -std::f64::consts::LN_2 {
+        (-x.exp_m1()).ln() // 1 − eˣ = −expm1(x)
+    } else {
+        (-x.exp()).ln_1p() // ln(1 + (−eˣ))
+    }
+}
+
+/// `x·ln y` with the convention `0·ln 0 = 0` (and `0·ln y = 0` for any `y`),
+/// the form that keeps entropy and divergence sums finite.
+pub fn xlogy(x: f64, y: f64) -> f64 {
+    if x == 0.0 { 0.0 } else { x * y.ln() }
+}
+
+/// The **scaled complementary error function** `erfcx(x) = eˣ² erfc(x)`.
+///
+/// For `x ≳ 4`, `erfc(x)` underflows but `erfcx(x) ~ 1/(x√π)` stays finite, so this
+/// is the right primitive for stable Normal tail log-probabilities. Computed
+/// directly from `erfc` near the origin and by a continued fraction in the tail.
+pub fn erfcx(x: f64) -> f64 {
+    if x < 0.0 {
+        // erfcx(−|x|) = 2 e^{x²} − erfcx(|x|).
+        return 2.0 * (x * x).exp() - erfcx(-x);
+    }
+    if x < 4.0 {
+        return (x * x).exp() * erfc(x);
+    }
+    // Tail continued fraction: erfcx(x) = (1/√π) / (x + ½/(x + 1/(x + 3⁄2/(x + …)))),
+    // the kₜₕ partial numerator being k/2. Evaluated by backward recurrence.
+    let mut t = x;
+    for k in (1..=60).rev() {
+        t = x + (k as f64) * 0.5 / t;
+    }
+    1.0 / (PI.sqrt() * t)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn ln_sum_exp_matches_naive_in_safe_range() {
+        let xs = [-1.0_f64, 0.5, 2.0, -3.0];
+        let naive = xs.iter().map(|&x| x.exp()).sum::<f64>().ln();
+        close(ln_sum_exp(&xs), naive, 1e-12);
+        // Edge cases.
+        assert_eq!(ln_sum_exp(&[]), f64::NEG_INFINITY);
+        assert_eq!(
+            ln_sum_exp(&[f64::NEG_INFINITY, f64::NEG_INFINITY]),
+            f64::NEG_INFINITY
+        );
+    }
+
+    #[test]
+    fn ln_sum_exp_survives_extreme_magnitudes() {
+        // Naive exp would overflow/underflow; the shifted form is exact.
+        let xs = [1000.0, 1000.0];
+        close(ln_sum_exp(&xs), 1000.0 + 2.0_f64.ln(), 1e-9);
+        let xs = [-1000.0, -1001.0];
+        close(ln_sum_exp(&xs), ln_add_exp(-1000.0, -1001.0), 1e-12);
+    }
+
+    #[test]
+    fn ln_add_exp_basic() {
+        close(ln_add_exp(0.0, 0.0), 2.0_f64.ln(), 1e-12);
+        assert_eq!(ln_add_exp(3.0, f64::NEG_INFINITY), 3.0);
+    }
+
+    #[test]
+    fn softplus_and_log1m() {
+        close(ln_1p_exp(0.0), 2.0_f64.ln(), 1e-12);
+        close(ln_1p_exp(50.0), 50.0, 1e-9); // ~x for large x
+        // ln(1 − e^x) round-trips against the definition for moderate x.
+        for &x in &[-0.1, -0.5, -1.0, -5.0] {
+            close(ln_1m_exp(x), (1.0 - x.exp()).ln(), 1e-9);
+        }
+        assert!(ln_1m_exp(0.5).is_nan());
+    }
+
+    #[test]
+    fn xlogy_zero_convention() {
+        assert_eq!(xlogy(0.0, 0.0), 0.0);
+        assert_eq!(xlogy(0.0, 5.0), 0.0);
+        close(xlogy(2.0, 3.0), 2.0 * 3.0_f64.ln(), 1e-12);
+    }
+
+    #[test]
+    fn erfcx_matches_definition_near_origin() {
+        assert_eq!(erfcx(0.0), 1.0);
+        for &x in &[0.25, 0.5, 1.0, 2.0, 3.0] {
+            // erfcx(x)·e^{−x²} == erfc(x) where erfc is still accurate.
+            close(erfcx(x) * (-x * x).exp(), erfc(x), 1e-9);
+        }
+    }
+
+    #[test]
+    fn erfcx_tail_is_finite_and_asymptotic() {
+        // erfcx stays finite where erfc underflows, and x·√π·erfcx(x) → 1.
+        for &x in &[10.0, 20.0, 50.0, 100.0] {
+            let v = erfcx(x);
+            assert!(v.is_finite() && v > 0.0);
+            close(x * PI.sqrt() * v, 1.0, 5e-2 / x); // tighter as x grows
+        }
+        // Continuity across the direct/continued-fraction seam at x = 4.
+        close(erfcx(3.999), erfcx(4.001), 1e-3);
+    }
+}

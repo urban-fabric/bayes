@@ -1,0 +1,37 @@
+[package]
+name = "bayes"
+version = "0.1.0"
+edition = "2024"
+license = "Proprietary"
+authors = ["Raymond Mead"]
+repository = "https://github.com/urban-fabric/bayes"
+rust-version = "1.95"
+description = "Closed-form probability and statistics for Rust: distributions, special functions, sample statistics, stochastic processes, and conjugate Bayesian updates."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+rand = "0.10"
+rand_chacha = "0.10"
+thiserror = "2.0"
+
+[lints.rust]
+unsafe_code = "warn"
+unreachable_pub = "warn"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+self_named_module_files = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+debug = "line-tables-only"
+
+[profile.bench]
+lto = "thin"
+codegen-units = 1
+debug = true
