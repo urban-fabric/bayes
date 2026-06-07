@@ -22,7 +22,6 @@ impl KlDivergence for Normal {
 
 impl KlDivergence for Exponential {
     fn kl_divergence(&self, other: &Self) -> f64 {
-        // KL(Exp(λ1) ‖ Exp(λ2)) = ln(λ1/λ2) + λ2/λ1 − 1.
         let (l1, l2) = (self.rate(), other.rate());
         (l1 / l2).ln() + l2 / l1 - 1.0
     }
@@ -30,7 +29,6 @@ impl KlDivergence for Exponential {
 
 impl KlDivergence for Gamma {
     fn kl_divergence(&self, other: &Self) -> f64 {
-        // Shape a, rate b.
         let (a1, b1) = (self.shape(), self.rate());
         let (a2, b2) = (other.shape(), other.rate());
         (a1 - a2) * digamma(a1) - ln_gamma(a1)
@@ -61,7 +59,6 @@ impl KlDivergence for Bernoulli {
 
 impl KlDivergence for Poisson {
     fn kl_divergence(&self, other: &Self) -> f64 {
-        // KL(Pois(λ1) ‖ Pois(λ2)) = λ1 ln(λ1/λ2) − λ1 + λ2.
         let (l1, l2) = (self.lambda(), other.lambda());
         l1 * (l1 / l2).ln() - l1 + l2
     }
@@ -121,12 +118,11 @@ mod tests {
         let q = Normal::new(2.0, 3.0).unwrap();
         assert!(p.kl_divergence(&q) > 0.0);
         assert!(q.kl_divergence(&p) > 0.0);
-        assert_ne!(p.kl_divergence(&q), q.kl_divergence(&p)); // not symmetric
+        assert_ne!(p.kl_divergence(&q), q.kl_divergence(&p));
     }
 
     #[test]
     fn normal_kl_known_value() {
-        // KL(N(0,1) ‖ N(1,1)) = ½(μ2-μ1)² = 0.5.
         close(
             Normal::new(0.0, 1.0)
                 .unwrap()

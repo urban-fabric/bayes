@@ -16,22 +16,17 @@ fn close(a: f64, b: f64, tol: f64) {
 #[test]
 fn normal_cdf_pdf_and_quantile() {
     let n = Normal::new(2.0, 3.0).unwrap();
-    // Standard-normal landmarks, shifted/scaled.
-    close(n.cdf(2.0), 0.5, 1e-12); // median
-    close(n.cdf(2.0 + 3.0), 0.841_344_746_068_543, 1e-9); // +1σ
-    // Quantile inverts the CDF.
+    close(n.cdf(2.0), 0.5, 1e-12);
+    close(n.cdf(2.0 + 3.0), 0.841_344_746_068_543, 1e-9);
     for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
         close(n.cdf(n.inverse_cdf(p)), p, 1e-9);
     }
-    // PDF peak at the mean = 1/(σ√2π).
     close(
         n.pdf(2.0),
         1.0 / (3.0 * std::f64::consts::TAU.sqrt()),
         1e-12,
     );
-    // Survival complements the CDF.
     close(n.cdf(1.0) + n.sf(1.0), 1.0, 1e-12);
-    // Moments.
     assert_eq!(n.mean(), Some(2.0));
     assert_eq!(n.variance(), Some(9.0));
 }
@@ -52,28 +47,26 @@ fn uniform_cdf_and_moments() {
 #[test]
 fn lognormal_cdf_quantile_and_mean() {
     let ln = LogNormal::new(0.0, 1.0).unwrap();
-    close(ln.cdf(1.0), 0.5, 1e-9); // median at e^μ = 1
+    close(ln.cdf(1.0), 0.5, 1e-9);
     close(ln.median().unwrap(), 1.0, 1e-12);
-    close(ln.mean().unwrap(), (0.5f64).exp(), 1e-12); // e^{μ+σ²/2}
+    close(ln.mean().unwrap(), (0.5f64).exp(), 1e-12);
     for &p in &[0.1, 0.5, 0.9] {
         close(ln.cdf(ln.inverse_cdf(p)), p, 1e-9);
     }
-    assert_eq!(ln.pdf(-1.0), 0.0); // zero on the non-positive axis
+    assert_eq!(ln.pdf(-1.0), 0.0);
 }
 
 #[test]
 fn poisson_pmf_cdf_and_moments() {
     let p = Poisson::new(4.0).unwrap();
-    // PMF sums (partially) and CDF agrees with cumulative PMF.
     let mut cum = 0.0;
     for k in 0..20u64 {
         cum += p.pmf(k);
         close(p.cdf(k), cum, 1e-9);
     }
-    close(cum, 1.0, 1e-6); // mass essentially all captured by k=19
+    close(cum, 1.0, 1e-6);
     assert_eq!(p.mean(), Some(4.0));
     assert_eq!(p.variance(), Some(4.0));
-    // PMF landmark: P(X=0) = e^{-λ}.
     close(p.pmf(0), (-4.0f64).exp(), 1e-12);
 }
 
@@ -86,7 +79,7 @@ fn bernoulli_and_discrete_uniform_spine() {
     assert_eq!(b.cdf(1), 1.0);
     assert_eq!(b.mean(), Some(0.3));
 
-    let d = DiscreteUniform::new(1, 7).unwrap(); // {1,…,6}, a die
+    let d = DiscreteUniform::new(1, 7).unwrap();
     close(d.pmf(3), 1.0 / 6.0, 1e-12);
     assert_eq!(d.pmf(7), 0.0);
     assert_eq!(d.min(), 1);

@@ -87,7 +87,6 @@ impl Moments for Rayleigh {
         Some(self.scale)
     }
     fn entropy(&self) -> Option<f64> {
-        // 1 + ln(σ/√2) + γ/2.
         Some(1.0 + (self.scale / 2.0_f64.sqrt()).ln() + 0.577_215_664_901_532_9 / 2.0)
     }
 }
@@ -97,7 +96,6 @@ impl Estimate for Rayleigh {
         if data.len() < 2 || data.iter().any(|&x| x < 0.0) {
             return None;
         }
-        // MLE: σ̂² = (1/2n) Σ xᵢ².
         let s2 = data.iter().map(|&x| x * x).sum::<f64>() / (2.0 * data.len() as f64);
         Rayleigh::new(s2.sqrt()).ok()
     }
@@ -120,6 +118,6 @@ mod tests {
         }
         close(r.mean().unwrap(), 2.0 * (PI / 2.0).sqrt(), 1e-12);
         close(r.mode().unwrap(), 2.0, 1e-12);
-        close(r.pdf(2.0), (2.0 / 4.0) * (-0.5f64).exp(), 1e-12); // peak at σ
+        close(r.pdf(2.0), (2.0 / 4.0) * (-0.5f64).exp(), 1e-12);
     }
 }

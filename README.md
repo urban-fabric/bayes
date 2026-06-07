@@ -16,6 +16,7 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   (Mixture, Truncated, Transformed).
   Each provides PDF/PMF, CDF/quantile/survival (incl. stable `ln_cdf`/`ln_sf`/`isf`),
   analytic moments (`Option`-typed — Cauchy honestly has no mean), and `rand` sampling.
+  Same-family pairs also expose a closed-form `kl_divergence`.
   Functional adapters (`ContinuousFn`, `DiscreteFn`, `ContinuousDensity`,
   `DiscreteMass`) lift closures into the same trait spine for custom likelihoods.
 - **Special functions** (`function`) — gamma/beta/erf/Bessel families,

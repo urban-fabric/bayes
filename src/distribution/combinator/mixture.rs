@@ -188,8 +188,7 @@ mod tests {
             ],
         )
         .unwrap();
-        close(m.mean().unwrap(), 2.0, 1e-12); // (0+4)/2
-        // Var = 0.5(1+0) + 0.5(1+16) − 2² = 0.5 + 8.5 − 4 = 5.
+        close(m.mean().unwrap(), 2.0, 1e-12);
         close(m.variance().unwrap(), 5.0, 1e-12);
     }
 

@@ -100,7 +100,7 @@ impl Moments for Uniform {
         Some(0.0)
     }
     fn kurtosis(&self) -> Option<f64> {
-        Some(-1.2) // excess kurtosis of the uniform
+        Some(-1.2)
     }
     fn entropy(&self) -> Option<f64> {
         Some(self.width.ln())

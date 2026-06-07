@@ -37,7 +37,6 @@ impl Frechet {
 
 impl Distribution<f64> for Frechet {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse transform: s·(−ln u)^{−1/α}.
         let u: f64 = rng.random();
         self.scale * (-u.ln()).powf(-1.0 / self.shape)
     }
@@ -54,8 +53,7 @@ impl Continuous for Frechet {
         if x <= 0.0 {
             return f64::NEG_INFINITY;
         }
-        let zinv = self.scale / x; // (x/s)^{-1}
-        // ln(α/s) − (α+1) ln(x/s) − (x/s)^{−α}.
+        let zinv = self.scale / x;
         (self.shape / self.scale).ln() + (self.shape + 1.0) * zinv.ln() - zinv.powf(self.shape)
     }
 }
@@ -136,13 +134,11 @@ mod tests {
             2.0 * std::f64::consts::LN_2.powf(-1.0 / 3.0),
             1e-12,
         );
-        // α ≤ 1 ⇒ undefined (infinite) mean.
         assert!(Frechet::new(0.8, 1.0).unwrap().mean().is_none());
     }
 
     #[test]
     fn sampled_median_matches() {
-        // Heavy tails make the sample mean noisy; check the median instead.
         let mut rng = ChaCha8Rng::seed_from_u64(17);
         let d = Frechet::new(4.0, 1.5).unwrap();
         let n = 40_000;

@@ -38,7 +38,6 @@ impl Beta {
 
 impl Distribution<f64> for Beta {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // X = Gₐ / (Gₐ + G_b), Gₐ ~ Gamma(α,1), G_b ~ Gamma(β,1).
         let ga = sample_standard_gamma(rng, self.alpha);
         let gb = sample_standard_gamma(rng, self.beta);
         ga / (ga + gb)
@@ -117,7 +116,7 @@ mod tests {
     #[test]
     fn uniform_is_beta_one_one() {
         let b = Beta::new(1.0, 1.0).unwrap();
-        close(b.cdf(0.37), 0.37, 1e-10); // Beta(1,1) = Uniform(0,1)
+        close(b.cdf(0.37), 0.37, 1e-10);
         close(b.pdf(0.5), 1.0, 1e-10);
     }
 

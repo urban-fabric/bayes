@@ -83,7 +83,6 @@ impl DiscreteCdf<i64> for DiscreteUniform {
 
 impl Moments for DiscreteUniform {
     fn mean(&self) -> Option<f64> {
-        // Mean of {lo, …, hi-1}.
         Some((self.lo + self.hi - 1) as f64 / 2.0)
     }
     fn variance(&self) -> Option<f64> {

@@ -67,7 +67,6 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(1);
         let data: Vec<f64> = (0..200).map(|i| i as f64).collect();
         let boot = bootstrap(&data, 2000, mean, &mut rng);
-        // The bootstrap distribution of the mean is centered on the sample mean.
         assert!((mean(&boot) - mean(&data)).abs() < 2.0);
         let (lo, hi) = percentile_interval(&boot, 0.95);
         assert!(lo < mean(&data) && mean(&data) < hi);
@@ -78,7 +77,6 @@ mod tests {
         let data = [1.0, 2.0, 3.0, 4.0];
         let loo = jackknife(&data, mean);
         assert_eq!(loo.len(), 4);
-        // Dropping element 0 (value 1) ⇒ mean of {2,3,4} = 3.
         assert!((loo[0] - 3.0).abs() < 1e-12);
     }
 }

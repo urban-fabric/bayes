@@ -2,7 +2,8 @@
 
 /// Numeric inverse CDF by bisection on a continuous, monotone non-decreasing
 /// `cdf` over `[lo, hi]` (either bound may be infinite). Used by Gamma, Beta,
-/// Student's t, χ² — distributions whose quantile has no elementary form.
+/// Student's t, F, Wald, and Inverse-Gamma — distributions whose quantile has no
+/// elementary form.
 pub(crate) fn inverse_cdf_bisect(cdf: impl Fn(f64) -> f64, lo: f64, hi: f64, p: f64) -> f64 {
     if p <= 0.0 {
         return lo;
@@ -10,7 +11,6 @@ pub(crate) fn inverse_cdf_bisect(cdf: impl Fn(f64) -> f64, lo: f64, hi: f64, p: 
     if p >= 1.0 {
         return hi;
     }
-    // Bracket `p`. For an infinite bound, expand geometrically until it straddles.
     let mut a = if lo.is_finite() { lo } else { -1.0 };
     let mut b = if hi.is_finite() { hi } else { 1.0 };
     let mut step = 1.0;
@@ -23,7 +23,6 @@ pub(crate) fn inverse_cdf_bisect(cdf: impl Fn(f64) -> f64, lo: f64, hi: f64, p: 
         b += step;
         step *= 2.0;
     }
-    // Bisect.
     let mut mid = 0.5 * (a + b);
     for _ in 0..200 {
         mid = 0.5 * (a + b);

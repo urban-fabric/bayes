@@ -15,7 +15,6 @@ pub(crate) mod linalg;
 pub mod process;
 pub mod statistics;
 
-// The distribution types and the trait spine, re-exported at the crate root.
 pub use distribution::{
     Affine, Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Bijector, Binomial,
     Categorical, Cauchy, ChiSquared, Conjugate, Constrained, Constraint, Continuous, ContinuousCdf,

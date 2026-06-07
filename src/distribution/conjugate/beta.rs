@@ -81,23 +81,21 @@ mod tests {
     #[test]
     fn beta_bernoulli_counts() {
         let model = BetaBernoulli::new(Beta::new(2.0, 2.0).unwrap());
-        let data = [true, true, true, false]; // 3 success, 1 failure
+        let data = [true, true, true, false];
         let post = model.posterior(&data);
         close(post.alpha(), 5.0, 1e-12);
         close(post.beta(), 3.0, 1e-12);
-        // Predictive p = 5/8.
         close(model.posterior_predictive(&data).p(), 5.0 / 8.0, 1e-12);
     }
 
     #[test]
     fn beta_binomial_predictive_is_overdispersed() {
         let model = BetaBinomialModel::new(Beta::new(1.0, 1.0).unwrap(), 10);
-        let data = [7u64, 8, 6, 9]; // Σ success = 30 of 40
+        let data = [7u64, 8, 6, 9];
         let post = model.posterior(&data);
-        close(post.alpha(), 31.0, 1e-12); // 1 + 30
-        close(post.beta(), 11.0, 1e-12); // 1 + 10
+        close(post.alpha(), 31.0, 1e-12);
+        close(post.beta(), 11.0, 1e-12);
         let pred = model.posterior_predictive(&data);
-        // Predictive mean = trials · α′/(α′+β′).
         close(pred.mean().unwrap(), 10.0 * 31.0 / 42.0, 1e-12);
     }
 }

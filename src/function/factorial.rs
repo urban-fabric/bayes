@@ -3,7 +3,7 @@
 
 use super::gamma::ln_gamma;
 
-/// Exact factorials cached up to 20! (the largest that fits an `f64` exactly).
+/// Cutoff for the exact loop: 20! is the largest factorial that fits an `f64` exactly.
 const SMALL: usize = 21;
 
 /// `n!` as `f64`. Exact through 20!, then via `exp(ln_factorial)` (so it overflows

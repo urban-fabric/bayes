@@ -55,7 +55,6 @@ impl Hypergeometric {
 
 impl Distribution<u64> for Hypergeometric {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> u64 {
-        // Sequential draws without replacement.
         let mut remaining = self.population;
         let mut good = self.successes;
         let mut hits = 0;
@@ -78,7 +77,6 @@ impl Discrete<u64> for Hypergeometric {
         if k < self.k_min() || k > self.k_max() {
             return 0.0;
         }
-        // C(K,k)·C(N-K, n-k) / C(N, n).
         (ln_binomial(self.successes, k)
             + ln_binomial(self.population - self.successes, self.draws - k)
             - ln_binomial(self.population, self.draws))
@@ -141,11 +139,10 @@ mod tests {
 
     #[test]
     fn pmf_sums_to_one_and_known_value() {
-        // N=50, K=5, n=10. P(X=0) = C(45,10)/C(50,10).
         let h = Hypergeometric::new(50, 5, 10).unwrap();
         let total: f64 = (h.min()..=h.max()).map(|k| h.pmf(k)).sum();
         close(total, 1.0, 1e-10);
-        close(h.mean().unwrap(), 1.0, 1e-12); // 10·5/50
+        close(h.mean().unwrap(), 1.0, 1e-12);
     }
 
     #[test]

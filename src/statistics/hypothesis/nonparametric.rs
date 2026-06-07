@@ -1,5 +1,5 @@
-//! Rank-based non-parametric tests: **Mann–Whitney U** (independent samples) and
-//! **Wilcoxon signed-rank** (paired samples).
+//! Rank-based non-parametric tests: **Mann–Whitney U** (independent samples),
+//! **Wilcoxon signed-rank**, and the **sign test** (paired samples).
 
 use super::{TestResult, binomial_two_sided_p_value, nan_result, z_two_sided};
 use crate::statistics::ranks;
@@ -11,7 +11,6 @@ pub fn mann_whitney_u(a: &[f64], b: &[f64]) -> TestResult {
     if na == 0 || nb == 0 {
         return nan_result();
     }
-    // Rank the pooled samples; U from the rank sum of `a`.
     let mut pooled = Vec::with_capacity(na + nb);
     pooled.extend_from_slice(a);
     pooled.extend_from_slice(b);
@@ -20,7 +19,6 @@ pub fn mann_whitney_u(a: &[f64], b: &[f64]) -> TestResult {
     let (na_f, nb_f) = (na as f64, nb as f64);
     let u_a = rank_sum_a - na_f * (na_f + 1.0) / 2.0;
     let u = u_a.min(na_f * nb_f - u_a);
-    // Normal approximation.
     let mu = na_f * nb_f / 2.0;
     let sigma = (na_f * nb_f * (na_f + nb_f + 1.0) / 12.0).sqrt();
     let z = (u - mu) / sigma;
@@ -114,7 +112,6 @@ mod tests {
         let a = [10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0];
         let b: Vec<f64> = a.iter().map(|x| x - 2.0).collect();
         assert!(wilcoxon_signed_rank(&a, &b).p_value < 0.05);
-        // Identical samples ⇒ all-zero diffs ⇒ NaN (no signed ranks).
         assert!(wilcoxon_signed_rank(&a, &a).p_value.is_nan());
     }
 

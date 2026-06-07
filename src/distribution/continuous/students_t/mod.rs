@@ -82,7 +82,6 @@ impl StudentT {
 
 impl Distribution<f64> for StudentT {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // T = Z / √(V/ν), Z ~ N(0,1), V ~ χ²_ν; then shift/scale.
         let z = standard_normal_polar(rng);
         let v = self.chi.sample(rng);
         self.location + self.scale * z / (v / self.freedom).sqrt()
@@ -117,7 +116,7 @@ impl ContinuousCdf for StudentT {
     fn cdf(&self, x: f64) -> f64 {
         let z = (x - self.location) / self.scale;
         if z == 0.0 {
-            return 0.5; // exact by symmetry
+            return 0.5;
         }
         let nu = self.freedom;
         let ix = beta_reg(nu / 2.0, 0.5, nu / (nu + z * z));
@@ -136,7 +135,7 @@ impl Moments for StudentT {
         if self.freedom > 2.0 {
             Some(self.scale * self.scale * self.freedom / (self.freedom - 2.0))
         } else {
-            None // infinite / undefined for ν ≤ 2
+            None
         }
     }
     fn skewness(&self) -> Option<f64> {
@@ -163,20 +162,17 @@ mod tests {
     fn symmetric_cdf_and_quantile() {
         let t = StudentT::new(10.0).unwrap();
         close(t.cdf(0.0), 0.5, 1e-12);
-        // Symmetry: cdf(-x) = 1 - cdf(x).
         close(t.cdf(-1.3), 1.0 - t.cdf(1.3), 1e-9);
-        // The incomplete-beta CDF is accurate to ~1e-7, so round-trips hold there.
         for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
             close(t.cdf(t.inverse_cdf(p)), p, 1e-6);
         }
-        // t₁₀ 0.975 quantile ≈ 2.228.
         close(t.inverse_cdf(0.975), 2.228_138_852, 1e-4);
     }
 
     #[test]
     fn heavy_tail_moments() {
-        assert_eq!(StudentT::new(1.0).unwrap().mean(), None); // Cauchy-like: no mean
-        assert_eq!(StudentT::new(2.0).unwrap().variance(), None); // infinite variance
+        assert_eq!(StudentT::new(1.0).unwrap().mean(), None);
+        assert_eq!(StudentT::new(2.0).unwrap().variance(), None);
         close(
             StudentT::new(5.0).unwrap().variance().unwrap(),
             5.0 / 3.0,
@@ -188,16 +184,12 @@ mod tests {
     fn location_scale_shifts_and_scales() {
         let std = StudentT::new(8.0).unwrap();
         let ls = StudentT::new_location_scale(8.0, 3.0, 2.0).unwrap();
-        // Density relation: f_ls(μ + σz) = f_std(z) / σ.
         let z = 0.7;
         close(ls.pdf(3.0 + 2.0 * z), std.pdf(z) / 2.0, 1e-12);
-        // CDF relation: F_ls(μ + σz) = F_std(z).
         close(ls.cdf(3.0 + 2.0 * z), std.cdf(z), 1e-12);
-        // Moments shift/scale.
         close(ls.mean().unwrap(), 3.0, 1e-12);
         close(ls.variance().unwrap(), 4.0 * 8.0 / 6.0, 1e-12);
         close(ls.median().unwrap(), 3.0, 1e-12);
-        // Quantile round-trip about the location.
         for &p in &[0.1, 0.5, 0.9] {
             close(ls.cdf(ls.inverse_cdf(p)), p, 1e-6);
         }

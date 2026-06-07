@@ -2,7 +2,7 @@
 //! sample state trajectories from a row-stochastic transition matrix, and compute
 //! the stationary distribution. (This is the chain as a random process — distinct
 //! from MCMC *inference*, which is out of scope for `bayes`.)
-#![allow(clippy::needless_range_loop)] // matrix–vector index arithmetic reads clearer here
+#![allow(clippy::needless_range_loop)]
 
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
@@ -66,7 +66,7 @@ impl MarkovChain {
                 return j;
             }
         }
-        row.len() - 1 // numerical guard
+        row.len() - 1
     }
 
     /// A trajectory of `steps` transitions from `start` — a vector of `steps + 1`
@@ -139,8 +139,8 @@ mod tests {
 
     #[test]
     fn rejects_non_stochastic_matrices() {
-        assert!(MarkovChain::new(vec![vec![0.5, 0.4], vec![0.5, 0.5]]).is_err()); // row sums ≠ 1
-        assert!(MarkovChain::new(vec![vec![1.0, 0.0]]).is_err()); // not square
+        assert!(MarkovChain::new(vec![vec![0.5, 0.4], vec![0.5, 0.5]]).is_err());
+        assert!(MarkovChain::new(vec![vec![1.0, 0.0]]).is_err());
     }
 
     #[test]
@@ -154,7 +154,6 @@ mod tests {
 
     #[test]
     fn stationary_distribution_is_correct() {
-        // For P = [[0.2,0.8],[0.6,0.4]], the stationary π = [3/7, 4/7].
         let mc = MarkovChain::new(vec![vec![0.2, 0.8], vec![0.6, 0.4]]).unwrap();
         let pi = mc.stationary();
         close(pi[0], 3.0 / 7.0, 1e-9);

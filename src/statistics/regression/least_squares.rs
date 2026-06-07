@@ -12,8 +12,9 @@ use crate::linalg::gaussian_solve;
 /// keeps near-collinear designs stable. There is no implicit intercept — add a
 /// constant column to the design if you want one.
 ///
-/// Returns a zero vector when the system is underdetermined (fewer samples than
-/// columns) or the design is empty.
+/// Returns a zero vector for a malformed or underdetermined problem: an empty or
+/// ragged design, fewer samples than columns, a length mismatch with `y`, or any
+/// non-finite entry.
 #[must_use]
 pub fn fit_least_squares(design: &[Vec<f64>], y: &[f64]) -> Vec<f64> {
     let k = design.first().map_or(0, Vec::len);
@@ -36,7 +37,6 @@ pub fn fit_least_squares(design: &[Vec<f64>], y: &[f64]) -> Vec<f64> {
             }
         }
     }
-    // Ridge, scaled by each column's magnitude, to regularise collinear bases.
     for (i, row) in ata.iter_mut().enumerate() {
         let scale = row[i].abs().max(1.0);
         row[i] += 1e-9 * scale;
@@ -55,7 +55,6 @@ mod tests {
 
     #[test]
     fn least_squares_recovers_multiple_coefficients() {
-        // Two predictors plus a constant column: y = 2·x₁ - 3·x₂ + 5.
         let (b1, b2, b0) = (2.0, -3.0, 5.0);
         let mut design = Vec::new();
         let mut y = Vec::new();
@@ -78,7 +77,6 @@ mod tests {
 
     #[test]
     fn underdetermined_system_returns_zeros() {
-        // One sample, two columns ⇒ fewer samples than columns.
         assert_eq!(fit_least_squares(&[vec![1.0, 2.0]], &[3.0]), vec![0.0, 0.0]);
     }
 

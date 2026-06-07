@@ -177,13 +177,13 @@ mod tests {
     #[test]
     fn rbf_peaks_at_zero_distance_and_is_symmetric() {
         let k = Rbf::new(2.0, 1.5);
-        close(k.covariance(&[1.0], &[1.0]), 2.0, 1e-12); // variance at d=0
+        close(k.covariance(&[1.0], &[1.0]), 2.0, 1e-12);
         close(
             k.covariance(&[0.0], &[3.0]),
             k.covariance(&[3.0], &[0.0]),
             1e-15,
         );
-        assert!(k.covariance(&[0.0], &[3.0]) < 2.0); // decays with distance
+        assert!(k.covariance(&[0.0], &[3.0]) < 2.0);
     }
 
     #[test]
@@ -195,7 +195,6 @@ mod tests {
     #[test]
     fn periodic_repeats() {
         let k = Periodic::new(1.0, 1.0, 4.0);
-        // Distance equal to a full period ⇒ same as distance 0.
         close(
             k.covariance(&[0.0], &[4.0]),
             k.covariance(&[0.0], &[0.0]),

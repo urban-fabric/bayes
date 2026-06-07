@@ -36,7 +36,6 @@ impl Weibull {
 
 impl Distribution<f64> for Weibull {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse transform: λ(−ln U)^{1/k}.
         let u = 1.0 - rng.random::<f64>();
         self.scale * (-u.ln()).powf(1.0 / self.shape)
     }
@@ -115,10 +114,9 @@ mod tests {
 
     #[test]
     fn weibull_reduces_to_exponential_at_shape_one() {
-        // Weibull(λ, 1) = Exponential(rate 1/λ).
         let w = Weibull::new(2.0, 1.0).unwrap();
         close(w.cdf(2.0), 1.0 - (-1.0f64).exp(), 1e-12);
-        close(w.mean().unwrap(), 2.0, 1e-10); // Γ(2) = 1
+        close(w.mean().unwrap(), 2.0, 1e-10);
     }
 
     #[test]

@@ -35,7 +35,6 @@ impl Pareto {
 
 impl Distribution<f64> for Pareto {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse transform: x_m / U^{1/α} (U uniform on (0,1]).
         let u = 1.0 - rng.random::<f64>();
         self.scale / u.powf(1.0 / self.shape)
     }
@@ -89,7 +88,7 @@ impl Moments for Pareto {
             let a = self.shape;
             Some(self.scale * self.scale * a / ((a - 1.0) * (a - 1.0) * (a - 2.0)))
         } else {
-            None // infinite for α ≤ 2
+            None
         }
     }
     fn median(&self) -> Option<f64> {
@@ -109,7 +108,6 @@ impl Estimate for Pareto {
             return None;
         }
         let xm = data.iter().copied().fold(f64::INFINITY, f64::min);
-        // MLE shape: n / Σ ln(xᵢ / x_m).
         let s: f64 = data.iter().map(|&x| (x / xm).ln()).sum();
         if s <= 0.0 {
             return None;
@@ -136,7 +134,6 @@ mod tests {
             close(p.cdf(p.inverse_cdf(q)), q, 1e-10);
         }
         close(p.mean().unwrap(), 3.0 * 2.0 / 2.0, 1e-12);
-        // α = 1.5 ⇒ finite mean, infinite variance.
         assert!(Pareto::new(1.0, 1.5).unwrap().variance().is_none());
         assert_eq!(Pareto::new(1.0, 0.8).unwrap().mean(), None);
     }

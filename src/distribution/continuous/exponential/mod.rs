@@ -35,7 +35,6 @@ impl Exponential {
 
 impl Distribution<f64> for Exponential {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse-transform: -ln(U)/λ, U ∈ (0, 1].
         -(1.0 - rng.random::<f64>()).ln() / self.rate
     }
 }
@@ -116,8 +115,6 @@ impl Moments for Exponential {
 }
 
 impl Estimate for Exponential {
-    // The MLE (λ̂ = 1/mean) lives in the `ExponentialFamily` impl; `Estimate` is the
-    // batch-fit façade over it.
     fn from_sample(data: &[f64]) -> Option<Self> {
         <Self as crate::distribution::ExponentialFamily>::fit(data)
     }

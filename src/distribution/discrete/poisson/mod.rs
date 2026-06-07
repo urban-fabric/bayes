@@ -99,7 +99,6 @@ impl Discrete<u64> for Poisson {
         self.ln_pmf(k).exp()
     }
     fn ln_pmf(&self, k: u64) -> f64 {
-        // ln(λ^k e^{-λ} / k!) = k ln λ - λ - ln k!
         (k as f64) * self.lambda.ln() - self.lambda - ln_factorial(k)
     }
 }
@@ -115,7 +114,6 @@ impl Support<u64> for Poisson {
 
 impl DiscreteCdf<u64> for Poisson {
     fn cdf(&self, k: u64) -> f64 {
-        // P(X ≤ k) = Q(k+1, λ), the regularized upper incomplete gamma.
         gamma_ur(k as f64 + 1.0, self.lambda)
     }
     fn inverse_cdf(&self, p: f64) -> u64 {
@@ -123,7 +121,6 @@ impl DiscreteCdf<u64> for Poisson {
             return 0;
         }
         let mut k = 0u64;
-        // Monotone search; the search space is bounded by the right tail.
         while self.cdf(k) < p {
             k += 1;
         }

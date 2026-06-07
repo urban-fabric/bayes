@@ -58,7 +58,7 @@ impl Continuous for Triangular {
         } else if x > c {
             2.0 * (b - x) / ((b - a) * (b - c))
         } else {
-            2.0 / (b - a) // peak at the mode
+            2.0 / (b - a)
         }
     }
 }
@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn pdf_cdf_quantile_and_moments() {
         let t = Triangular::new(0.0, 4.0, 1.0).unwrap();
-        close(t.pdf(1.0), 2.0 / 4.0, 1e-12); // peak 2/(b-a)
+        close(t.pdf(1.0), 2.0 / 4.0, 1e-12);
         close(t.cdf(4.0), 1.0, 1e-12);
         close(t.cdf(0.0), 0.0, 1e-12);
         for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {

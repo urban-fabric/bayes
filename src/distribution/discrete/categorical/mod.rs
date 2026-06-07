@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn normalizes_weights_and_pmf_cdf() {
-        let c = Categorical::new(&[1.0, 3.0]).unwrap(); // → [0.25, 0.75]
+        let c = Categorical::new(&[1.0, 3.0]).unwrap();
         close(c.pmf(0), 0.25, 1e-12);
         close(c.pmf(1), 0.75, 1e-12);
         close(c.cdf(0), 0.25, 1e-12);

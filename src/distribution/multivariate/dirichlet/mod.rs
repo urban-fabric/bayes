@@ -43,7 +43,6 @@ impl Dirichlet {
 
 impl Distribution<Vec<f64>> for Dirichlet {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec<f64> {
-        // xᵢ = yᵢ / Σy, yᵢ ~ Gamma(αᵢ, 1).
         let y: Vec<f64> = self
             .alpha
             .iter()
@@ -65,7 +64,6 @@ impl MultivariateContinuous for Dirichlet {
         {
             return f64::NEG_INFINITY;
         }
-        // ln B(α)⁻¹ + Σ (αᵢ-1) ln xᵢ, with ln B(α) = Σ ln Γ(αᵢ) − ln Γ(Σα).
         let ln_norm =
             ln_gamma(self.alpha_sum()) - self.alpha.iter().map(|&a| ln_gamma(a)).sum::<f64>();
         ln_norm
@@ -126,7 +124,7 @@ mod tests {
         let n = 40_000;
         for _ in 0..n {
             let x = d.sample(&mut rng);
-            close(x.iter().sum::<f64>(), 1.0, 1e-12); // on the simplex
+            close(x.iter().sum::<f64>(), 1.0, 1e-12);
             for i in 0..3 {
                 avg[i] += x[i] / n as f64;
             }
@@ -138,7 +136,6 @@ mod tests {
 
     #[test]
     fn uniform_dirichlet_has_constant_density() {
-        // Dir(1,1,1) is uniform on the simplex: density = Γ(3) = 2 everywhere.
         let d = Dirichlet::new(vec![1.0, 1.0, 1.0]).unwrap();
         close(d.pdf(&[0.2, 0.3, 0.5]), 2.0, 1e-10);
         close(d.pdf(&[0.6, 0.1, 0.3]), 2.0, 1e-10);

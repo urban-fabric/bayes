@@ -16,7 +16,7 @@ pub struct KernelDensity {
 
 impl KernelDensity {
     /// Fit a KDE to `data` with Silverman's rule-of-thumb bandwidth
-    /// `0.9·min(σ̂, IQR/1.34)·n^{-1/5}`. `None` if `data` has fewer than 2 points or
+    /// `0.9·min(σ̂, IQR/1.349)·n^{-1/5}`. `None` if `data` has fewer than 2 points or
     /// the bandwidth degenerates to zero (all values identical).
     pub fn new(data: &[f64]) -> Option<Self> {
         if data.len() < 2 {
@@ -76,7 +76,6 @@ mod tests {
     fn density_is_non_negative_and_integrates_to_about_one() {
         let data: Vec<f64> = (0..200).map(|i| (i as f64) * 0.05 - 5.0).collect();
         let kde = KernelDensity::new(&data).unwrap();
-        // Numerically integrate over a wide grid.
         let (lo, hi, steps) = (-15.0, 15.0, 6000);
         let dx = (hi - lo) / steps as f64;
         let mut area = 0.0;
@@ -91,7 +90,6 @@ mod tests {
 
     #[test]
     fn peaks_near_a_cluster() {
-        // Data clustered near 0 ⇒ density at 0 exceeds density far away.
         let data = [-0.1, 0.0, 0.05, -0.05, 0.1, 0.02];
         let kde = KernelDensity::new(&data).unwrap();
         assert!(kde.density(0.0) > kde.density(5.0));
@@ -100,6 +98,6 @@ mod tests {
     #[test]
     fn degenerate_inputs_return_none() {
         assert!(KernelDensity::new(&[1.0]).is_none());
-        assert!(KernelDensity::new(&[2.0, 2.0, 2.0]).is_none()); // zero spread
+        assert!(KernelDensity::new(&[2.0, 2.0, 2.0]).is_none());
     }
 }

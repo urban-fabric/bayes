@@ -8,7 +8,6 @@ use super::TDigest;
 impl TDigest {
     /// The estimated `p`-quantile (`p ∈ [0, 1]`). `NaN` for an empty digest.
     pub fn quantile(&self, p: f64) -> f64 {
-        // Fast path: with nothing buffered, the centroids are already current.
         if self.buffer.is_empty() {
             return self.quantile_compressed(p);
         }
@@ -28,7 +27,6 @@ impl TDigest {
         let w_total: f64 = cs.iter().map(|c| c.weight).sum();
         let target = p.clamp(0.0, 1.0) * w_total;
 
-        // Centroid "centers" in cumulative-weight space.
         let mut centers = Vec::with_capacity(cs.len());
         let mut cum = 0.0;
         for c in cs {
@@ -36,7 +34,6 @@ impl TDigest {
             cum += c.weight;
         }
 
-        // Left tail: interpolate from the global min to the first centroid.
         if target < centers[0] {
             if centers[0] <= 0.0 {
                 return cs[0].mean;
@@ -44,7 +41,6 @@ impl TDigest {
             let t = target / centers[0];
             return self.min + t * (cs[0].mean - self.min);
         }
-        // Right tail: interpolate from the last centroid to the global max.
         let last = cs.len() - 1;
         if target > centers[last] {
             let denom = w_total - centers[last];
@@ -54,7 +50,6 @@ impl TDigest {
             let t = (target - centers[last]) / denom;
             return cs[last].mean + t * (self.max - cs[last].mean);
         }
-        // Interior: linear interpolation between adjacent centroid centers.
         for i in 1..cs.len() {
             if target <= centers[i] {
                 let t = (target - centers[i - 1]) / (centers[i] - centers[i - 1]);

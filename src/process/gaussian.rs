@@ -5,7 +5,7 @@
 //!
 //! Inputs are points in `ℝ^d` (each a `Vec<f64>`); the GP draws a value per input
 //! by sampling the multivariate normal `N(m·1, K)` via the Cholesky factor.
-#![allow(clippy::needless_range_loop)] // matrix/vector index arithmetic reads clearer here
+#![allow(clippy::needless_range_loop)]
 
 use rand::Rng;
 
@@ -92,7 +92,6 @@ impl<K: Kernel> GaussianProcess<K> {
         let z: Vec<f64> = (0..inputs.len())
             .map(|_| standard_normal_polar(rng))
             .collect();
-        // f = mean·1 + L z.
         Some(
             (0..inputs.len())
                 .map(|i| self.mean + (0..=i).map(|j| l[i][j] * z[j]).sum::<f64>())
@@ -122,18 +121,15 @@ impl<K: Kernel> GaussianProcess<K> {
             return None;
         }
         let n = train_x.len();
-        // Ky = K_XX + noise·I.
         let mut ky = self.gram(train_x, train_x);
         for (i, row) in ky.iter_mut().enumerate() {
             row[i] += noise;
         }
         let l = cholesky(&ky, self.jitter)?;
 
-        // α = Ky⁻¹ (y − mean).
         let y_centered: Vec<f64> = train_y.iter().map(|&y| y - self.mean).collect();
         let alpha = cholesky_solve(&l, &y_centered);
 
-        // Cross covariance columns ks[j] = cov(train, test_j), length n.
         let ks: Vec<Vec<f64>> = test_x
             .iter()
             .map(|t| {
@@ -145,7 +141,6 @@ impl<K: Kernel> GaussianProcess<K> {
             .collect();
         let kss = self.gram(test_x, test_x);
 
-        // Mean: m + ksⱼᵀ α.   Covariance: Kss − VᵀV with V = L \ ks.
         let m = test_x.len();
         let v: Vec<Vec<f64>> = ks.iter().map(|col| solve_lower(&l, col)).collect();
         let mean: Vec<f64> = (0..m)
@@ -235,7 +230,6 @@ mod tests {
 
     #[test]
     fn posterior_interpolates_noiseless_observations() {
-        // With ~zero noise, the GP posterior mean passes through the training data.
         let gp = GaussianProcess::new(Rbf::new(1.0, 1.0));
         let tx = points(&[-2.0, 0.0, 2.0]);
         let ty = [1.0, 0.5, -1.0];
@@ -243,7 +237,6 @@ mod tests {
         for i in 0..3 {
             close(post.mean[i], ty[i], 1e-4);
         }
-        // Predictive variance at training points ≈ 0.
         for v in post.variance() {
             assert!(v.abs() < 1e-3, "variance at observed point: {v}");
         }
@@ -251,8 +244,6 @@ mod tests {
 
     #[test]
     fn posterior_reverts_to_prior_far_from_data() {
-        // Far from any training point, an RBF GP predicts the prior mean (0) with
-        // ≈ prior variance (1).
         let gp = GaussianProcess::new(Rbf::new(1.0, 0.5));
         let post = gp
             .posterior(&points(&[0.0]), &[3.0], 1e-6, &points(&[100.0]))

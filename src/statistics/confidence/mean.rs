@@ -81,13 +81,11 @@ mod tests {
         let ci = mean_t_interval(&data, 0.95);
         assert!(ci.contains(mean(&data)));
         assert!(ci.lower < mean(&data) && mean(&data) < ci.upper);
-        // Higher confidence ⇒ wider interval.
         assert!(mean_t_interval(&data, 0.99).width() > ci.width());
     }
 
     #[test]
     fn z_interval_known_width() {
-        // n=4, σ=2, 95% ⇒ half-width = 1.959964·2/2 = 1.959964.
         let data = [10.0, 10.0, 10.0, 10.0];
         let ci = mean_z_interval(&data, 2.0, 0.95);
         close(ci.upper - 10.0, 1.959_963_98, 1e-4);

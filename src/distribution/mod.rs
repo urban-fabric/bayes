@@ -21,8 +21,6 @@ pub mod multivariate;
 mod numeric;
 pub mod transformed;
 
-// The concrete distributions are organised into `continuous` / `discrete`; they
-// are also re-exported flat here (and at the crate root) so `bayes::Normal` works.
 pub use combinator::{Mixture, Truncated};
 pub use conjugate::{
     BetaBernoulli, BetaBinomialModel, Conjugate, DirichletCategorical, DirichletMultinomial,
@@ -49,8 +47,6 @@ pub use multivariate::{
 };
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};
 
-// Re-export the standard-normal sampler module at a stable `distribution::normal`
-// path for `process` (and other internal samplers).
 pub(crate) use continuous::normal;
 
 /// Continuous probability **density** — the PDF `f(x)`.

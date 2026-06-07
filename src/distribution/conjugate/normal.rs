@@ -157,15 +157,11 @@ mod tests {
 
     #[test]
     fn normal_known_variance_shrinks_toward_data() {
-        // Vague prior N(0, 10) on the mean, likelihood σ = 1, data centered at 5.
         let model = NormalKnownVariance::new(Normal::new(0.0, 10.0).unwrap(), 1.0);
         let data = [4.8, 5.0, 5.2, 4.9, 5.1];
         let post = model.posterior(&data);
-        // Posterior mean is very close to the sample mean (≈5) with a vague prior.
         close(post.mean().unwrap(), 5.0, 0.02);
-        // Posterior is tighter than the likelihood's per-observation σ.
         assert!(post.variance().unwrap() < 1.0);
-        // Predictive is wider than the posterior (adds likelihood noise).
         let pred = model.posterior_predictive(&data);
         assert!(pred.variance().unwrap() > post.variance().unwrap());
     }
@@ -173,22 +169,19 @@ mod tests {
     #[test]
     fn normal_inverse_gamma_posterior_and_predictive() {
         let model = NormalInverseGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
-        let data = [1.0, 2.0, 3.0]; // n=3, x̄=2, SS=2
+        let data = [1.0, 2.0, 3.0];
         let post = model.posterior(&data);
-        close(post.mu(), 1.5, 1e-12); // (1·0 + 3·2)/4
+        close(post.mu(), 1.5, 1e-12);
         close(post.lambda(), 4.0, 1e-12);
-        close(post.alpha(), 3.5, 1e-12); // 2 + 3/2
-        close(post.beta(), 3.5, 1e-12); // 1 + 1 + 12/8
-        // Marginal mean ~ t(ν=7, loc=1.5, scale=√(β/(αλ))=0.5).
+        close(post.alpha(), 3.5, 1e-12);
+        close(post.beta(), 3.5, 1e-12);
         let mu_t = post.mean_marginal();
         close(mu_t.freedom(), 7.0, 1e-12);
         close(mu_t.location(), 1.5, 1e-12);
         close(mu_t.scale(), 0.5, 1e-12);
-        // Predictive ~ t(ν=7, loc=1.5, scale=√(β(λ+1)/(αλ))=√1.25).
         let pred = model.posterior_predictive(&data);
         close(pred.freedom(), 7.0, 1e-12);
         close(pred.scale(), 1.25_f64.sqrt(), 1e-12);
-        // Variance marginal of σ² is InverseGamma(3.5, 3.5).
         let ig = post.variance_marginal();
         close(ig.shape(), 3.5, 1e-12);
         close(ig.scale(), 3.5, 1e-12);

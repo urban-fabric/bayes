@@ -67,7 +67,6 @@ impl ContinuousCdf for LogNormal {
         if x <= 0.0 {
             return 0.0;
         }
-        // Φ over ln(x) under the underlying Normal.
         self.underlying.cdf(x.ln())
     }
     fn inverse_cdf(&self, p: f64) -> f64 {

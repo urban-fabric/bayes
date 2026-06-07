@@ -79,7 +79,7 @@ pub fn jarque_bera(data: &[f64]) -> TestResult {
     }
     let n = data.len() as f64;
     let s = skewness(data);
-    let k = kurtosis(data); // excess kurtosis
+    let k = kurtosis(data);
     let jb = n / 6.0 * (s * s + k * k / 4.0);
     TestResult {
         statistic: jb,
@@ -102,11 +102,9 @@ mod tests {
 
     #[test]
     fn ks_one_sample_matches_uniform() {
-        let data: Vec<f64> = (1..10).map(|i| i as f64 / 10.0).collect(); // 0.1..0.9
-        // Against the true Uniform(0,1) CDF: small D, large p.
+        let data: Vec<f64> = (1..10).map(|i| i as f64 / 10.0).collect();
         let good = ks_one_sample(&data, |x| x.clamp(0.0, 1.0));
         assert!(good.p_value > 0.2);
-        // Against a badly mismatched CDF: larger D, smaller p.
         let bad = ks_one_sample(&data, |x| (x - 5.0).clamp(0.0, 1.0));
         assert!(bad.statistic > good.statistic);
         assert!(bad.p_value < good.p_value);
