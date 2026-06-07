@@ -27,7 +27,6 @@ impl InverseGamma {
                 return Err(BayesError::NotPositive { name, value: v });
             }
         }
-        // 1/X with X ~ Gamma(shape, rate = scale).
         Ok(Self {
             shape,
             scale,
@@ -60,7 +59,6 @@ impl Continuous for InverseGamma {
         if x <= 0.0 {
             return f64::NEG_INFINITY;
         }
-        // β^α/Γ(α) · x^{-α-1} · exp(-β/x).
         self.shape * self.scale.ln()
             - ln_gamma(self.shape)
             - (self.shape + 1.0) * x.ln()
@@ -82,7 +80,6 @@ impl ContinuousCdf for InverseGamma {
         if x <= 0.0 {
             0.0
         } else {
-            // P(X ≤ x) = Q(α, β/x), the regularized upper incomplete gamma.
             gamma_ur(self.shape, self.scale / x)
         }
     }
@@ -123,9 +120,8 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(ig.cdf(ig.inverse_cdf(p)), p, 1e-7);
         }
-        close(ig.mean().unwrap(), 2.0 / 2.0, 1e-12); // β/(α-1)
-        close(ig.mode().unwrap(), 2.0 / 4.0, 1e-12); // β/(α+1)
-        // α = 1.5 ⇒ finite mean, infinite variance.
+        close(ig.mean().unwrap(), 2.0 / 2.0, 1e-12);
+        close(ig.mode().unwrap(), 2.0 / 4.0, 1e-12);
         assert!(InverseGamma::new(1.5, 1.0).unwrap().variance().is_none());
     }
 }

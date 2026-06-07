@@ -39,7 +39,6 @@ impl Gamma {
 /// Marsaglia–Tsang sampler for a standard gamma (rate 1), any `shape > 0`.
 pub(crate) fn sample_standard_gamma<R: Rng + ?Sized>(rng: &mut R, shape: f64) -> f64 {
     if shape < 1.0 {
-        // Boost: Gamma(shape) = Gamma(shape+1) · U^{1/shape}.
         let g = sample_standard_gamma(rng, shape + 1.0);
         return g * rng.random::<f64>().powf(1.0 / shape);
     }
@@ -140,7 +139,6 @@ impl Estimate for Gamma {
         if data.len() < 2 || data.iter().any(|&x| x <= 0.0) {
             return None;
         }
-        // Method of moments: shape = mean²/var, rate = mean/var.
         let n = data.len() as f64;
         let mean = data.iter().sum::<f64>() / n;
         let var = data.iter().map(|&x| (x - mean) * (x - mean)).sum::<f64>() / n;
@@ -165,7 +163,6 @@ mod tests {
     #[test]
     fn gamma_reduces_to_exponential_at_shape_one() {
         let g = Gamma::new(1.0, 2.0).unwrap();
-        // Gamma(1, β) = Exponential(β).
         close(g.cdf(1.0), 1.0 - (-2.0f64).exp(), 1e-10);
         close(g.pdf(0.5), 2.0 * (-1.0f64).exp(), 1e-10);
     }

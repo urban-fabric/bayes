@@ -50,7 +50,6 @@ impl MultivariateNormal {
         let chol = cholesky(&cov, JITTER).ok_or(BayesError::Malformed {
             what: "covariance is not positive-definite",
         })?;
-        // ln|2πΣ| = d·ln(2π) + ln|Σ| = d·ln(2π) + 2·Σ ln L_ii.
         let ln_det: f64 = (0..d).map(|i| chol[i][i].ln()).sum::<f64>() * 2.0;
         let ln_det_2pi = d as f64 * TAU.ln() + ln_det;
         Ok(Self {
@@ -73,7 +72,6 @@ impl Distribution<Vec<f64>> for MultivariateNormal {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec<f64> {
         let d = self.mean.len();
         let z: Vec<f64> = (0..d).map(|_| standard_normal_polar(rng)).collect();
-        // x = μ + L z.
         (0..d)
             .map(|i| self.mean[i] + (0..=i).map(|j| self.chol[i][j] * z[j]).sum::<f64>())
             .collect()
@@ -89,7 +87,6 @@ impl MultivariateContinuous for MultivariateNormal {
             return f64::NEG_INFINITY;
         }
         let diff: Vec<f64> = x.iter().zip(&self.mean).map(|(xi, mi)| xi - mi).collect();
-        // quad = diffᵀ Σ⁻¹ diff  (via the Cholesky solve).
         let solved = cholesky_solve(&self.chol, &diff);
         let quad: f64 = diff.iter().zip(&solved).map(|(a, b)| a * b).sum();
         -0.5 * (quad + self.ln_det_2pi)
@@ -118,11 +115,9 @@ mod tests {
 
     #[test]
     fn diagonal_matches_independent_normals() {
-        // N(μ, diag(σ²)) density = product of marginal normals.
         let mvn =
             MultivariateNormal::new(vec![1.0, -2.0], vec![vec![4.0, 0.0], vec![0.0, 9.0]]).unwrap();
         let x = [2.0, 0.0];
-        // ln of N(2;1,2)·N(0;-2,3).
         let marg = |xi: f64, mu: f64, sd: f64| {
             let z = (xi - mu) / sd;
             -0.5 * z * z - (sd * TAU.sqrt()).ln()
@@ -146,7 +141,6 @@ mod tests {
         let m1 = samples.iter().map(|s| s[1]).sum::<f64>() / n as f64;
         close(m0, mean[0], 0.05);
         close(m1, mean[1], 0.05);
-        // Empirical covariance[0][1].
         let c01 = samples
             .iter()
             .map(|s| (s[0] - m0) * (s[1] - m1))

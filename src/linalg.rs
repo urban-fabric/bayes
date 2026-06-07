@@ -2,7 +2,7 @@
 //! positive-definite matrix with its triangular solves (for Gaussian processes),
 //! and a general Gaussian-elimination solver (for ordinary least squares).
 //! Hand-rolled (small matrices) so the numerics core needs no `nalgebra` dependency.
-#![allow(clippy::needless_range_loop)] // index arithmetic over rows/cols reads clearer here
+#![allow(clippy::needless_range_loop)]
 
 /// A dense row-major square matrix as `Vec<Vec<f64>>`.
 pub(crate) type Matrix = Vec<Vec<f64>>;
@@ -116,10 +116,8 @@ mod tests {
 
     #[test]
     fn cholesky_reconstructs_the_matrix() {
-        // SPD matrix [[4,2],[2,3]].
         let a = vec![vec![4.0, 2.0], vec![2.0, 3.0]];
         let l = cholesky(&a, 0.0).unwrap();
-        // L Lᵀ == a.
         for i in 0..2 {
             for j in 0..2 {
                 let v: f64 = (0..2).map(|k| l[i][k] * l[j][k]).sum();
@@ -134,7 +132,6 @@ mod tests {
         let l = cholesky(&a, 0.0).unwrap();
         let b = [1.0, 2.0];
         let x = cholesky_solve(&l, &b);
-        // a·x == b.
         for i in 0..2 {
             let v: f64 = (0..2).map(|j| a[i][j] * x[j]).sum();
             close(v, b[i], 1e-12);
@@ -143,7 +140,7 @@ mod tests {
 
     #[test]
     fn non_pd_returns_none() {
-        let a = vec![vec![1.0, 2.0], vec![2.0, 1.0]]; // indefinite
+        let a = vec![vec![1.0, 2.0], vec![2.0, 1.0]];
         assert!(cholesky(&a, 0.0).is_none());
     }
 }

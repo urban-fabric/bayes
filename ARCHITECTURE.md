@@ -72,11 +72,13 @@ The concrete distributions are grouped by kind:
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
 - `combinator/`: Mixture and Truncated.
 - `transformed/`: Bijectors and `Transformed<D, B>`.
-- `functional.rs`: closure-backed density/mass/CDF adapters plus extension traits
+- `functional/`: closure-backed density/mass/CDF adapters plus extension traits
   for log-likelihoods, interval probabilities, truncation, and bijective
   composition.
 - `exponential_family/`: mergeable sufficient statistics and closed-form fits.
 - `conjugate/`: closed-form conjugate prior/posterior updates and predictives.
+- `divergence.rs`: closed-form KL divergence between same-family distributions
+  (Normal, Gamma, Beta, Exponential, Poisson, Bernoulli).
 
 Every distribution should validate constructor parameters, implement the relevant
 spine traits, and implement `rand::distr::Distribution` for sampling.
@@ -121,8 +123,8 @@ implementation groups with their public functions re-exported from
   Mahalanobis distance, and Hotelling's T-squared;
 - `regression`: simple OLS diagnostics and explicit-design least squares;
 - `resampling`: bootstrap, jackknife, percentile intervals;
-- `hypothesis`: z/t/Welch/F, chi-squared, Fisher exact, exact binomial, McNemar,
-  KS, Jarque-Bera, ANOVA, Mann-Whitney, Wilcoxon, sign test;
+- `hypothesis`: z/t/Welch/F, Pearson correlation, chi-squared, Fisher exact, exact
+  binomial, McNemar, KS, Jarque-Bera, ANOVA, Mann-Whitney, Wilcoxon, sign test;
 - `confidence`: closed-form confidence intervals for means, proportions, rates,
   variance/standard deviation, and mean/proportion differences;
 - `empirical`: ECDF and histograms;

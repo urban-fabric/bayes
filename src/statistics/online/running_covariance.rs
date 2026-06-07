@@ -9,9 +9,9 @@ pub struct RunningCovariance {
     n: u64,
     mean_x: f64,
     mean_y: f64,
-    c2: f64,   // Σ (xᵢ − x̄)(yᵢ − ȳ)
-    m2_x: f64, // Σ (xᵢ − x̄)²
-    m2_y: f64, // Σ (yᵢ − ȳ)²
+    c2: f64,
+    m2_x: f64,
+    m2_y: f64,
 }
 
 impl Default for RunningCovariance {
@@ -40,7 +40,6 @@ impl RunningCovariance {
         self.mean_x += dx / n;
         let dy = y - self.mean_y;
         self.mean_y += dy / n;
-        // Welford co-moment uses the *updated* y-mean and the *old* x-deviation.
         self.c2 += dx * (y - self.mean_y);
         self.m2_x += dx * (x - self.mean_x);
         self.m2_y += dy * (y - self.mean_y);
@@ -155,7 +154,6 @@ mod tests {
         let rc: RunningCovariance = xs.iter().copied().zip(ys.iter().copied()).collect();
         close(rc.covariance(), covariance(&xs, &ys), 1e-7);
         close(rc.correlation(), correlation(&xs, &ys), 1e-9);
-        // OLS slope = cov/var(x) (≈ 2 here, the linear part).
         close(rc.slope(), covariance(&xs, &ys) / variance(&xs), 1e-7);
         close(
             rc.intercept(),
@@ -163,7 +161,6 @@ mod tests {
             1e-12,
         );
 
-        // Split-and-merge equals the one-pass result.
         let mut a: RunningCovariance = xs[..70]
             .iter()
             .copied()

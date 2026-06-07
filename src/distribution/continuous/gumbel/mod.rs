@@ -89,7 +89,6 @@ impl Moments for Gumbel {
         Some(PI * PI / 6.0 * self.scale * self.scale)
     }
     fn skewness(&self) -> Option<f64> {
-        // 12√6 ζ(3) / π³ ≈ 1.13955.
         Some(1.139_547_099_404_649)
     }
     fn median(&self) -> Option<f64> {
@@ -120,7 +119,6 @@ mod tests {
         }
         close(g.mean().unwrap(), 1.0 + 2.0 * EULER_GAMMA, 1e-12);
         close(g.mode().unwrap(), 1.0, 1e-12);
-        // CDF at the mode = e⁻¹.
         close(g.cdf(1.0), (-1.0f64).exp(), 1e-12);
     }
 }

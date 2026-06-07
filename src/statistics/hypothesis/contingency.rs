@@ -1,5 +1,5 @@
-//! Contingency-table tests: **χ² goodness-of-fit**, **χ² independence**, and
-//! **Fisher's exact** test.
+//! Contingency-table tests: **χ² goodness-of-fit**, **χ² independence**, **Fisher's
+//! exact**, the **exact binomial** test, and **McNemar's** test.
 
 use super::{TestResult, binomial_two_sided_p_value, chi2_upper, nan_result};
 use crate::function::factorial::ln_binomial;
@@ -80,7 +80,6 @@ pub fn fishers_exact(a: u64, b: u64, c: u64, d: u64) -> TestResult {
     if n == 0 {
         return nan_result();
     }
-    // P(cell(0,0) = k | margins) = C(r1,k)·C(r2,c1−k) / C(n,c1).
     let log_norm = ln_binomial(n, c1);
     let ln_p = |k: u64| ln_binomial(r1, k) + ln_binomial(r2, c1 - k) - log_norm;
     let p_obs = ln_p(a).exp();
@@ -141,19 +140,16 @@ mod tests {
 
     #[test]
     fn chi_squared_fair_die() {
-        // A fair die observed close to expectation ⇒ large p.
         let observed = [10.0, 11.0, 9.0, 10.0, 12.0, 8.0];
         let expected = [10.0; 6];
         let res = chi_squared_goodness_of_fit(&observed, &expected);
         assert!(res.p_value > 0.5);
-        // A loaded die ⇒ small p.
         let loaded = [2.0, 2.0, 2.0, 2.0, 2.0, 50.0];
         assert!(chi_squared_goodness_of_fit(&loaded, &[10.0; 6]).p_value < 1e-6);
     }
 
     #[test]
     fn independence_of_a_balanced_table() {
-        // Perfectly proportional table ⇒ χ² = 0, p = 1.
         let table = vec![vec![10.0, 20.0], vec![20.0, 40.0]];
         let res = chi_squared_independence(&table);
         assert!(res.statistic.abs() < 1e-9);
@@ -162,9 +158,7 @@ mod tests {
 
     #[test]
     fn fishers_exact_known_values() {
-        // "Lady tasting tea" 2×2 [[3,1],[1,3]]: two-sided p = 34/70 ≈ 0.4857.
         close(fishers_exact(3, 1, 1, 3).p_value, 34.0 / 70.0, 1e-9);
-        // Perfect association ⇒ tiny p; balanced table ⇒ p = 1.
         assert!(fishers_exact(10, 0, 0, 10).p_value < 0.01);
         close(fishers_exact(5, 5, 5, 5).p_value, 1.0, 1e-9);
     }

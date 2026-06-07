@@ -23,7 +23,6 @@ pub fn beta_reg(a: f64, b: f64, x: f64) -> f64 {
         return 1.0;
     }
     let front = (a * x.ln() + b * (1.0 - x).ln() - ln_beta(a, b)).exp();
-    // Use the continued fraction; reflect for faster convergence when x is large.
     if x < (a + 1.0) / (a + b + 2.0) {
         front * beta_cf(a, b, x) / a
     } else {
@@ -50,7 +49,6 @@ fn beta_cf(a: f64, b: f64, x: f64) -> f64 {
     for m in 1..MAX_ITER {
         let m = m as f64;
         let m2 = 2.0 * m;
-        // Even step.
         let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
         d = 1.0 + aa * d;
         if d.abs() < tiny {
@@ -62,7 +60,6 @@ fn beta_cf(a: f64, b: f64, x: f64) -> f64 {
         }
         d = 1.0 / d;
         h *= d * c;
-        // Odd step.
         let aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
         d = 1.0 + aa * d;
         if d.abs() < tiny {
@@ -93,7 +90,6 @@ mod tests {
 
     #[test]
     fn beta_known_values() {
-        // B(1,1) = 1, B(2,3) = 1/12.
         close(beta(1.0, 1.0), 1.0, 1e-12);
         close(beta(2.0, 3.0), 1.0 / 12.0, 1e-10);
     }
@@ -102,11 +98,9 @@ mod tests {
     fn beta_reg_endpoints_and_symmetry() {
         assert_eq!(beta_reg(2.0, 3.0, 0.0), 0.0);
         assert_eq!(beta_reg(2.0, 3.0, 1.0), 1.0);
-        // I_x(a,b) = 1 - I_{1-x}(b,a).
         for &(a, b, x) in &[(2.0, 3.0, 0.4), (0.5, 0.5, 0.3), (5.0, 2.0, 0.7)] {
             close(beta_reg(a, b, x), 1.0 - beta_reg(b, a, 1.0 - x), 1e-10);
         }
-        // I_x(1,1) = x (uniform CDF).
         close(beta_reg(1.0, 1.0, 0.37), 0.37, 1e-12);
     }
 }

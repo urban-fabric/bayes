@@ -103,7 +103,6 @@ mod tests {
         let c = ChiSquared::new(5.0).unwrap();
         close(c.mean().unwrap(), 5.0, 1e-12);
         close(c.variance().unwrap(), 10.0, 1e-12);
-        // χ²₅ median ≈ 4.3515.
         close(c.inverse_cdf(0.5), 4.351_460_191, 1e-4);
         for &p in &[0.1, 0.5, 0.9] {
             close(c.cdf(c.inverse_cdf(p)), p, 1e-8);

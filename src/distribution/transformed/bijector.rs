@@ -55,7 +55,6 @@ impl Bijector for Affine {
         (y - self.shift) / self.scale
     }
     fn inverse_log_det_jacobian(&self, _y: f64) -> f64 {
-        // d g⁻¹/dy = 1/scale ⇒ ln|1/scale| = -ln|scale|.
         -self.scale.abs().ln()
     }
 }
@@ -73,7 +72,6 @@ impl Bijector for Exp {
         y.ln()
     }
     fn inverse_log_det_jacobian(&self, y: f64) -> f64 {
-        // d ln(y)/dy = 1/y ⇒ ln(1/y) = -ln y.
         -y.ln()
     }
 }
@@ -87,11 +85,9 @@ impl Bijector for Sigmoid {
         1.0 / (1.0 + (-x).exp())
     }
     fn inverse(&self, y: f64) -> f64 {
-        // logit.
         (y / (1.0 - y)).ln()
     }
     fn inverse_log_det_jacobian(&self, y: f64) -> f64 {
-        // d logit(y)/dy = 1/(y(1-y)) ⇒ ln = -ln y - ln(1-y).
         -y.ln() - (1.0 - y).ln()
     }
 }

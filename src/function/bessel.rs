@@ -100,7 +100,7 @@ mod tests {
         close(i0(1.0), 1.266_065_877_75, 1e-7);
         close(i0(2.0), 2.279_585_302_34, 1e-7);
         close(i0(5.0), 27.239_871_823_6, 1e-6);
-        close(i0(-3.0), i0(3.0), 1e-12); // even
+        close(i0(-3.0), i0(3.0), 1e-12);
     }
 
     #[test]
@@ -109,7 +109,7 @@ mod tests {
         close(i1(1.0), 0.565_159_103_99, 1e-7);
         close(i1(2.0), 1.590_636_854_64, 1e-7);
         close(i1(5.0), 24.335_642_142_1, 1e-6);
-        close(i1(-2.0), -i1(2.0), 1e-12); // odd
+        close(i1(-2.0), -i1(2.0), 1e-12);
     }
 
     #[test]
@@ -117,8 +117,6 @@ mod tests {
         for &x in &[0.5, 2.0, 3.0, 6.0] {
             close(i1_over_i0(x), i1(x) / i0(x), 1e-9);
         }
-        // Large argument: the separate ratio overflows (∞/∞ = NaN), this stays valid
-        // and → 1⁻.
         let r = i1_over_i0(1000.0);
         assert!(r.is_finite() && r > 0.999 && r < 1.0);
     }

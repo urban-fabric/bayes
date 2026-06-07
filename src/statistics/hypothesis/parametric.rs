@@ -1,5 +1,5 @@
-//! Parametric mean tests: one-/two-sample **z** and **t**, **Welch's t**, and
-//! **one-way ANOVA**.
+//! Parametric tests: one-/two-sample/paired **t** and **z**, **Welch's t**, the
+//! variance-ratio **F-test**, the **Pearson correlation** test, and **one-way ANOVA**.
 
 use super::{TestResult, nan_result, t_two_sided, z_two_sided};
 use crate::distribution::{ContinuousCdf, FisherSnedecor};
@@ -162,7 +162,6 @@ mod tests {
 
     #[test]
     fn z_test_detects_a_clear_shift() {
-        // Data centered at 5, testing μ = 0 with σ = 1 ⇒ huge z, tiny p.
         let data: Vec<f64> = (0..30).map(|_| 5.0).collect();
         let res = one_sample_z(&data, 0.0, 1.0);
         assert!(res.statistic > 10.0);
@@ -171,7 +170,6 @@ mod tests {
 
     #[test]
     fn t_test_does_not_reject_when_consistent() {
-        // Symmetric data with mean 0 ⇒ large p (fail to reject μ = 0).
         let data = [-2.0, -1.0, 0.0, 1.0, 2.0];
         let res = one_sample_t(&data, 0.0);
         assert!(res.p_value > 0.5);

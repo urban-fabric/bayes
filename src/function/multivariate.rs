@@ -58,7 +58,6 @@ mod tests {
 
     #[test]
     fn multivariate_beta_matches_dirichlet_normalizer() {
-        // B(1,1,1) = Γ(1)^3 / Γ(3) = 1/2.
         close(multivariate_beta(&[1.0, 1.0, 1.0]), 0.5, 1e-12);
         assert!(ln_multivariate_beta(&[1.0, 0.0]).is_nan());
     }

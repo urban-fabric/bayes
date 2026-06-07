@@ -65,7 +65,6 @@ fn wrap(theta: f64) -> f64 {
 
 impl Distribution<f64> for VonMises {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Best & Fisher (1979) acceptance–rejection.
         let k = self.kappa;
         let a = 1.0 + (1.0 + 4.0 * k * k).sqrt();
         let b = (a - (2.0 * a).sqrt()) / (2.0 * k);
@@ -131,9 +130,7 @@ mod tests {
     #[test]
     fn density_peaks_at_the_mean_and_integrates_to_one() {
         let d = VonMises::new(0.5, 2.0).unwrap();
-        // Mode at μ: density there exceeds the density a quarter-turn away.
         assert!(d.pdf(0.5) > d.pdf(0.5 + std::f64::consts::FRAC_PI_2));
-        // Numerically integrate over the circle.
         let (mut area, n) = (0.0, 20_000);
         for i in 0..n {
             let theta = -PI + TAU * (i as f64 + 0.5) / n as f64;
@@ -144,7 +141,6 @@ mod tests {
 
     #[test]
     fn circular_variance_bounds() {
-        // Higher concentration ⇒ smaller circular variance.
         let tight = VonMises::new(0.0, 10.0).unwrap();
         let loose = VonMises::new(0.0, 0.5).unwrap();
         assert!(tight.circular_variance() < loose.circular_variance());
@@ -161,11 +157,10 @@ mod tests {
         let (mut sc, mut ss) = (0.0, 0.0);
         for _ in 0..n {
             let t = d.sample(&mut rng);
-            assert!((-PI..PI).contains(&t)); // stays on the canonical circle
+            assert!((-PI..PI).contains(&t));
             sc += t.cos();
             ss += t.sin();
         }
-        // The circular mean angle atan2(Σsin, Σcos) ≈ μ.
         close(ss.atan2(sc), mu, 0.02);
     }
 }

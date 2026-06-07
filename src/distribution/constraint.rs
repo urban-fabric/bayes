@@ -99,9 +99,7 @@ impl Constraint {
     pub fn log_abs_det_jacobian(&self, y: f64) -> f64 {
         match *self {
             Constraint::Real => 0.0,
-            // d exp(y)/dy = exp(y) ⇒ ln = y.
             Constraint::Positive | Constraint::NonNegative => y,
-            // d σ(y)/dy = σ(1-σ).
             Constraint::UnitInterval => {
                 let s = sigmoid(y);
                 (s * (1.0 - s)).ln()
@@ -168,7 +166,7 @@ mod tests {
                     c.contains(x),
                     "{c:?}: to_constrained({y})={x} not in domain"
                 );
-                close(c.to_unconstrained(x), y, 1e-9); // round trips
+                close(c.to_unconstrained(x), y, 1e-9);
             }
         }
     }

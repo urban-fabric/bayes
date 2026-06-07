@@ -11,7 +11,6 @@ impl ExponentialFamily for Normal {
         if stat.count() < 2.0 {
             return None;
         }
-        // MLE: μ̂ = mean, σ̂ = √(population variance).
         Normal::new(stat.mean(), stat.population_variance().sqrt()).ok()
     }
 }
@@ -22,14 +21,13 @@ impl ExponentialFamily for Exponential {
         if stat.count() < 1.0 || stat.mean() <= 0.0 {
             return None;
         }
-        Exponential::new(stat.mean().recip()).ok() // MLE: λ̂ = 1/mean.
+        Exponential::new(stat.mean().recip()).ok()
     }
 }
 
 impl ExponentialFamily for Gamma {
     type Stat = MeanVar;
     fn from_sufficient(stat: &MeanVar) -> Option<Self> {
-        // Method of moments: shape = mean²/var, rate = mean/var.
         let (m, v) = (stat.mean(), stat.population_variance());
         if stat.count() < 2.0 || m <= 0.0 || v <= 0.0 {
             return None;
@@ -41,8 +39,6 @@ impl ExponentialFamily for Gamma {
 impl ExponentialFamily for Beta {
     type Stat = MeanVar;
     fn from_sufficient(stat: &MeanVar) -> Option<Self> {
-        // Method of moments on (0,1): with c = mean(1−mean)/var − 1,
-        // α = mean·c, β = (1−mean)·c.
         let (m, v) = (stat.mean(), stat.population_variance());
         if stat.count() < 2.0 || !(0.0..=1.0).contains(&m) || v <= 0.0 {
             return None;
@@ -61,7 +57,7 @@ impl ExponentialFamily for Poisson {
         if stat.count() < 1.0 {
             return None;
         }
-        Poisson::new(stat.sum() / stat.count()).ok() // MLE: λ̂ = mean count.
+        Poisson::new(stat.sum() / stat.count()).ok()
     }
 }
 
@@ -71,7 +67,7 @@ impl ExponentialFamily for Bernoulli {
         if stat.count() < 1.0 {
             return None;
         }
-        Bernoulli::new(stat.successes() / stat.count()).ok() // MLE: p̂ = successes/n.
+        Bernoulli::new(stat.successes() / stat.count()).ok()
     }
 }
 
@@ -88,18 +84,17 @@ mod tests {
 
     #[test]
     fn normal_fit_recovers_parameters() {
-        // Symmetric data: μ̂ = 0, σ̂² = population variance.
         let data = [-2.0, -1.0, 0.0, 1.0, 2.0];
         let n = Normal::fit(&data).unwrap();
         close(n.mean().unwrap(), 0.0, 1e-12);
-        close(n.variance().unwrap(), 2.0, 1e-12); // (4+1+0+1+4)/5 = 2
+        close(n.variance().unwrap(), 2.0, 1e-12);
     }
 
     #[test]
     fn poisson_and_bernoulli_fit() {
-        let counts = [2u64, 3, 5, 1, 4]; // mean 3
+        let counts = [2u64, 3, 5, 1, 4];
         close(Poisson::fit(&counts).unwrap().lambda(), 3.0, 1e-12);
-        let flips = [true, true, false, true, false, false, true, true]; // 5/8
+        let flips = [true, true, false, true, false, false, true, true];
         close(Bernoulli::fit(&flips).unwrap().p(), 5.0 / 8.0, 1e-12);
     }
 

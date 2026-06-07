@@ -124,7 +124,6 @@ impl TDigest {
         for c in all.into_iter().skip(1) {
             let q0 = w_so_far / w_total;
             let q2 = (w_so_far + cur.weight + c.weight) / w_total;
-            // Merge while the combined centroid still fits within one scale unit.
             if self.scale(q2) - self.scale(q0) <= 1.0 {
                 let nw = cur.weight + c.weight;
                 cur.mean += c.weight * (c.mean - cur.mean) / nw;
@@ -163,7 +162,6 @@ mod tests {
 
     #[test]
     fn uniform_quantiles_are_accurate() {
-        // 0, 1/n, …, 1: the p-quantile of Uniform(0,1) is ≈ p.
         let n = 10_000;
         let d: TDigest = (0..n).map(|i| i as f64 / (n - 1) as f64).collect();
         for &p in &[0.01, 0.1, 0.25, 0.5, 0.75, 0.9, 0.99] {

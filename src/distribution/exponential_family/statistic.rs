@@ -158,7 +158,6 @@ mod tests {
         let a = MeanVar::from_sample(&data[..63]);
         let b = MeanVar::from_sample(&data[63..150]);
         let c = MeanVar::from_sample(&data[150..]);
-        // (a·b)·c == a·(b·c) == one pass.
         let left = a.merge(&b).merge(&c);
         let right = a.merge(&b.merge(&c));
         close(left.mean(), whole.mean(), 1e-12);
@@ -173,7 +172,6 @@ mod tests {
             whole.population_variance(),
             1e-10,
         );
-        // Empty is the identity.
         assert_eq!(MeanVar::empty().merge(&whole), whole);
     }
 }

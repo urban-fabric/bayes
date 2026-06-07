@@ -32,7 +32,6 @@ impl Binomial {
 
 impl Distribution<u64> for Binomial {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> u64 {
-        // Count successes across `n` Bernoulli(p) trials.
         (0..self.n).filter(|_| rng.random::<f64>() < self.p).count() as u64
     }
 }
@@ -68,7 +67,6 @@ impl DiscreteCdf<u64> for Binomial {
         if k >= self.n {
             return 1.0;
         }
-        // P(X ≤ k) = I_{1-p}(n-k, k+1).
         beta_reg((self.n - k) as f64, (k + 1) as f64, 1.0 - self.p)
     }
     fn inverse_cdf(&self, p: f64) -> u64 {
@@ -123,7 +121,6 @@ mod tests {
 
     #[test]
     fn pmf_landmark() {
-        // P(X=0) = (1-p)^n.
         let b = Binomial::new(5, 0.4).unwrap();
         close(b.pmf(0), 0.6f64.powi(5), 1e-12);
         close(b.pmf(5), 0.4f64.powi(5), 1e-12);

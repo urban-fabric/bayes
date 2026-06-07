@@ -45,7 +45,6 @@ impl FisherSnedecor {
 
 impl Distribution<f64> for FisherSnedecor {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // F = (χ²_{d1}/d1) / (χ²_{d2}/d2).
         (self.chi1.sample(rng) / self.d1) / (self.chi2.sample(rng) / self.d2)
     }
 }
@@ -62,7 +61,6 @@ impl Continuous for FisherSnedecor {
             return f64::NEG_INFINITY;
         }
         let (a, b) = (self.d1 / 2.0, self.d2 / 2.0);
-        // ln of (d1 x)^{a} (d2)^{b} / (d1 x + d2)^{a+b} / (x B(a,b)).
         a * (self.d1 * x).ln() + b * self.d2.ln()
             - (a + b) * (self.d1 * x + self.d2).ln()
             - x.ln()
@@ -84,7 +82,6 @@ impl ContinuousCdf for FisherSnedecor {
         if x <= 0.0 {
             return 0.0;
         }
-        // I_{d1 x / (d1 x + d2)}(d1/2, d2/2).
         beta_reg(
             self.d1 / 2.0,
             self.d2 / 2.0,
@@ -133,9 +130,7 @@ mod tests {
             close(f.cdf(f.inverse_cdf(p)), p, 1e-6);
         }
         close(f.mean().unwrap(), 10.0 / 8.0, 1e-12);
-        // F(5,2) has no finite mean (d2 ≤ 2).
         assert_eq!(FisherSnedecor::new(5.0, 2.0).unwrap().mean(), None);
-        // F(5,10) 0.95 quantile ≈ 3.3258.
         close(f.inverse_cdf(0.95), 3.325_835, 1e-3);
     }
 }

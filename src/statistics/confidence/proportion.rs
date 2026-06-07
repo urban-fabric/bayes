@@ -140,10 +140,8 @@ mod tests {
 
     #[test]
     fn wilson_stays_in_unit_interval_at_extremes() {
-        // 0 successes of 10: Wald would dip below 0; Wilson stays valid and > 0 upper.
         let w = proportion_wilson(0, 10, 0.95);
         assert!(w.lower >= 0.0 && w.upper > 0.0 && w.upper < 1.0);
-        // Half successes: centered near 0.5.
         let mid = proportion_wilson(5, 10, 0.95);
         close((mid.lower + mid.upper) / 2.0, 0.5, 0.02);
     }

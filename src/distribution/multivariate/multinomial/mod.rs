@@ -63,7 +63,6 @@ impl Multinomial {
         if counts.len() != self.p.len() || counts.iter().sum::<u64>() != self.n {
             return f64::NEG_INFINITY;
         }
-        // ln n! − Σ ln kᵢ! + Σ kᵢ ln pᵢ.
         let mut acc = ln_factorial(self.n);
         for (&k, &pi) in counts.iter().zip(&self.p) {
             acc -= ln_factorial(k);
@@ -81,7 +80,6 @@ impl Multinomial {
 
 impl Distribution<Vec<u64>> for Multinomial {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec<u64> {
-        // `n` categorical draws, tallied.
         let mut counts = vec![0u64; self.p.len()];
         for _ in 0..self.n {
             let u: f64 = rng.random();
@@ -132,12 +130,10 @@ mod tests {
 
     #[test]
     fn pmf_matches_binomial_in_two_categories() {
-        // Multinomial(n, [p, 1-p]) marginal = Binomial(n, p).
         let m = Multinomial::new(5, &[0.3, 0.7]).unwrap();
-        // P(counts=[2,3]) = C(5,2) 0.3² 0.7³.
         let expect = 10.0 * 0.3f64.powi(2) * 0.7f64.powi(3);
         close(m.pmf(&[2, 3]), expect, 1e-12);
-        assert_eq!(m.pmf(&[2, 2]), 0.0); // counts don't sum to n
+        assert_eq!(m.pmf(&[2, 2]), 0.0);
     }
 
     #[test]

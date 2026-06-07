@@ -33,8 +33,7 @@ pub fn ranks(data: &[f64]) -> Vec<f64> {
         while j < n && data[idx[j]] == data[idx[i]] {
             j += 1;
         }
-        // Ranks i..j (0-based positions) tie → average rank = mean of (pos+1).
-        let avg = ((i + 1 + j) as f64) / 2.0; // mean of i+1 .. j inclusive (1-based)
+        let avg = ((i + 1 + j) as f64) / 2.0;
         for &k in &idx[i..j] {
             out[k] = avg;
         }
@@ -66,7 +65,6 @@ pub fn kendall_tau(a: &[f64], b: &[f64]) -> f64 {
             let da = (a[i] - a[j]).signum();
             let db = (b[i] - b[j]).signum();
             if a[i] == a[j] && b[i] == b[j] {
-                // pair tied in both — counted in neither n1 nor n2 below
             } else if a[i] == a[j] {
                 ties_a += 1;
             } else if b[i] == b[j] {
@@ -127,17 +125,16 @@ mod tests {
     #[test]
     fn perfect_monotone_relationships() {
         let x = [1.0, 2.0, 3.0, 4.0, 5.0];
-        let y = [10.0, 20.0, 30.0, 40.0, 50.0]; // strictly increasing
+        let y = [10.0, 20.0, 30.0, 40.0, 50.0];
         close(spearman(&x, &y), 1.0, 1e-12);
         close(kendall_tau(&x, &y), 1.0, 1e-12);
-        let z = [5.0, 4.0, 3.0, 2.0, 1.0]; // strictly decreasing
+        let z = [5.0, 4.0, 3.0, 2.0, 1.0];
         close(spearman(&x, &z), -1.0, 1e-12);
         close(kendall_tau(&x, &z), -1.0, 1e-12);
     }
 
     #[test]
     fn spearman_beats_pearson_on_monotone_nonlinear() {
-        // y = x³ is monotone but nonlinear: Spearman = 1, Pearson < 1.
         let x = [1.0f64, 2.0, 3.0, 4.0, 5.0];
         let y: Vec<f64> = x.iter().map(|v| v.powi(3)).collect();
         close(spearman(&x, &y), 1.0, 1e-12);
@@ -145,16 +142,13 @@ mod tests {
 
     #[test]
     fn ranks_average_ties() {
-        // [10, 20, 20, 40] → ranks [1, 2.5, 2.5, 4].
         let r = ranks(&[10.0, 20.0, 20.0, 40.0]);
         assert_eq!(r, vec![1.0, 2.5, 2.5, 4.0]);
     }
 
     #[test]
     fn cramers_v_bounds() {
-        // Perfect association ⇒ V = 1.
         close(cramers_v(&[vec![10.0, 0.0], vec![0.0, 10.0]]), 1.0, 1e-12);
-        // Proportional (independent) table ⇒ V = 0.
         close(cramers_v(&[vec![10.0, 20.0], vec![20.0, 40.0]]), 0.0, 1e-12);
     }
 }

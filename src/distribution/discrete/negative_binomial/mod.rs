@@ -54,7 +54,6 @@ impl NegativeBinomial {
 
 impl Distribution<u64> for NegativeBinomial {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> u64 {
-        // Gamma–Poisson mixture: λ ~ Gamma(r, rate = p/(1-p)), then Poisson(λ).
         let rate = self.p / (1.0 - self.p);
         let lambda = match Gamma::new(self.r, rate) {
             Ok(g) => g.sample(rng),
@@ -90,7 +89,6 @@ impl Support<u64> for NegativeBinomial {
 
 impl DiscreteCdf<u64> for NegativeBinomial {
     fn cdf(&self, k: u64) -> f64 {
-        // P(X ≤ k) = I_p(r, k+1).
         beta_reg(self.r, (k + 1) as f64, self.p)
     }
     fn inverse_cdf(&self, p: f64) -> u64 {
@@ -137,7 +135,6 @@ mod tests {
 
     #[test]
     fn geometric_special_case() {
-        // NB(r=1, p) is the geometric (number of failures): P(X=0) = p.
         let nb = NegativeBinomial::new(1.0, 0.3).unwrap();
         close(nb.pmf(0), 0.3, 1e-12);
         close(nb.pmf(1), 0.3 * 0.7, 1e-12);

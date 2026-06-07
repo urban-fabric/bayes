@@ -35,7 +35,6 @@ impl Distribution<u64> for Geometric {
         if self.p >= 1.0 {
             return 1;
         }
-        // Inverse transform: ⌈ln(U) / ln(1-p)⌉, U ∈ (0, 1].
         let u = 1.0 - rng.random::<f64>();
         (u.ln() / (1.0 - self.p).ln()).ceil().max(1.0) as u64
     }

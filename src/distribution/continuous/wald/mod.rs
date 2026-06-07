@@ -43,7 +43,6 @@ impl Wald {
 
 impl Distribution<f64> for Wald {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Michael–Schucany–Haas: transform a χ²₁ draw, then choose the root.
         let (mu, lam) = (self.mu, self.shape);
         let nu = standard_normal_polar(rng);
         let y = nu * nu;
@@ -89,8 +88,6 @@ impl ContinuousCdf for Wald {
         let s = (lam / x).sqrt();
         let a = s * (x / mu - 1.0);
         let b = s * (x / mu + 1.0);
-        // Φ(a) + e^{2λ/μ} Φ(−b), the second term via erfcx so e^{2λ/μ} never
-        // overflows: e^{2λ/μ} · ½ erfc(b/√2) = ½ erfcx(b/√2) · e^{2λ/μ − b²/2}.
         let phi_a = 0.5 * erfc(-a / SQRT_2);
         let term2 = 0.5 * erfcx(b / SQRT_2) * (2.0 * lam / mu - 0.5 * b * b).exp();
         (phi_a + term2).clamp(0.0, 1.0)
@@ -111,7 +108,7 @@ impl Moments for Wald {
         Some(3.0 * (self.mu / self.shape).sqrt())
     }
     fn kurtosis(&self) -> Option<f64> {
-        Some(15.0 * self.mu / self.shape) // excess
+        Some(15.0 * self.mu / self.shape)
     }
     fn mode(&self) -> Option<f64> {
         let r = self.mu / self.shape;
@@ -133,7 +130,6 @@ mod tests {
     #[test]
     fn pdf_integrates_and_cdf_quantile_round_trip() {
         let d = Wald::new(1.0, 3.0).unwrap();
-        // Coarse trapezoidal check that the density integrates to ≈ 1.
         let (mut area, mut x, dx) = (0.0, 1e-4, 1e-3);
         while x < 8.0 {
             area += d.pdf(x) * dx;

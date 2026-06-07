@@ -103,13 +103,12 @@ pub fn histogram(data: &[f64], bins: usize) -> Option<Histogram> {
         hi = hi.max(x);
     }
     if hi <= lo {
-        return None; // degenerate (or non-finite) range
+        return None;
     }
     let width = (hi - lo) / bins as f64;
     let edges: Vec<f64> = (0..=bins).map(|i| lo + i as f64 * width).collect();
     let mut counts = vec![0u64; bins];
     for &x in &clean {
-        // Last bin is closed on the right so the maximum lands in bin `bins-1`.
         let mut b = ((x - lo) / width) as usize;
         if b >= bins {
             b = bins - 1;
@@ -132,7 +131,7 @@ mod tests {
     fn ecdf_steps_and_quantiles() {
         let e = Ecdf::new(&[3.0, 1.0, 2.0, 4.0]);
         close(e.eval(0.0), 0.0, 1e-12);
-        close(e.eval(2.0), 0.5, 1e-12); // two of four ≤ 2
+        close(e.eval(2.0), 0.5, 1e-12);
         close(e.eval(4.0), 1.0, 1e-12);
         close(e.eval(100.0), 1.0, 1e-12);
         assert_eq!(e.quantile(0.5), 2.0);
@@ -144,18 +143,16 @@ mod tests {
     fn ecdf_handles_empty_and_nan() {
         assert!(Ecdf::new(&[]).eval(0.0).is_nan());
         let e = Ecdf::new(&[1.0, f64::NAN, 3.0]);
-        assert_eq!(e.len(), 2); // NaN dropped
+        assert_eq!(e.len(), 2);
     }
 
     #[test]
     fn histogram_counts_and_density() {
-        let data = [0.0, 0.5, 1.0, 1.5, 2.0]; // range [0, 2], 2 bins of width 1
+        let data = [0.0, 0.5, 1.0, 1.5, 2.0];
         let h = histogram(&data, 2).unwrap();
         assert_eq!(h.edges, vec![0.0, 1.0, 2.0]);
-        // [0,1): 0.0, 0.5 → 2 ; [1,2]: 1.0, 1.5, 2.0 → 3
         assert_eq!(h.counts, vec![2, 3]);
         let d = h.density();
-        // Σ densityᵢ · widthᵢ = (2/5)·1 + (3/5)·1 = 1.
         close(d[0] * 1.0 + d[1] * 1.0, 1.0, 1e-12);
     }
 
@@ -163,6 +160,6 @@ mod tests {
     fn histogram_rejects_degenerate_inputs() {
         assert!(histogram(&[], 4).is_none());
         assert!(histogram(&[1.0, 2.0], 0).is_none());
-        assert!(histogram(&[5.0, 5.0, 5.0], 3).is_none()); // zero-width range
+        assert!(histogram(&[5.0, 5.0, 5.0], 3).is_none());
     }
 }

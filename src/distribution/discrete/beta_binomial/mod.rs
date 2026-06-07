@@ -61,7 +61,6 @@ impl BetaBinomial {
 
 impl Distribution<u64> for BetaBinomial {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> u64 {
-        // Compound draw: p ~ Beta(α, β), then K ~ Binomial(n, p).
         let p = match Beta::new(self.alpha, self.beta) {
             Ok(b) => b.sample(rng),
             Err(_) => return 0,
@@ -102,7 +101,6 @@ impl Support<u64> for BetaBinomial {
 
 impl DiscreteCdf<u64> for BetaBinomial {
     fn cdf(&self, k: u64) -> f64 {
-        // No simple closed form; sum the mass up to k (support is finite, ≤ n).
         if k >= self.n {
             return 1.0;
         }
@@ -131,11 +129,9 @@ impl Moments for BetaBinomial {
     fn variance(&self) -> Option<f64> {
         let nf = self.n as f64;
         let s = self.alpha + self.beta;
-        // n·α·β·(α+β+n) / [(α+β)²·(α+β+1)].
         Some(nf * self.alpha * self.beta * (s + nf) / (s * s * (s + 1.0)))
     }
     fn mode(&self) -> Option<f64> {
-        // Mode of the underlying Beta scaled by n, when it has an interior mode.
         if self.alpha > 1.0 && self.beta > 1.0 {
             Some((self.n as f64) * (self.alpha - 1.0) / (self.alpha + self.beta - 2.0))
         } else {
@@ -157,7 +153,6 @@ mod tests {
 
     #[test]
     fn reduces_to_binomial_at_large_equal_shapes() {
-        // Beta(α, α) with huge α concentrates p at 0.5 ⇒ ~Binomial(n, 0.5).
         let bb = BetaBinomial::new(10, 1e6, 1e6).unwrap();
         let bin = Binomial::new(10, 0.5).unwrap();
         for k in 0..=10u64 {
@@ -167,7 +162,6 @@ mod tests {
 
     #[test]
     fn uniform_when_shapes_are_one() {
-        // Beta(1,1) ⇒ K uniform on {0,…,n}: P(K=k) = 1/(n+1).
         let bb = BetaBinomial::new(4, 1.0, 1.0).unwrap();
         for k in 0..=4u64 {
             close(bb.pmf(k), 1.0 / 5.0, 1e-12);

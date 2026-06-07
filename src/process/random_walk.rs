@@ -66,7 +66,6 @@ mod tests {
 
     #[test]
     fn wiener_variance_grows_linearly_in_time() {
-        // Var[W(t)] = σ²·t. Estimate at t = 4 with σ = 1 across many paths.
         let mut rng = ChaCha8Rng::seed_from_u64(2);
         let times = [4.0];
         let ends: Vec<f64> = (0..20_000)

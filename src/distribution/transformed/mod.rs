@@ -55,7 +55,6 @@ where
         self.ln_pdf(y).exp()
     }
     fn ln_pdf(&self, y: f64) -> f64 {
-        // ln p_Y(y) = ln p_X(g⁻¹(y)) + ln |d g⁻¹/dy|.
         let x = self.bijector.inverse(y);
         self.base.ln_pdf(x) + self.bijector.inverse_log_det_jacobian(y)
     }
@@ -75,7 +74,6 @@ mod tests {
 
     #[test]
     fn exp_of_normal_is_lognormal() {
-        // Transformed(Normal(μ,σ), Exp) ≡ LogNormal(μ,σ) — density matches.
         let t = Transformed::new(Normal::new(0.5, 1.2).unwrap(), Exp);
         let ln = LogNormal::new(0.5, 1.2).unwrap();
         for &y in &[0.1, 0.5, 1.0, 2.0, 5.0] {
@@ -85,7 +83,6 @@ mod tests {
 
     #[test]
     fn affine_shifts_and_scales_a_normal() {
-        // Transformed(Normal(0,1), 2·x + 3) ≡ Normal(3, 2).
         let t = Transformed::new(
             Normal::new(0.0, 1.0).unwrap(),
             Affine::new(2.0, 3.0).unwrap(),
@@ -100,7 +97,6 @@ mod tests {
     fn sampling_applies_the_forward_map() {
         let mut rng = ChaCha8Rng::seed_from_u64(2);
         let t = Transformed::new(Normal::new(0.0, 1.0).unwrap(), Exp);
-        // exp(normal) is always positive.
         assert!((0..1000).all(|_| t.sample(&mut rng) > 0.0));
     }
 }

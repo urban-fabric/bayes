@@ -47,7 +47,6 @@ impl Logistic {
 
 impl Distribution<f64> for Logistic {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse transform: μ + s·ln(u/(1−u)).
         let u: f64 = rng.random();
         self.location + self.scale * (u / (1.0 - u)).ln()
     }
@@ -59,7 +58,6 @@ impl Continuous for Logistic {
     }
     fn ln_pdf(&self, x: f64) -> f64 {
         let z = (x - self.location) / self.scale;
-        // −z − ln s − 2·ln(1 + e^{−z}), stable via softplus.
         -z - self.scale.ln() - 2.0 * ln_1p_exp(-z)
     }
 }
@@ -83,11 +81,11 @@ impl ContinuousCdf for Logistic {
     }
     fn ln_cdf(&self, x: f64) -> f64 {
         let z = (x - self.location) / self.scale;
-        -ln_1p_exp(-z) // ln σ(z)
+        -ln_1p_exp(-z)
     }
     fn ln_sf(&self, x: f64) -> f64 {
         let z = (x - self.location) / self.scale;
-        -ln_1p_exp(z) // ln σ(−z)
+        -ln_1p_exp(z)
     }
 }
 
@@ -102,7 +100,7 @@ impl Moments for Logistic {
         Some(0.0)
     }
     fn kurtosis(&self) -> Option<f64> {
-        Some(1.2) // excess kurtosis 6/5
+        Some(1.2)
     }
     fn entropy(&self) -> Option<f64> {
         Some(self.scale.ln() + 2.0)
@@ -129,11 +127,10 @@ mod tests {
     #[test]
     fn cdf_pdf_quantile_and_moments() {
         let d = Logistic::new(1.0, 2.0).unwrap();
-        close(d.cdf(1.0), 0.5, 1e-12); // median at the location
+        close(d.cdf(1.0), 0.5, 1e-12);
         for &p in &[0.1, 0.3, 0.5, 0.7, 0.9] {
             close(d.cdf(d.inverse_cdf(p)), p, 1e-10);
         }
-        // ln_cdf/ln_sf agree with the direct logs in the safe range.
         close(d.ln_cdf(0.5).exp(), d.cdf(0.5), 1e-12);
         close(d.ln_sf(0.5).exp(), d.sf(0.5), 1e-12);
         close(d.mean().unwrap(), 1.0, 1e-12);

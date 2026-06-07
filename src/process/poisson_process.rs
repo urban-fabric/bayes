@@ -39,7 +39,6 @@ impl PoissonProcess {
     /// are `Exponential(rate)`; the count is `Poisson(rate · horizon)` in
     /// distribution.
     pub fn arrivals<R: Rng + ?Sized>(&self, horizon: f64, rng: &mut R) -> Vec<f64> {
-        // `Exponential::new` cannot fail here — rate was validated in the ctor.
         let mut out = Vec::new();
         let inter = match Exponential::new(self.rate) {
             Ok(e) => e,
@@ -125,7 +124,6 @@ mod tests {
     #[test]
     fn thinning_drops_to_zero_intensity() {
         let mut rng = ChaCha8Rng::seed_from_u64(3);
-        // Intensity 0 on the second half ⇒ no arrivals there.
         let a = inhomogeneous_arrivals(10.0, 5.0, |t| if t < 5.0 { 5.0 } else { 0.0 }, &mut rng);
         assert!(a.iter().all(|&t| t < 5.0));
     }

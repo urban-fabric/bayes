@@ -35,7 +35,6 @@ pub fn erf_inv(x: f64) -> f64 {
     if x == 0.0 {
         return 0.0;
     }
-    // Giles (2010) rational approximation as the initial guess.
     let w = -((1.0 - x) * (1.0 + x)).ln();
     let mut p;
     if w < 5.0 {
@@ -62,7 +61,6 @@ pub fn erf_inv(x: f64) -> f64 {
         p = 2.832_976_82 + p * w;
     }
     let mut result = p * x;
-    // One Newton step on erf to polish: f(y) = erf(y) - x, f'(y) = (2/√π)e^{-y²}.
     let err = erf(result) - x;
     result -= err / (2.0 / PI.sqrt() * (-result * result).exp());
     result

@@ -90,18 +90,18 @@ mod tests {
     #[test]
     fn dirichlet_categorical_counts_and_predictive() {
         let model = DirichletCategorical::new(Dirichlet::new(vec![1.0, 1.0, 1.0]).unwrap());
-        let data = [0u64, 0, 1, 2, 0]; // counts: cat0=3, cat1=1, cat2=1
+        let data = [0u64, 0, 1, 2, 0];
         let post = model.posterior(&data);
         assert_eq!(post.alpha(), &[4.0, 2.0, 2.0]);
         let pred = model.posterior_predictive(&data);
-        close(pred.probabilities()[0], 0.5, 1e-12); // 4/8
-        close(pred.probabilities()[1], 0.25, 1e-12); // 2/8
+        close(pred.probabilities()[0], 0.5, 1e-12);
+        close(pred.probabilities()[1], 0.25, 1e-12);
     }
 
     #[test]
     fn dirichlet_multinomial_aggregates_count_vectors() {
         let model = DirichletMultinomial::new(Dirichlet::new(vec![1.0, 1.0]).unwrap());
-        let data = [vec![3u64, 1], vec![2, 2]]; // totals: cat0=5, cat1=3
+        let data = [vec![3u64, 1], vec![2, 2]];
         let post = model.posterior(&data);
         assert_eq!(post.alpha(), &[6.0, 4.0]);
         let pred = model.posterior_predictive(&data);

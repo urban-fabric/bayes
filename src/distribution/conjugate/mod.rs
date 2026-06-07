@@ -2,13 +2,12 @@
 //!
 //! For a handful of prior/likelihood pairs the Bayesian posterior is in the *same
 //! family* as the prior, with parameters given by a direct formula — no MCMC, no
-//! optimisation. Each model here wraps a prior distribution and exposes:
-//!
-//! * [`posterior`](Conjugate::posterior) — the updated same-family distribution
-//!   after observing data; and
-//! * `posterior_predictive` — the distribution of a *future* observation with the
-//!   parameter integrated out (often a compound distribution such as the
-//!   [`BetaBinomial`](crate::BetaBinomial) or [`NegativeBinomial`](crate::NegativeBinomial)).
+//! optimisation. Each model wraps a prior distribution and exposes a closed-form
+//! [`posterior`](Conjugate::posterior) — the updated same-family distribution after
+//! observing data; most also expose a `posterior_predictive` — the distribution of a
+//! *future* observation with the parameter integrated out (often a compound
+//! distribution such as the [`BetaBinomial`](crate::BetaBinomial) or
+//! [`NegativeBinomial`](crate::NegativeBinomial)).
 //!
 //! This is the one genuinely *Bayesian* capability the library exposes, and it sits
 //! squarely on the closed-form side of the boundary: a posterior is just another

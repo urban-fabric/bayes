@@ -1,5 +1,5 @@
 //! Multivariate sample statistics over row-major observations.
-#![allow(clippy::needless_range_loop)] // dense matrix indexing is clearer here
+#![allow(clippy::needless_range_loop)]
 
 use crate::linalg::{cholesky, cholesky_solve};
 

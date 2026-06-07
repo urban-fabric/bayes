@@ -89,7 +89,6 @@ impl Moments for HalfNormal {
         Some(0.0)
     }
     fn entropy(&self) -> Option<f64> {
-        // ½ ln(πσ²/2) + ½.
         Some(0.5 * (PI * self.scale * self.scale / 2.0).ln() + 0.5)
     }
 }
@@ -107,7 +106,6 @@ mod tests {
     #[test]
     fn density_is_twice_the_normal_on_the_positive_axis() {
         let h = HalfNormal::new(1.5).unwrap();
-        // Half-normal pdf = 2·N(0,σ²) pdf for x ≥ 0.
         let normal_pdf = |x: f64| (-0.5 * (x / 1.5).powi(2)).exp() / (1.5 * TAU.sqrt());
         close(h.pdf(2.0), 2.0 * normal_pdf(2.0), 1e-12);
         assert_eq!(h.pdf(-1.0), 0.0);

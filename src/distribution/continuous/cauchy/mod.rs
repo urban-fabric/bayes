@@ -48,7 +48,6 @@ impl Cauchy {
 
 impl Distribution<f64> for Cauchy {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse transform: x₀ + γ·tan(π(U − ½)).
         let u: f64 = rng.random();
         self.location + self.scale * (PI * (u - 0.5)).tan()
     }
@@ -80,7 +79,6 @@ impl ContinuousCdf for Cauchy {
 }
 
 impl Moments for Cauchy {
-    // mean / variance / skewness / kurtosis are all undefined → None (the default).
     fn entropy(&self) -> Option<f64> {
         Some((4.0 * PI * self.scale).ln())
     }
@@ -104,12 +102,11 @@ mod tests {
     #[test]
     fn cdf_quantile_and_undefined_moments() {
         let c = Cauchy::new(1.0, 2.0).unwrap();
-        close(c.cdf(1.0), 0.5, 1e-12); // median at location
-        close(c.cdf(3.0), 0.75, 1e-12); // location + scale ⇒ 3rd quartile
+        close(c.cdf(1.0), 0.5, 1e-12);
+        close(c.cdf(3.0), 0.75, 1e-12);
         for &p in &[0.1, 0.25, 0.5, 0.75, 0.9] {
             close(c.cdf(c.inverse_cdf(p)), p, 1e-10);
         }
-        // The defining feature: no mean, no variance.
         assert_eq!(c.mean(), None);
         assert_eq!(c.variance(), None);
         assert_eq!(c.median(), Some(1.0));

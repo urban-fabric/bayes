@@ -141,8 +141,6 @@ impl Moments for Normal {
 }
 
 impl Estimate for Normal {
-    // The MLE lives in the `ExponentialFamily` impl (μ̂ = mean, σ̂² = population
-    // variance); `Estimate` is the batch-fit façade over it.
     fn from_sample(data: &[f64]) -> Option<Self> {
         <Self as crate::distribution::ExponentialFamily>::fit(data)
     }

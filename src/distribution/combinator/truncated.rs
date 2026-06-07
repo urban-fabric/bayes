@@ -85,7 +85,6 @@ impl<D: ContinuousCdf> ContinuousCdf for Truncated<D> {
         }
     }
     fn inverse_cdf(&self, p: f64) -> f64 {
-        // Map p ∈ [0,1] back to the base's CDF range [F(lo), F(hi)].
         self.base
             .inverse_cdf(self.cdf_lo + p.clamp(0.0, 1.0) * self.z)
     }
@@ -93,7 +92,6 @@ impl<D: ContinuousCdf> ContinuousCdf for Truncated<D> {
 
 impl<D: ContinuousCdf> Distribution<f64> for Truncated<D> {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse-transform within the truncated range — always inside [lo, hi].
         self.inverse_cdf(rng.random::<f64>())
     }
 }

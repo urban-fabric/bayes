@@ -123,7 +123,7 @@ mod tests {
         close(quantile(&d, 1.0), 5.0, 1e-12);
         close(quantile(&d, 0.5), 3.0, 1e-12);
         close(percentile(&d, 25.0), 2.0, 1e-12);
-        close(iqr(&d), 2.0, 1e-12); // Q3=4, Q1=2
+        close(iqr(&d), 2.0, 1e-12);
     }
 
     #[test]
@@ -134,7 +134,6 @@ mod tests {
         close(med, 5.0, 1e-12);
         close(q3, 7.0, 1e-12);
         close(mx, 9.0, 1e-12);
-        // MAD of {1,3,5,7,9}: median 5, |dev| {4,2,0,2,4}, median 2.
         close(median_abs_deviation(&[1.0, 3.0, 5.0, 7.0, 9.0]), 2.0, 1e-12);
     }
 
@@ -142,7 +141,7 @@ mod tests {
     fn input_is_not_mutated() {
         let d = [3.0, 1.0, 2.0];
         let _ = median(&d);
-        assert_eq!(d, [3.0, 1.0, 2.0]); // unchanged — we sort a copy
+        assert_eq!(d, [3.0, 1.0, 2.0]);
     }
 
     #[test]

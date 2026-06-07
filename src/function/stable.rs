@@ -85,9 +85,9 @@ pub fn ln_1m_exp(x: f64) -> f64 {
         return f64::NAN;
     }
     if x > -std::f64::consts::LN_2 {
-        (-x.exp_m1()).ln() // 1 − eˣ = −expm1(x)
+        (-x.exp_m1()).ln()
     } else {
-        (-x.exp()).ln_1p() // ln(1 + (−eˣ))
+        (-x.exp()).ln_1p()
     }
 }
 
@@ -104,14 +104,11 @@ pub fn xlogy(x: f64, y: f64) -> f64 {
 /// directly from `erfc` near the origin and by a continued fraction in the tail.
 pub fn erfcx(x: f64) -> f64 {
     if x < 0.0 {
-        // erfcx(−|x|) = 2 e^{x²} − erfcx(|x|).
         return 2.0 * (x * x).exp() - erfcx(-x);
     }
     if x < 4.0 {
         return (x * x).exp() * erfc(x);
     }
-    // Tail continued fraction: erfcx(x) = (1/√π) / (x + ½/(x + 1/(x + 3⁄2/(x + …)))),
-    // the kₜₕ partial numerator being k/2. Evaluated by backward recurrence.
     let mut t = x;
     for k in (1..=60).rev() {
         t = x + (k as f64) * 0.5 / t;
@@ -133,7 +130,6 @@ mod tests {
         let xs = [-1.0_f64, 0.5, 2.0, -3.0];
         let naive = xs.iter().map(|&x| x.exp()).sum::<f64>().ln();
         close(ln_sum_exp(&xs), naive, 1e-12);
-        // Edge cases.
         assert_eq!(ln_sum_exp(&[]), f64::NEG_INFINITY);
         assert_eq!(
             ln_sum_exp(&[f64::NEG_INFINITY, f64::NEG_INFINITY]),
@@ -143,7 +139,6 @@ mod tests {
 
     #[test]
     fn ln_sum_exp_survives_extreme_magnitudes() {
-        // Naive exp would overflow/underflow; the shifted form is exact.
         let xs = [1000.0, 1000.0];
         close(ln_sum_exp(&xs), 1000.0 + 2.0_f64.ln(), 1e-9);
         let xs = [-1000.0, -1001.0];
@@ -171,8 +166,7 @@ mod tests {
     #[test]
     fn softplus_and_log1m() {
         close(ln_1p_exp(0.0), 2.0_f64.ln(), 1e-12);
-        close(ln_1p_exp(50.0), 50.0, 1e-9); // ~x for large x
-        // ln(1 − e^x) round-trips against the definition for moderate x.
+        close(ln_1p_exp(50.0), 50.0, 1e-9);
         for &x in &[-0.1, -0.5, -1.0, -5.0] {
             close(ln_1m_exp(x), (1.0 - x.exp()).ln(), 1e-9);
         }
@@ -190,20 +184,17 @@ mod tests {
     fn erfcx_matches_definition_near_origin() {
         assert_eq!(erfcx(0.0), 1.0);
         for &x in &[0.25, 0.5, 1.0, 2.0, 3.0] {
-            // erfcx(x)·e^{−x²} == erfc(x) where erfc is still accurate.
             close(erfcx(x) * (-x * x).exp(), erfc(x), 1e-9);
         }
     }
 
     #[test]
     fn erfcx_tail_is_finite_and_asymptotic() {
-        // erfcx stays finite where erfc underflows, and x·√π·erfcx(x) → 1.
         for &x in &[10.0, 20.0, 50.0, 100.0] {
             let v = erfcx(x);
             assert!(v.is_finite() && v > 0.0);
-            close(x * PI.sqrt() * v, 1.0, 5e-2 / x); // tighter as x grows
+            close(x * PI.sqrt() * v, 1.0, 5e-2 / x);
         }
-        // Continuity across the direct/continued-fraction seam at x = 4.
         close(erfcx(3.999), erfcx(4.001), 1e-3);
     }
 }

@@ -44,7 +44,7 @@ pub fn std_dev(data: &[f64]) -> f64 {
     variance(data).sqrt()
 }
 
-/// Coefficient of variation `s / x̄`. `NaN` if the mean is zero or undefined.
+/// Coefficient of variation `s / |x̄|`. `NaN` if the mean is zero or undefined.
 pub fn coefficient_of_variation(data: &[f64]) -> f64 {
     let m = mean(data);
     if m == 0.0 || m.is_nan() {
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn means_family() {
         let d = [1.0, 2.0, 4.0];
-        close(geometric_mean(&d), 2.0, 1e-12); // (1·2·4)^{1/3} = 2
+        close(geometric_mean(&d), 2.0, 1e-12);
         close(harmonic_mean(&d), 3.0 / (1.0 + 0.5 + 0.25), 1e-12);
         assert!(geometric_mean(&[1.0, -1.0]).is_nan());
     }
@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn covariance_and_correlation() {
         let a = [1.0, 2.0, 3.0, 4.0, 5.0];
-        let b = [2.0, 4.0, 6.0, 8.0, 10.0]; // perfectly linear, slope 2
+        let b = [2.0, 4.0, 6.0, 8.0, 10.0];
         close(correlation(&a, &b), 1.0, 1e-12);
         close(covariance(&a, &b), 5.0, 1e-12);
     }

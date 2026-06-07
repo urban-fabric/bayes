@@ -250,7 +250,6 @@ mod tests {
 
     #[test]
     fn recovers_an_exact_line() {
-        // y = 3x + 2 exactly ⇒ slope 3, intercept 2, R² = 1.
         let x = [0.0, 1.0, 2.0, 3.0, 4.0];
         let y: Vec<f64> = x.iter().map(|v| 3.0 * v + 2.0).collect();
         let fit = LinearRegression::fit(&x, &y).unwrap();
@@ -264,7 +263,7 @@ mod tests {
     #[test]
     fn noisy_fit_has_r_squared_below_one() {
         let x = [1.0, 2.0, 3.0, 4.0, 5.0];
-        let y = [2.1, 3.9, 6.2, 7.8, 10.1]; // ≈ 2x with noise
+        let y = [2.1, 3.9, 6.2, 7.8, 10.1];
         let fit = LinearRegression::fit(&x, &y).unwrap();
         assert!(fit.slope > 1.8 && fit.slope < 2.2);
         assert!(fit.r_squared > 0.99 && fit.r_squared < 1.0);

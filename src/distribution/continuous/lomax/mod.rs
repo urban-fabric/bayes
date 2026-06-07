@@ -37,7 +37,6 @@ impl Lomax {
 
 impl Distribution<f64> for Lomax {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> f64 {
-        // Inverse transform: λ((1 − u)^{−1/α} − 1).
         let u: f64 = rng.random();
         self.scale * ((1.0 - u).powf(-1.0 / self.shape) - 1.0)
     }
@@ -125,13 +124,12 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(d.cdf(d.inverse_cdf(p)), p, 1e-10);
         }
-        close(d.mean().unwrap(), 2.0 / 2.0, 1e-12); // λ/(α−1)
+        close(d.mean().unwrap(), 2.0 / 2.0, 1e-12);
         close(
             d.median().unwrap(),
             2.0 * (2.0_f64.powf(1.0 / 3.0) - 1.0),
             1e-12,
         );
-        // α ≤ 2 ⇒ undefined variance.
         assert!(Lomax::new(1.5, 1.0).unwrap().variance().is_none());
     }
 
