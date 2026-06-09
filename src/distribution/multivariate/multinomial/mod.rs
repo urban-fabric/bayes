@@ -1,10 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use ramanujan::DenseMatrix;
+
 use super::MultivariateMoments;
 use crate::error::BayesError;
 use crate::function::factorial::ln_factorial;
-use crate::linalg::Matrix;
 
 /// The multinomial distribution: the counts in each of `k` categories after `n`
 /// independent trials with category probabilities `p₁, …, p_k` (`Σ pᵢ = 1`).
@@ -98,22 +99,16 @@ impl MultivariateMoments for Multinomial {
     fn mean_vector(&self) -> Vec<f64> {
         self.p.iter().map(|&pi| self.n as f64 * pi).collect()
     }
-    fn covariance(&self) -> Matrix {
+    fn covariance(&self) -> DenseMatrix {
         let n = self.n as f64;
         let k = self.p.len();
-        (0..k)
-            .map(|i| {
-                (0..k)
-                    .map(|j| {
-                        if i == j {
-                            n * self.p[i] * (1.0 - self.p[i])
-                        } else {
-                            -n * self.p[i] * self.p[j]
-                        }
-                    })
-                    .collect()
-            })
-            .collect()
+        DenseMatrix::from_fn(k, k, |i, j| {
+            if i == j {
+                n * self.p[i] * (1.0 - self.p[i])
+            } else {
+                -n * self.p[i] * self.p[j]
+            }
+        })
     }
 }
 

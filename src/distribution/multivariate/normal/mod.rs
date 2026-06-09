@@ -3,54 +3,65 @@ use std::f64::consts::TAU;
 use rand::Rng;
 use rand::distr::Distribution;
 
+use ramanujan::{Cholesky, DenseMatrix};
+
 use super::{MultivariateContinuous, MultivariateMoments};
 use crate::distribution::continuous::normal::standard_normal_polar;
 use crate::error::BayesError;
-use crate::linalg::{Matrix, cholesky, cholesky_solve};
 
 const JITTER: f64 = 1e-12;
 
 /// The multivariate normal `N(μ, Σ)` over `ℝ^d`, with mean vector `μ` and a
 /// symmetric positive-definite covariance matrix `Σ`. Sampling and density use the
-/// Cholesky factor `L` with `L Lᵀ = Σ`.
-#[derive(Clone, Debug, PartialEq)]
+/// ramanujan Cholesky factorization `Σ = L Lᵀ`.
+#[derive(Clone, Debug)]
 pub struct MultivariateNormal {
     mean: Vec<f64>,
-    cov: Matrix,
-    chol: Matrix,
+    cov: DenseMatrix,
+    chol: Cholesky<f64>,
     /// ln |2πΣ|, cached for the density.
     ln_det_2pi: f64,
+}
+
+// `chol` is a deterministic function of `cov`, so the mean and covariance alone
+// identify the distribution (ramanujan's `Cholesky` is not itself `PartialEq`).
+impl PartialEq for MultivariateNormal {
+    fn eq(&self, other: &Self) -> bool {
+        self.mean == other.mean && self.cov == other.cov
+    }
 }
 
 impl MultivariateNormal {
     /// Build from a mean vector and covariance matrix. Errors if the matrix is not
     /// square, mismatched with `mean`, non-finite, non-symmetric, or not
     /// positive-definite.
-    pub fn new(mean: Vec<f64>, cov: Matrix) -> Result<Self, BayesError> {
+    pub fn new(mean: Vec<f64>, cov: DenseMatrix) -> Result<Self, BayesError> {
         let d = mean.len();
-        if d == 0 || cov.len() != d || cov.iter().any(|row| row.len() != d) {
+        if d == 0 || cov.rows() != d || cov.cols() != d {
             return Err(BayesError::Malformed {
                 what: "covariance must be square and match the mean",
             });
         }
-        if mean.iter().any(|x| !x.is_finite()) || cov.iter().flatten().any(|x| !x.is_finite()) {
+        if mean.iter().any(|x| !x.is_finite()) || !cov.is_finite() {
             return Err(BayesError::Malformed {
                 what: "mean and covariance entries must be finite",
             });
         }
-        for (i, row_i) in cov.iter().enumerate() {
-            for (j, row_j) in cov.iter().enumerate().skip(i + 1) {
-                if (row_i[j] - row_j[i]).abs() > 1e-10 {
+        for i in 0..d {
+            for j in (i + 1)..d {
+                if (cov.get(i, j) - cov.get(j, i)).abs() > 1e-10 {
                     return Err(BayesError::Malformed {
                         what: "covariance must be symmetric",
                     });
                 }
             }
         }
-        let chol = cholesky(&cov, JITTER).ok_or(BayesError::Malformed {
-            what: "covariance is not positive-definite",
-        })?;
-        let ln_det: f64 = (0..d).map(|i| chol[i][i].ln()).sum::<f64>() * 2.0;
+        let chol = DenseMatrix::from_fn(d, d, |i, j| cov.get(i, j) + if i == j { JITTER } else { 0.0 })
+            .cholesky()
+            .map_err(|_| BayesError::Malformed {
+                what: "covariance is not positive-definite",
+            })?;
+        let ln_det: f64 = (0..d).map(|i| chol.lower().get(i, i).ln()).sum::<f64>() * 2.0;
         let ln_det_2pi = d as f64 * TAU.ln() + ln_det;
         Ok(Self {
             mean,
@@ -72,8 +83,9 @@ impl Distribution<Vec<f64>> for MultivariateNormal {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec<f64> {
         let d = self.mean.len();
         let z: Vec<f64> = (0..d).map(|_| standard_normal_polar(rng)).collect();
+        let l = self.chol.lower();
         (0..d)
-            .map(|i| self.mean[i] + (0..=i).map(|j| self.chol[i][j] * z[j]).sum::<f64>())
+            .map(|i| self.mean[i] + (0..=i).map(|j| l.get(i, j) * z[j]).sum::<f64>())
             .collect()
     }
 }
@@ -87,7 +99,7 @@ impl MultivariateContinuous for MultivariateNormal {
             return f64::NEG_INFINITY;
         }
         let diff: Vec<f64> = x.iter().zip(&self.mean).map(|(xi, mi)| xi - mi).collect();
-        let solved = cholesky_solve(&self.chol, &diff);
+        let solved = self.chol.solve(&diff);
         let quad: f64 = diff.iter().zip(&solved).map(|(a, b)| a * b).sum();
         -0.5 * (quad + self.ln_det_2pi)
     }
@@ -97,7 +109,7 @@ impl MultivariateMoments for MultivariateNormal {
     fn mean_vector(&self) -> Vec<f64> {
         self.mean.clone()
     }
-    fn covariance(&self) -> Matrix {
+    fn covariance(&self) -> DenseMatrix {
         self.cov.clone()
     }
 }
@@ -115,8 +127,11 @@ mod tests {
 
     #[test]
     fn diagonal_matches_independent_normals() {
-        let mvn =
-            MultivariateNormal::new(vec![1.0, -2.0], vec![vec![4.0, 0.0], vec![0.0, 9.0]]).unwrap();
+        let mvn = MultivariateNormal::new(
+            vec![1.0, -2.0],
+            DenseMatrix::from_rows(&[vec![4.0, 0.0], vec![0.0, 9.0]]),
+        )
+        .unwrap();
         let x = [2.0, 0.0];
         let marg = |xi: f64, mu: f64, sd: f64| {
             let z = (xi - mu) / sd;
@@ -133,7 +148,7 @@ mod tests {
     fn sampled_mean_and_covariance_match() {
         let mut rng = ChaCha8Rng::seed_from_u64(7);
         let mean = vec![1.0, -1.0];
-        let cov = vec![vec![2.0, 0.8], vec![0.8, 1.0]];
+        let cov = DenseMatrix::from_rows(&[vec![2.0, 0.8], vec![0.8, 1.0]]);
         let mvn = MultivariateNormal::new(mean.clone(), cov.clone()).unwrap();
         let n = 40_000;
         let samples: Vec<Vec<f64>> = (0..n).map(|_| mvn.sample(&mut rng)).collect();
@@ -146,24 +161,35 @@ mod tests {
             .map(|s| (s[0] - m0) * (s[1] - m1))
             .sum::<f64>()
             / n as f64;
-        close(c01, cov[0][1], 0.05);
+        close(c01, cov.get(0, 1), 0.05);
     }
 
     #[test]
     fn rejects_non_pd_covariance() {
         assert!(
-            MultivariateNormal::new(vec![0.0, 0.0], vec![vec![1.0, 2.0], vec![2.0, 1.0]]).is_err()
+            MultivariateNormal::new(
+                vec![0.0, 0.0],
+                DenseMatrix::from_rows(&[vec![1.0, 2.0], vec![2.0, 1.0]])
+            )
+            .is_err()
         );
     }
 
     #[test]
     fn rejects_nonfinite_or_nonsymmetric_covariance() {
         assert!(
-            MultivariateNormal::new(vec![0.0, f64::NAN], vec![vec![1.0, 0.0], vec![0.0, 1.0]])
-                .is_err()
+            MultivariateNormal::new(
+                vec![0.0, f64::NAN],
+                DenseMatrix::from_rows(&[vec![1.0, 0.0], vec![0.0, 1.0]])
+            )
+            .is_err()
         );
         assert!(
-            MultivariateNormal::new(vec![0.0, 0.0], vec![vec![1.0, 0.2], vec![0.3, 1.0]]).is_err()
+            MultivariateNormal::new(
+                vec![0.0, 0.0],
+                DenseMatrix::from_rows(&[vec![1.0, 0.2], vec![0.3, 1.0]])
+            )
+            .is_err()
         );
     }
 }

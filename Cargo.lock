@@ -12,6 +12,7 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 name = "bayes"
 version = "0.1.0"
 dependencies = [
+ "ramanujan",
  "rand",
  "rand_chacha",
  "thiserror",
@@ -186,6 +187,11 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "ramanujan"
+version = "0.1.0"
+source = "git+ssh://git@github.com/urban-fabric/ramanujan.git?branch=main#a65bf8089f477dfaad5e854548187d0fe3281f05"
 
 [[package]]
 name = "rand"

@@ -1,7 +1,7 @@
 //! Multiple ordinary least squares over an explicit **design matrix**:
 //! [`fit_least_squares`] solves the ridge-regularised normal equations.
 
-use crate::linalg::gaussian_solve;
+use ramanujan::DenseMatrix;
 
 /// Ordinary least squares over an explicit **design matrix**: given one basis row
 /// per sample (`design[i]` — the predictor values for sample `i`) and the observed
@@ -27,21 +27,23 @@ pub fn fit_least_squares(design: &[Vec<f64>], y: &[f64]) -> Vec<f64> {
     {
         return vec![0.0; k];
     }
-    let mut ata = vec![vec![0.0_f64; k]; k];
+    let mut ata = DenseMatrix::zeros(k, k);
     let mut aty = vec![0.0_f64; k];
     for (row, &yi) in design.iter().zip(y) {
         for i in 0..k {
             aty[i] += row[i] * yi;
             for j in 0..k {
-                ata[i][j] += row[i] * row[j];
+                ata.set(i, j, ata.get(i, j) + row[i] * row[j]);
             }
         }
     }
-    for (i, row) in ata.iter_mut().enumerate() {
-        let scale = row[i].abs().max(1.0);
-        row[i] += 1e-9 * scale;
+    for i in 0..k {
+        let scale = ata.get(i, i).abs().max(1.0);
+        ata.set(i, i, ata.get(i, i) + 1e-9 * scale);
     }
-    gaussian_solve(ata, aty)
+    // LU with partial pivoting solves the normal equations; a singular system
+    // (Err) maps back to the zero-vector contract.
+    ata.lu().map_or_else(|_| vec![0.0; k], |lu| lu.solve(&aty))
 }
 
 #[cfg(test)]

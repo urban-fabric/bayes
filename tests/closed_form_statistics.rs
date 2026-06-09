@@ -15,8 +15,8 @@ fn new_closed_form_statistics_are_public() {
     assert_eq!(trimmed_mean(&[1.0, 2.0, 3.0, 100.0], 0.25), 2.5);
 
     let cov = covariance_matrix(&[vec![1.0, 2.0], vec![2.0, 4.0], vec![3.0, 6.0]]);
-    assert_eq!(cov.len(), 2);
-    assert!(cov[0][1] > 0.0);
+    assert_eq!(cov.rows(), 2);
+    assert!(cov.get(0, 1) > 0.0);
 
     let cp = proportion_clopper_pearson(0, 10, 0.95);
     assert_eq!(cp.lower, 0.0);

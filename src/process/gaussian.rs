@@ -9,9 +9,10 @@
 
 use rand::Rng;
 
+use ramanujan::DenseMatrix;
+
 use super::kernel::Kernel;
 use crate::distribution::normal::standard_normal_polar;
-use crate::linalg::{Matrix, cholesky, cholesky_solve, solve_lower};
 
 const DEFAULT_JITTER: f64 = 1e-9;
 
@@ -65,10 +66,10 @@ impl<K: Kernel> GaussianProcess<K> {
     }
 
     /// The cross-covariance matrix `K[i][j] = kernel(xs[i], ys[j])`.
-    fn gram(&self, xs: &[Vec<f64>], ys: &[Vec<f64>]) -> Matrix {
-        xs.iter()
-            .map(|x| ys.iter().map(|y| self.kernel.covariance(x, y)).collect())
-            .collect()
+    fn gram(&self, xs: &[Vec<f64>], ys: &[Vec<f64>]) -> DenseMatrix {
+        DenseMatrix::from_fn(xs.len(), ys.len(), |i, j| {
+            self.kernel.covariance(&xs[i], &ys[j])
+        })
     }
 
     /// Sample a realization of the process at `inputs`, drawn from the GP **prior**
@@ -87,14 +88,17 @@ impl<K: Kernel> GaussianProcess<K> {
         if !points_are_rectangular_and_finite(inputs) {
             return None;
         }
+        let n = inputs.len();
         let k = self.gram(inputs, inputs);
-        let l = cholesky(&k, self.jitter)?;
-        let z: Vec<f64> = (0..inputs.len())
-            .map(|_| standard_normal_polar(rng))
-            .collect();
+        let chol =
+            DenseMatrix::from_fn(n, n, |i, j| k.get(i, j) + if i == j { self.jitter } else { 0.0 })
+                .cholesky()
+                .ok()?;
+        let l = chol.lower();
+        let z: Vec<f64> = (0..n).map(|_| standard_normal_polar(rng)).collect();
         Some(
-            (0..inputs.len())
-                .map(|i| self.mean + (0..=i).map(|j| l[i][j] * z[j]).sum::<f64>())
+            (0..n)
+                .map(|i| self.mean + (0..=i).map(|j| l.get(i, j) * z[j]).sum::<f64>())
                 .collect(),
         )
     }
@@ -121,14 +125,16 @@ impl<K: Kernel> GaussianProcess<K> {
             return None;
         }
         let n = train_x.len();
-        let mut ky = self.gram(train_x, train_x);
-        for (i, row) in ky.iter_mut().enumerate() {
-            row[i] += noise;
-        }
-        let l = cholesky(&ky, self.jitter)?;
+        let ky = self.gram(train_x, train_x);
+        // Observation noise and jitter go on the diagonal of the training Gram matrix.
+        let chol = DenseMatrix::from_fn(n, n, |i, j| {
+            ky.get(i, j) + if i == j { noise + self.jitter } else { 0.0 }
+        })
+        .cholesky()
+        .ok()?;
 
         let y_centered: Vec<f64> = train_y.iter().map(|&y| y - self.mean).collect();
-        let alpha = cholesky_solve(&l, &y_centered);
+        let alpha = chol.solve(&y_centered);
 
         let ks: Vec<Vec<f64>> = test_x
             .iter()
@@ -142,17 +148,15 @@ impl<K: Kernel> GaussianProcess<K> {
         let kss = self.gram(test_x, test_x);
 
         let m = test_x.len();
-        let v: Vec<Vec<f64>> = ks.iter().map(|col| solve_lower(&l, col)).collect();
+        // βⱼ = K⁻¹ ksⱼ, so the predictive covariance Kss[i][j] − ksᵢᵀ K⁻¹ ksⱼ is
+        // Kss[i][j] − ksᵢ · βⱼ (the L⁻¹ form ksᵢᵀ L⁻ᵀ L⁻¹ ksⱼ, one SPD solve per column).
+        let beta: Vec<Vec<f64>> = ks.iter().map(|col| chol.solve(col)).collect();
         let mean: Vec<f64> = (0..m)
             .map(|j| self.mean + (0..n).map(|k| ks[j][k] * alpha[k]).sum::<f64>())
             .collect();
-        let covariance: Matrix = (0..m)
-            .map(|i| {
-                (0..m)
-                    .map(|j| kss[i][j] - (0..n).map(|k| v[i][k] * v[j][k]).sum::<f64>())
-                    .collect()
-            })
-            .collect();
+        let covariance = DenseMatrix::from_fn(m, m, |i, j| {
+            kss.get(i, j) - (0..n).map(|k| ks[i][k] * beta[j][k]).sum::<f64>()
+        });
 
         Some(GpPosterior {
             mean,
@@ -167,7 +171,7 @@ impl<K: Kernel> GaussianProcess<K> {
 #[derive(Clone, Debug)]
 pub struct GpPosterior {
     pub mean: Vec<f64>,
-    pub covariance: Matrix,
+    pub covariance: DenseMatrix,
     jitter: f64,
 }
 
@@ -176,7 +180,7 @@ impl GpPosterior {
     /// diagonal).
     pub fn variance(&self) -> Vec<f64> {
         (0..self.mean.len())
-            .map(|i| self.covariance[i][i])
+            .map(|i| self.covariance.get(i, i))
             .collect()
     }
 
@@ -190,13 +194,17 @@ impl GpPosterior {
         if self.mean.is_empty() {
             return Some(Vec::new());
         }
-        let l = cholesky(&self.covariance, self.jitter)?;
-        let z: Vec<f64> = (0..self.mean.len())
-            .map(|_| standard_normal_polar(rng))
-            .collect();
+        let n = self.mean.len();
+        let chol = DenseMatrix::from_fn(n, n, |i, j| {
+            self.covariance.get(i, j) + if i == j { self.jitter } else { 0.0 }
+        })
+        .cholesky()
+        .ok()?;
+        let l = chol.lower();
+        let z: Vec<f64> = (0..n).map(|_| standard_normal_polar(rng)).collect();
         Some(
-            (0..self.mean.len())
-                .map(|i| self.mean[i] + (0..=i).map(|j| l[i][j] * z[j]).sum::<f64>())
+            (0..n)
+                .map(|i| self.mean[i] + (0..=i).map(|j| l.get(i, j) * z[j]).sum::<f64>())
                 .collect(),
         )
     }

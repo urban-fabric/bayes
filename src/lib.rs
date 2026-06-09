@@ -11,7 +11,6 @@
 pub mod distribution;
 mod error;
 pub mod function;
-pub(crate) mod linalg;
 pub mod process;
 pub mod statistics;
 
