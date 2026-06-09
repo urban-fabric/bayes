@@ -12,6 +12,9 @@ description = "Closed-form probability and statistics for Rust: distributions, s
 path = "src/lib.rs"
 
 [dependencies]
+# Dense linear algebra (Cholesky / LU factorizations and their solves) plus the
+# DenseMatrix type used by the multivariate / Gaussian-process routines.
+ramanujan = { git = "ssh://git@github.com/urban-fabric/ramanujan.git", branch = "main" }
 rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"

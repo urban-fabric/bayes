@@ -1,11 +1,12 @@
 use rand::Rng;
 use rand::distr::Distribution;
 
+use ramanujan::DenseMatrix;
+
 use super::{MultivariateContinuous, MultivariateMoments};
 use crate::distribution::continuous::gamma::sample_standard_gamma;
 use crate::error::BayesError;
 use crate::function::gamma::ln_gamma;
-use crate::linalg::Matrix;
 
 /// The Dirichlet distribution over the `k`-simplex (vectors of non-negative
 /// components summing to 1), with concentration parameters `α₁, …, α_k > 0`.
@@ -81,23 +82,17 @@ impl MultivariateMoments for Dirichlet {
         let a0 = self.alpha_sum();
         self.alpha.iter().map(|&a| a / a0).collect()
     }
-    fn covariance(&self) -> Matrix {
+    fn covariance(&self) -> DenseMatrix {
         let a0 = self.alpha_sum();
         let denom = a0 * a0 * (a0 + 1.0);
         let k = self.alpha.len();
-        (0..k)
-            .map(|i| {
-                (0..k)
-                    .map(|j| {
-                        if i == j {
-                            self.alpha[i] * (a0 - self.alpha[i]) / denom
-                        } else {
-                            -self.alpha[i] * self.alpha[j] / denom
-                        }
-                    })
-                    .collect()
-            })
-            .collect()
+        DenseMatrix::from_fn(k, k, |i, j| {
+            if i == j {
+                self.alpha[i] * (a0 - self.alpha[i]) / denom
+            } else {
+                -self.alpha[i] * self.alpha[j] / denom
+            }
+        })
     }
 }
 
