@@ -191,7 +191,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 [[package]]
 name = "ramanujan"
 version = "0.1.0"
-source = "git+ssh://git@github.com/urban-fabric/ramanujan.git?branch=main#a65bf8089f477dfaad5e854548187d0fe3281f05"
+source = "git+ssh://git@github.com/urban-fabric/ramanujan.git?branch=main#25628e62412d92acd33d33614163c04ff7fe7e6b"
 
 [[package]]
 name = "rand"
