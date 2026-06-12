@@ -4,9 +4,9 @@
 //! from MCMC *inference*, which is out of scope for `bayes`.)
 #![allow(clippy::needless_range_loop)]
 
+use ramanujan::DenseMatrix;
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
-use ramanujan::DenseMatrix;
 
 use crate::error::BayesError;
 
@@ -150,7 +150,8 @@ mod tests {
     #[test]
     fn trajectory_stays_in_state_space() {
         let mut rng = ChaCha8Rng::seed_from_u64(1);
-        let mc = MarkovChain::new(DenseMatrix::from_rows(&[vec![0.2, 0.8], vec![0.6, 0.4]])).unwrap();
+        let mc =
+            MarkovChain::new(DenseMatrix::from_rows(&[vec![0.2, 0.8], vec![0.6, 0.4]])).unwrap();
         let traj = mc.trajectory(0, 50, &mut rng);
         assert_eq!(traj.len(), 51);
         assert!(traj.iter().all(|&s| s < 2));
@@ -158,7 +159,8 @@ mod tests {
 
     #[test]
     fn stationary_distribution_is_correct() {
-        let mc = MarkovChain::new(DenseMatrix::from_rows(&[vec![0.2, 0.8], vec![0.6, 0.4]])).unwrap();
+        let mc =
+            MarkovChain::new(DenseMatrix::from_rows(&[vec![0.2, 0.8], vec![0.6, 0.4]])).unwrap();
         let pi = mc.stationary();
         close(pi[0], 3.0 / 7.0, 1e-9);
         close(pi[1], 4.0 / 7.0, 1e-9);

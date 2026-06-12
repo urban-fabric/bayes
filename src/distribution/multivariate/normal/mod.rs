@@ -56,11 +56,13 @@ impl MultivariateNormal {
                 }
             }
         }
-        let chol = DenseMatrix::from_fn(d, d, |i, j| cov.get(i, j) + if i == j { JITTER } else { 0.0 })
-            .cholesky()
-            .map_err(|_| BayesError::Malformed {
-                what: "covariance is not positive-definite",
-            })?;
+        let chol = DenseMatrix::from_fn(d, d, |i, j| {
+            cov.get(i, j) + if i == j { JITTER } else { 0.0 }
+        })
+        .cholesky()
+        .map_err(|_| BayesError::Malformed {
+            what: "covariance is not positive-definite",
+        })?;
         let ln_det: f64 = (0..d).map(|i| chol.lower().get(i, i).ln()).sum::<f64>() * 2.0;
         let ln_det_2pi = d as f64 * TAU.ln() + ln_det;
         Ok(Self {
