@@ -44,7 +44,11 @@ pub fn covariance_matrix(samples: &[Vec<f64>]) -> DenseMatrix {
     for row in samples {
         for i in 0..p {
             for j in 0..=i {
-                cov.set(i, j, cov.get(i, j) + (row[i] - means[i]) * (row[j] - means[j]));
+                cov.set(
+                    i,
+                    j,
+                    cov.get(i, j) + (row[i] - means[i]) * (row[j] - means[j]),
+                );
             }
         }
     }
@@ -125,9 +129,10 @@ pub fn mahalanobis_squared(x: &[f64], mean: &[f64], cov: &DenseMatrix) -> f64 {
         return f64::NAN;
     }
     let delta: Vec<f64> = x.iter().zip(mean).map(|(&xi, &mi)| xi - mi).collect();
-    let Ok(chol) =
-        DenseMatrix::from_fn(p, p, |i, j| cov.get(i, j) + if i == j { 1e-12 } else { 0.0 }).cholesky()
-    else {
+    let Ok(chol) = DenseMatrix::from_fn(p, p, |i, j| {
+        cov.get(i, j) + if i == j { 1e-12 } else { 0.0 }
+    })
+    .cholesky() else {
         return f64::NAN;
     };
     let solved = chol.solve(&delta);

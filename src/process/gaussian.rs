@@ -90,10 +90,11 @@ impl<K: Kernel> GaussianProcess<K> {
         }
         let n = inputs.len();
         let k = self.gram(inputs, inputs);
-        let chol =
-            DenseMatrix::from_fn(n, n, |i, j| k.get(i, j) + if i == j { self.jitter } else { 0.0 })
-                .cholesky()
-                .ok()?;
+        let chol = DenseMatrix::from_fn(n, n, |i, j| {
+            k.get(i, j) + if i == j { self.jitter } else { 0.0 }
+        })
+        .cholesky()
+        .ok()?;
         let l = chol.lower();
         let z: Vec<f64> = (0..n).map(|_| standard_normal_polar(rng)).collect();
         Some(
