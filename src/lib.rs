@@ -23,9 +23,10 @@ pub use distribution::{
     ExponentialFamily, FisherSnedecor, Frechet, Gamma, GammaExponential, GammaPoisson, Geometric,
     Gumbel, HalfNormal, Hypergeometric, InverseGamma, KlDivergence, Laplace, LogNormal, Logistic,
     Lomax, MeanVar, Mixture, Moments, Multinomial, MultivariateContinuous, MultivariateMoments,
-    MultivariateNormal, NegativeBinomial, Normal, NormalInverseGamma, NormalKnownVariance, Pareto,
-    Poisson, Rayleigh, Sigmoid, StudentT, SufficientStatistic, Support, Transformed, Trials,
-    Triangular, Truncated, Uniform, Uniform2D, VonMises, Wald, Weibull,
+    MultivariateNormal, NaturalParams, NegativeBinomial, Normal, NormalInverseGamma,
+    NormalKnownVariance, Pareto, Poisson, Rayleigh, Sigmoid, StudentT, SufficientStatistic,
+    Support, Transformed, Trials, Triangular, Truncated, Uniform, Uniform2D, VonMises, Wald,
+    Weibull,
 };
 pub use error::{BayesError, StatsError};
 

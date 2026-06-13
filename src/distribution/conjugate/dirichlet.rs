@@ -1,7 +1,7 @@
 //! Dirichlet-prior conjugate models: **Dirichlet–Categorical** and
 //! **Dirichlet–Multinomial**.
 
-use super::Conjugate;
+use super::{Conjugate, Counts};
 use crate::distribution::{Categorical, Dirichlet};
 
 /// **Dirichlet–Categorical.** A `Dirichlet(α)` prior on category probabilities;
@@ -29,14 +29,25 @@ impl DirichletCategorical {
 impl Conjugate for DirichletCategorical {
     type Datum = u64;
     type Posterior = Dirichlet;
-    fn posterior(&self, data: &[u64]) -> Dirichlet {
-        let mut alpha = self.prior.alpha().to_vec();
-        for &k in data {
-            if let Some(a) = alpha.get_mut(k as usize) {
-                *a += 1.0;
-            }
+    type Natural = Counts;
+
+    /// A one-hot count for category `c` — the riemann `catStat`. Labels outside
+    /// the prior's `K` categories contribute the zero increment (ignored).
+    fn statistic(&self, &c: &u64) -> Counts {
+        let k = c as usize;
+        if k < self.prior.alpha().len() {
+            let mut v = vec![0.0; k + 1];
+            v[k] = 1.0;
+            Counts(v)
+        } else {
+            Counts(Vec::new())
         }
-        Dirichlet::new(alpha).unwrap_or_else(|_| self.prior.clone())
+    }
+    fn prior_natural(&self) -> Counts {
+        Counts(self.prior.alpha().to_vec())
+    }
+    fn posterior_from_natural(&self, c: Counts) -> Dirichlet {
+        Dirichlet::new(c.0).unwrap_or_else(|_| self.prior.clone())
     }
 }
 
@@ -65,16 +76,24 @@ impl DirichletMultinomial {
 impl Conjugate for DirichletMultinomial {
     type Datum = Vec<u64>;
     type Posterior = Dirichlet;
-    fn posterior(&self, data: &[Vec<u64>]) -> Dirichlet {
-        let mut alpha = self.prior.alpha().to_vec();
-        for counts in data {
-            for (i, &c) in counts.iter().enumerate() {
-                if let Some(a) = alpha.get_mut(i) {
-                    *a += c as f64;
-                }
-            }
-        }
-        Dirichlet::new(alpha).unwrap_or_else(|_| self.prior.clone())
+    type Natural = Counts;
+
+    /// A per-trial count vector, truncated to the prior's `K` categories (counts
+    /// beyond `K` are ignored).
+    fn statistic(&self, counts: &Vec<u64>) -> Counts {
+        Counts(
+            counts
+                .iter()
+                .take(self.prior.alpha().len())
+                .map(|&c| c as f64)
+                .collect(),
+        )
+    }
+    fn prior_natural(&self) -> Counts {
+        Counts(self.prior.alpha().to_vec())
+    }
+    fn posterior_from_natural(&self, c: Counts) -> Dirichlet {
+        Dirichlet::new(c.0).unwrap_or_else(|_| self.prior.clone())
     }
 }
 

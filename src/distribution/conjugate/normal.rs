@@ -1,7 +1,7 @@
 //! Normal-prior conjugate models: **Normal–Normal** (known variance) and
 //! **Normal–Inverse-Gamma** (unknown mean and variance).
 
-use super::Conjugate;
+use super::{Conjugate, NigNatural, Pair};
 use crate::distribution::{InverseGamma, Normal, StudentT};
 use crate::error::BayesError;
 
@@ -35,18 +35,30 @@ impl NormalKnownVariance {
 impl Conjugate for NormalKnownVariance {
     type Datum = f64;
     type Posterior = Normal;
-    fn posterior(&self, data: &[f64]) -> Normal {
+    /// Natural coordinates `(precision, precision·mean)` — the space in which
+    /// the Gaussian (known variance) update is additive.
+    type Natural = Pair;
+
+    /// One observation in natural coordinates: `T(x) = (1/σ², x/σ²)` for the
+    /// known likelihood variance `σ²`. A non-positive `σ` contributes nothing
+    /// (the model is degenerate; the posterior stays the prior).
+    fn statistic(&self, &x: &f64) -> Pair {
+        if self.obs_std <= 0.0 {
+            return Pair::new(0.0, 0.0);
+        }
+        let prec = 1.0 / (self.obs_std * self.obs_std);
+        Pair::new(prec, x * prec)
+    }
+    fn prior_natural(&self) -> Pair {
         let (mu0, tau0) = self.prior.params();
-        let n = data.len() as f64;
-        if n == 0.0 || self.obs_std <= 0.0 {
+        let prec = 1.0 / (tau0 * tau0);
+        Pair::new(prec, mu0 * prec)
+    }
+    fn posterior_from_natural(&self, p: Pair) -> Normal {
+        if p.a <= 0.0 {
             return self.prior;
         }
-        let sum: f64 = data.iter().sum();
-        let prior_prec = 1.0 / (tau0 * tau0);
-        let like_prec = n / (self.obs_std * self.obs_std);
-        let post_prec = prior_prec + like_prec;
-        let post_mean = (mu0 * prior_prec + sum / (self.obs_std * self.obs_std)) / post_prec;
-        Normal::new(post_mean, post_prec.recip().sqrt()).unwrap_or(self.prior)
+        Normal::new(p.b / p.a, p.a.recip().sqrt()).unwrap_or(self.prior)
     }
 }
 
@@ -128,20 +140,37 @@ impl NormalInverseGamma {
 impl Conjugate for NormalInverseGamma {
     type Datum = f64;
     type Posterior = NormalInverseGamma;
-    fn posterior(&self, data: &[f64]) -> NormalInverseGamma {
-        let n = data.len() as f64;
-        if n == 0.0 {
+    /// Natural coordinates `(λ, λμ, 2α, 2β + λμ²)` — the space in which the NIG
+    /// update is additive (riemann `normalInverseGamma_online_eq_batch`).
+    type Natural = NigNatural;
+
+    /// One observation: `T(x) = (1, x, 1, x²)` — the `λ` and `2α` counts both
+    /// gain `1`, matching riemann's `nigStat x = (1, x, x²)`.
+    fn statistic(&self, &x: &f64) -> NigNatural {
+        NigNatural {
+            lambda: 1.0,
+            lambda_mu: x,
+            two_alpha: 1.0,
+            sum_sq: x * x,
+        }
+    }
+    fn prior_natural(&self) -> NigNatural {
+        NigNatural {
+            lambda: self.lambda,
+            lambda_mu: self.lambda * self.mu,
+            two_alpha: 2.0 * self.alpha,
+            sum_sq: 2.0 * self.beta + self.lambda * self.mu * self.mu,
+        }
+    }
+    fn posterior_from_natural(&self, n: NigNatural) -> NormalInverseGamma {
+        if n.lambda <= 0.0 {
             return *self;
         }
-        let xbar = data.iter().sum::<f64>() / n;
-        let ss = data.iter().map(|&x| (x - xbar) * (x - xbar)).sum::<f64>();
-        let lambda_n = self.lambda + n;
-        let mu_n = (self.lambda * self.mu + n * xbar) / lambda_n;
-        let alpha_n = self.alpha + n / 2.0;
-        let beta_n = self.beta
-            + 0.5 * ss
-            + self.lambda * n * (xbar - self.mu) * (xbar - self.mu) / (2.0 * lambda_n);
-        NormalInverseGamma::new(mu_n, lambda_n, alpha_n, beta_n).unwrap_or(*self)
+        let mu_n = n.lambda_mu / n.lambda;
+        let alpha_n = n.two_alpha / 2.0;
+        // β recovered from the natural sum-of-squares: 2β = (2β+λμ²) − λμ².
+        let beta_n = (n.sum_sq - n.lambda_mu * n.lambda_mu / n.lambda) / 2.0;
+        NormalInverseGamma::new(mu_n, n.lambda, alpha_n, beta_n).unwrap_or(*self)
     }
 }
 

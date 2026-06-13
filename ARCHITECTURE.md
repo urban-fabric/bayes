@@ -77,6 +77,12 @@ The concrete distributions are grouped by kind:
   composition.
 - `exponential_family/`: mergeable sufficient statistics and closed-form fits.
 - `conjugate/`: closed-form conjugate prior/posterior updates and predictives.
+  Every family is one instance of the `Conjugate` trait's generic
+  `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
+  only its statistic `T`, prior coordinates `η`, and the map back to a
+  distribution; the streaming `posterior_natural` accumulator and the
+  online-equals-batch / order-independence guarantees are proved generically in
+  `riemann` (`Bayes/ExponentialFamily`, `Bayes/ConjugateFamilies`).
 - `divergence.rs`: closed-form KL divergence between same-family distributions
   (Normal, Gamma, Beta, Exponential, Poisson, Bernoulli).
 
