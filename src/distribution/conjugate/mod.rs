@@ -27,20 +27,151 @@
 mod beta;
 mod dirichlet;
 mod gamma;
+mod natural;
 mod normal;
 
 pub use beta::{BetaBernoulli, BetaBinomialModel};
 pub use dirichlet::{DirichletCategorical, DirichletMultinomial};
 pub use gamma::{GammaExponential, GammaPoisson};
+pub use natural::{Counts, NaturalParams, NigNatural, Pair};
 pub use normal::{NormalInverseGamma, NormalKnownVariance};
 
-/// A conjugate prior/likelihood pair whose posterior is computable in closed form.
+/// A conjugate prior/likelihood pair whose posterior is computable in closed
+/// form by the **one** algebraic move every conjugate family shares: add the
+/// data's sufficient statistic to the prior's natural hyperparameters,
+///
+/// ```text
+/// posterior = η + Σ T(xᵢ)
+/// ```
+///
+/// in a commutative additive monoid of hyperparameters ([`NaturalParams`]).
+/// That umbrella law — and its two corollaries, **online updating equals batch**
+/// and **order-independence** — is machine-checked once, generically over the
+/// monoid, in the `riemann` Lean development
+/// (`RiemannLean/Bayes/ExponentialFamily.lean`: `posterior`,
+/// `posterior_online_eq_batch`, `posterior_perm`); the named families specialize
+/// it in `Bayes/ConjugateFamilies.lean`.
+///
+/// So an implementor supplies only the three family-specific pieces — the
+/// per-datum statistic [`statistic`](Self::statistic), the prior's natural
+/// coordinates [`prior_natural`](Self::prior_natural), and the map back to a
+/// distribution [`posterior_from_natural`](Self::posterior_from_natural) — and inherits the
+/// proved-correct [`posterior`](Self::posterior) accumulation (and its streaming
+/// accumulator [`posterior_natural`](Self::posterior_natural)) for free.
 pub trait Conjugate {
     /// The observation type of the likelihood.
     type Datum;
     /// The posterior distribution type (the same family as the prior).
     type Posterior;
+    /// The natural-hyperparameter monoid this family accumulates in.
+    type Natural: NaturalParams;
+
+    /// `T(x)` — the per-datum sufficient statistic as a natural-hyperparameter
+    /// increment. Takes `&self` because some statistics carry a model constant
+    /// (the binomial trial count, the known likelihood variance) — matching
+    /// riemann's parameterized `binomStat m`.
+    fn statistic(&self, x: &Self::Datum) -> Self::Natural;
+
+    /// `η` — the prior expressed in natural hyperparameters (the fold seed).
+    fn prior_natural(&self) -> Self::Natural;
+
+    /// Recover the posterior distribution from accumulated natural
+    /// hyperparameters `η + Σ T(xᵢ)`.
+    fn posterior_from_natural(&self, natural: Self::Natural) -> Self::Posterior;
+
+    /// `η + Σ T(xᵢ)` — the posterior's natural hyperparameters, the accumulator
+    /// behind a streaming update. Folds each datum's statistic into the prior;
+    /// by riemann's `posterior_online_eq_batch` / `posterior_perm` the result is
+    /// independent of how `data` is split or ordered.
+    fn posterior_natural(&self, data: &[Self::Datum]) -> Self::Natural {
+        let mut acc = self.prior_natural();
+        for x in data {
+            acc = acc.combine(&self.statistic(x));
+        }
+        acc
+    }
 
     /// The closed-form posterior after observing `data`.
-    fn posterior(&self, data: &[Self::Datum]) -> Self::Posterior;
+    fn posterior(&self, data: &[Self::Datum]) -> Self::Posterior {
+        self.posterior_from_natural(self.posterior_natural(data))
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    //! The two corollaries every family inherits from the riemann umbrella law
+    //! (`Bayes/ExponentialFamily`): **online = batch** (`posterior_online_eq_batch`)
+    //! and **order-independence** (`posterior_perm`). Exercised here on a family
+    //! whose natural coordinates are trivial (Beta–Bernoulli) and one whose are a
+    //! genuine change of variables (Normal–Inverse-Gamma).
+
+    use super::*;
+    use crate::distribution::{Beta, Dirichlet};
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    /// Fold `data` into the prior one datum at a time, continuing from a
+    /// running natural accumulator — the streaming update. By
+    /// `posterior_online_eq_batch` this must equal the batch posterior.
+    fn streamed<C: Conjugate>(model: &C, first: &[C::Datum], rest: &[C::Datum]) -> C::Natural {
+        let mut acc = model.posterior_natural(first);
+        for x in rest {
+            acc = acc.combine(&model.statistic(x));
+        }
+        acc
+    }
+
+    #[test]
+    fn beta_bernoulli_online_equals_batch_and_order_independent() {
+        let model = BetaBernoulli::new(Beta::new(1.0, 1.0).unwrap());
+        let d1 = [true, false, true];
+        let d2 = [true, true, false, false];
+        let all: Vec<bool> = d1.iter().chain(d2.iter()).copied().collect();
+
+        let batch = model.posterior(&all);
+        let online = model.posterior_from_natural(streamed(&model, &d1, &d2));
+        close(batch.alpha(), online.alpha(), 1e-12);
+        close(batch.beta(), online.beta(), 1e-12);
+
+        // A permutation of the same multiset (4 successes, 3 failures).
+        let shuffled = [false, false, true, true, true, true, false];
+        let permuted = model.posterior(&shuffled);
+        close(permuted.alpha(), batch.alpha(), 1e-12);
+        close(permuted.beta(), batch.beta(), 1e-12);
+    }
+
+    #[test]
+    fn normal_inverse_gamma_online_equals_batch() {
+        // NIG's natural coordinates are a real change of variables, so this is
+        // the load-bearing check that the accumulation is correct there.
+        let model = NormalInverseGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
+        let d1 = [1.0, 2.0];
+        let d2 = [3.0, 4.0, 5.0];
+        let all: Vec<f64> = d1.iter().chain(d2.iter()).copied().collect();
+
+        let batch = model.posterior(&all);
+        let online = model.posterior_from_natural(streamed(&model, &d1, &d2));
+        close(batch.mu(), online.mu(), 1e-12);
+        close(batch.lambda(), online.lambda(), 1e-12);
+        close(batch.alpha(), online.alpha(), 1e-12);
+        close(batch.beta(), online.beta(), 1e-12);
+
+        // Empty data leaves the prior unchanged (`posterior_nil`).
+        let prior_again = model.posterior(&[]);
+        close(prior_again.mu(), model.mu(), 1e-12);
+        close(prior_again.beta(), model.beta(), 1e-12);
+    }
+
+    #[test]
+    fn dirichlet_categorical_ignores_out_of_support_labels() {
+        // The statistic confines each increment to the prior's K categories, so
+        // labels ≥ K are dropped (matching the closed form) rather than growing
+        // the concentration vector.
+        let model = DirichletCategorical::new(Dirichlet::new(vec![1.0, 1.0, 1.0]).unwrap());
+        let post = model.posterior(&[0u64, 1, 2, 7, 99]);
+        assert_eq!(post.alpha(), &[2.0, 2.0, 2.0]);
+    }
 }

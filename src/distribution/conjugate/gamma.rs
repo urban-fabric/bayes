@@ -1,6 +1,6 @@
 //! Gamma-prior conjugate models: **Gamma–Poisson** and **Gamma–Exponential**.
 
-use super::Conjugate;
+use super::{Conjugate, Pair};
 use crate::distribution::{Gamma, NegativeBinomial};
 
 /// **Gamma–Poisson.** A `Gamma(shape α, rate β)` prior on the Poisson rate;
@@ -28,10 +28,17 @@ impl GammaPoisson {
 impl Conjugate for GammaPoisson {
     type Datum = u64;
     type Posterior = Gamma;
-    fn posterior(&self, data: &[u64]) -> Gamma {
-        let sum: f64 = data.iter().map(|&k| k as f64).sum();
-        let n = data.len() as f64;
-        Gamma::new(self.prior.shape() + sum, self.prior.rate() + n).unwrap_or(self.prior)
+    type Natural = Pair;
+
+    /// One Poisson count: `T(k) = (k, 1)` — adds `k` to the shape, `1` to the rate.
+    fn statistic(&self, &k: &u64) -> Pair {
+        Pair::new(k as f64, 1.0)
+    }
+    fn prior_natural(&self) -> Pair {
+        Pair::new(self.prior.shape(), self.prior.rate())
+    }
+    fn posterior_from_natural(&self, p: Pair) -> Gamma {
+        Gamma::new(p.a, p.b).unwrap_or(self.prior)
     }
 }
 
@@ -55,10 +62,18 @@ impl GammaExponential {
 impl Conjugate for GammaExponential {
     type Datum = f64;
     type Posterior = Gamma;
-    fn posterior(&self, data: &[f64]) -> Gamma {
-        let sum: f64 = data.iter().sum();
-        let n = data.len() as f64;
-        Gamma::new(self.prior.shape() + n, self.prior.rate() + sum).unwrap_or(self.prior)
+    type Natural = Pair;
+
+    /// One interarrival time: `T(x) = (1, x)` — adds `1` to the shape (a count),
+    /// `x` to the rate.
+    fn statistic(&self, &x: &f64) -> Pair {
+        Pair::new(1.0, x)
+    }
+    fn prior_natural(&self) -> Pair {
+        Pair::new(self.prior.shape(), self.prior.rate())
+    }
+    fn posterior_from_natural(&self, p: Pair) -> Gamma {
+        Gamma::new(p.a, p.b).unwrap_or(self.prior)
     }
 }
 

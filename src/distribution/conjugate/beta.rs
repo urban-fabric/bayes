@@ -1,6 +1,6 @@
 //! Beta-prior conjugate models: **Beta–Bernoulli** and **Beta–Binomial**.
 
-use super::Conjugate;
+use super::{Conjugate, Pair};
 use crate::distribution::{Bernoulli, Beta, BetaBinomial};
 
 /// **Beta–Bernoulli.** A `Beta(α, β)` prior on a Bernoulli success probability;
@@ -27,11 +27,21 @@ impl BetaBernoulli {
 impl Conjugate for BetaBernoulli {
     type Datum = bool;
     type Posterior = Beta;
-    fn posterior(&self, data: &[bool]) -> Beta {
-        let successes = data.iter().filter(|&&b| b).count() as f64;
-        let failures = data.len() as f64 - successes;
-        Beta::new(self.prior.alpha() + successes, self.prior.beta() + failures)
-            .unwrap_or(self.prior)
+    type Natural = Pair;
+
+    /// One success or one failure: `T(true) = (1, 0)`, `T(false) = (0, 1)`.
+    fn statistic(&self, &b: &bool) -> Pair {
+        if b {
+            Pair::new(1.0, 0.0)
+        } else {
+            Pair::new(0.0, 1.0)
+        }
+    }
+    fn prior_natural(&self) -> Pair {
+        Pair::new(self.prior.alpha(), self.prior.beta())
+    }
+    fn posterior_from_natural(&self, p: Pair) -> Beta {
+        Beta::new(p.a, p.b).unwrap_or(self.prior)
     }
 }
 
@@ -60,11 +70,19 @@ impl BetaBinomialModel {
 impl Conjugate for BetaBinomialModel {
     type Datum = u64;
     type Posterior = Beta;
-    fn posterior(&self, data: &[u64]) -> Beta {
-        let successes: f64 = data.iter().map(|&k| k.min(self.trials) as f64).sum();
-        let failures = (data.len() as u64 * self.trials) as f64 - successes;
-        Beta::new(self.prior.alpha() + successes, self.prior.beta() + failures)
-            .unwrap_or(self.prior)
+    type Natural = Pair;
+
+    /// `k` successes out of `m` trials: `T(k) = (k, m − k)` (the riemann
+    /// `binomStat m`), with `k` clamped to the trial count.
+    fn statistic(&self, &k: &u64) -> Pair {
+        let successes = k.min(self.trials) as f64;
+        Pair::new(successes, self.trials as f64 - successes)
+    }
+    fn prior_natural(&self) -> Pair {
+        Pair::new(self.prior.alpha(), self.prior.beta())
+    }
+    fn posterior_from_natural(&self, p: Pair) -> Beta {
+        Beta::new(p.a, p.b).unwrap_or(self.prior)
     }
 }
 
