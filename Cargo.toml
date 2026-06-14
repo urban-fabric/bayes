@@ -15,6 +15,9 @@ path = "src/lib.rs"
 # Dense linear algebra (Cholesky / LU factorizations and their solves) plus the
 # DenseMatrix type used by the multivariate / Gaussian-process routines.
 ramanujan = { git = "ssh://git@github.com/urban-fabric/ramanujan.git", branch = "main" }
+# Spherical geometry: the S² space (`S2Point`, tangent frames) that directional
+# distributions (von Mises–Fisher) are defined over — the manifold as a typed space.
+hausdorff = { git = "ssh://git@github.com/urban-fabric/hausdorff.git", branch = "main" }
 rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"

@@ -9,11 +9,13 @@
 mod dirichlet;
 mod multinomial;
 mod normal;
+mod von_mises_fisher;
 
 pub use dirichlet::Dirichlet;
 pub use multinomial::Multinomial;
 pub use normal::MultivariateNormal;
 use ramanujan::DenseMatrix;
+pub use von_mises_fisher::VonMisesFisher;
 
 /// A continuous distribution over vectors: the joint density `f(x)` for `x ∈ ℝ^d`.
 pub trait MultivariateContinuous {
