@@ -44,6 +44,7 @@ pub use functional::{
 };
 pub use multivariate::{
     Dirichlet, Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
+    VonMisesFisher,
 };
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};
 

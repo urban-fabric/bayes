@@ -25,8 +25,8 @@ pub use distribution::{
     Lomax, MeanVar, Mixture, Moments, Multinomial, MultivariateContinuous, MultivariateMoments,
     MultivariateNormal, NaturalParams, NegativeBinomial, Normal, NormalInverseGamma,
     NormalKnownVariance, Pareto, Poisson, Rayleigh, Sigmoid, StudentT, SufficientStatistic,
-    Support, Transformed, Trials, Triangular, Truncated, Uniform, Uniform2D, VonMises, Wald,
-    Weibull,
+    Support, Transformed, Trials, Triangular, Truncated, Uniform, Uniform2D, VonMises,
+    VonMisesFisher, Wald, Weibull,
 };
 pub use error::{BayesError, StatsError};
 
