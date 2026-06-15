@@ -29,7 +29,8 @@ pub use distribution::{
     Poisson, Rayleigh, RenyiDivergence, ReverseKl, Sigmoid, SquaredHellinger, StudentT,
     SufficientStatistic, Support, TotalVariation, TotalVariationGen, Transformed, Trials,
     Triangular, Truncated, Uniform, Uniform2D, VonMises, VonMisesFisher, Wald, Weibull,
-    f_divergence, mutual_information,
+    bhattacharyya_coefficient, cross_entropy, f_divergence, jensen_shannon, mutual_information,
+    shannon_entropy,
 };
 pub use error::{BayesError, StatsError};
 

@@ -40,12 +40,23 @@
 //! (Markov kernel) carrying the **data-processing inequality**. The three
 //! universal guarantees (nonnegativity, data-processing monotonicity, joint
 //! convexity) are the `fDiv_*` theorems in `RiemannLean/Bayes/Divergence.lean`.
+//!
+//! ## Information measures over probability vectors
+//!
+//! The [`info`] submodule rounds out the discrete information-theory toolkit on
+//! the same `&[f64]` representation: [`shannon_entropy`], [`cross_entropy`],
+//! [`jensen_shannon`], and [`bhattacharyya_coefficient`] — entropy/cross-entropy,
+//! the symmetric bounded JS divergence, and the Hellinger affinity, each cited to
+//! its `Divergence.lean` theorem (`entropy_le_log_card`,
+//! `crossEntropy_eq_entropy_add_klDiv`, `jsDiv_le_log2`, `bhattacharyya_le_one`).
 
 mod fdiv;
+mod info;
 pub use fdiv::{
     Alpha, Channel, ChiSquared as ChiSquaredGen, Custom, FGenerator, Jeffreys, Kl, ReverseKl,
     SquaredHellinger, TotalVariation as TotalVariationGen, f_divergence,
 };
+pub use info::{bhattacharyya_coefficient, cross_entropy, jensen_shannon, shannon_entropy};
 
 use crate::distribution::{
     Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, Geometric, Laplace,
