@@ -15,19 +15,22 @@ pub mod process;
 pub mod statistics;
 
 pub use distribution::{
-    Affine, Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Bijector, Binomial,
-    Categorical, Cauchy, ChiSquared, ChiSquaredDivergence, Conjugate, Constrained, Constraint,
-    Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt,
-    ContinuousFn, CountSum, Dirichlet, DirichletCategorical, DirichletMultinomial, Discrete,
-    DiscreteCdf, DiscreteDistributionExt, DiscreteFn, DiscreteMass, DiscreteUniform, Divergence,
-    Estimate, Exp, Exponential, ExponentialFamily, FisherSnedecor, Frechet, Gamma,
-    GammaExponential, GammaPoisson, Geometric, Gumbel, HalfNormal, HellingerDistance,
-    Hypergeometric, InverseGamma, JensenShannon, KlDivergence, Laplace, LogNormal, Logistic, Lomax,
-    MeanVar, Mixture, Moments, Multinomial, MultivariateContinuous, MultivariateMoments,
-    MultivariateNormal, NaturalParams, NegativeBinomial, Normal, NormalInverseGamma,
-    NormalKnownVariance, Pareto, Poisson, Rayleigh, RenyiDivergence, Sigmoid, StudentT,
-    SufficientStatistic, Support, TotalVariation, Transformed, Trials, Triangular, Truncated,
-    Uniform, Uniform2D, VonMises, VonMisesFisher, Wald, Weibull, mutual_information,
+    Affine, Alpha, Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Bijector,
+    Binomial, Categorical, Cauchy, Channel, ChiSquared, ChiSquaredDivergence, ChiSquaredGen,
+    Conjugate, Constrained, Constraint, Continuous, ContinuousCdf, ContinuousCdfExt,
+    ContinuousDensity, ContinuousDistributionExt, ContinuousFn, CountSum, Custom, Dirichlet,
+    DirichletCategorical, DirichletMultinomial, Discrete, DiscreteCdf, DiscreteDistributionExt,
+    DiscreteFn, DiscreteMass, DiscreteUniform, Divergence, Estimate, Exp, Exponential,
+    ExponentialFamily, FGenerator, FisherSnedecor, Frechet, Gamma, GammaExponential, GammaPoisson,
+    Geometric, Gumbel, HalfNormal, HellingerDistance, Hypergeometric, InverseGamma, Jeffreys,
+    JensenShannon, Kl, KlDivergence, Laplace, LogNormal, Logistic, Lomax, MeanVar, Mixture,
+    Moments, Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
+    NaturalParams, NegativeBinomial, Normal, NormalInverseGamma, NormalKnownVariance, Pareto,
+    Poisson, Rayleigh, RenyiDivergence, ReverseKl, Sigmoid, SquaredHellinger, StudentT,
+    SufficientStatistic, Support, TotalVariation, TotalVariationGen, Transformed, Trials,
+    Triangular, Truncated, Uniform, Uniform2D, VonMises, VonMisesFisher, Wald, Weibull,
+    bhattacharyya_coefficient, cross_entropy, f_divergence, jensen_shannon, mutual_information,
+    shannon_entropy,
 };
 pub use error::{BayesError, StatsError};
 

@@ -83,8 +83,17 @@ The concrete distributions are grouped by kind:
   distribution; the streaming `posterior_natural` accumulator and the
   online-equals-batch / order-independence guarantees are proved generically in
   `riemann` (`Bayes/ExponentialFamily`, `Bayes/ConjugateFamilies`).
-- `divergence.rs`: closed-form KL divergence between same-family distributions
-  (Normal, Gamma, Beta, Exponential, Poisson, Bernoulli).
+- `divergence/`: the closed-form divergence toolkit. `mod.rs` holds the
+  per-family closed forms — KL (17 families), Jeffreys/reverse-KL, Jensen–Shannon,
+  squared Hellinger, total variation, Pearson χ², Rényi, and mutual information.
+  `fdiv.rs` is the **f-divergence umbrella**: one generic `f_divergence(p, q, gen)`
+  over probability vectors with pluggable convex generators (`Kl`, `ReverseKl`,
+  `ChiSquared`, `SquaredHellinger`, `TotalVariation`, `Jeffreys`, `Alpha`,
+  `Custom`), plus the row-stochastic `Channel` (Markov kernel) carrying the
+  data-processing inequality. The three universal guarantees (nonnegativity,
+  data-processing monotonicity, joint convexity) are proved generically in
+  `riemann` (`Bayes/Divergence`: `fDiv_nonneg`, `fDiv_dataProcessing`,
+  `fDiv_convex`).
 
 Every distribution should validate constructor parameters, implement the relevant
 spine traits, and implement `rand::distr::Distribution` for sampling.

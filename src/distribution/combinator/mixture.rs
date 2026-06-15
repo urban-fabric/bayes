@@ -61,6 +61,31 @@ impl<D> Mixture<D> {
     }
 }
 
+impl<D: Moments> Mixture<D> {
+    /// The **law-of-total-variance decomposition** `(within, between)` of the
+    /// mixture variance: the *within-component* part `E[Var(X|Z)] = Σ wᵢ Var(Xᵢ)`
+    /// (the weight-averaged component variance) and the *between-component* part
+    /// `Var(E[X|Z]) = Σ wᵢ (μᵢ − μ)²` (the spread of component means about the
+    /// mixture mean `μ`). Their sum is [`variance`](Moments::variance).
+    ///
+    /// The identity `variance = within + between` and its nonnegativity are proved
+    /// in `riemann` (`RiemannLean/Bayes/Mixture.lean`: `law_of_total_variance`,
+    /// `mixtureVar_nonneg`). `None` if any component lacks a mean or variance.
+    pub fn variance_decomposition(&self) -> Option<(f64, f64)> {
+        let mut mean = 0.0;
+        for (&w, c) in self.weights.iter().zip(&self.components) {
+            mean += w * c.mean()?;
+        }
+        let mut within = 0.0;
+        let mut between = 0.0;
+        for (&w, c) in self.weights.iter().zip(&self.components) {
+            within += w * c.variance()?;
+            between += w * (c.mean()? - mean).powi(2);
+        }
+        Some((within, between))
+    }
+}
+
 impl<D, T> Distribution<T> for Mixture<D>
 where
     D: Distribution<T>,
@@ -136,8 +161,11 @@ where
         }
         Some(m)
     }
-    /// Mixture variance by the law of total variance:
-    /// `Σ wᵢ(σᵢ² + μᵢ²) − (Σ wᵢ μᵢ)²`.
+    /// Mixture variance by the **law of total variance**, in the one-pass form
+    /// `Σ wᵢ(σᵢ² + μᵢ²) − (Σ wᵢ μᵢ)²` — equal to the within + between split
+    /// ([`variance_decomposition`](Mixture::variance_decomposition)) and always
+    /// nonnegative, proved in `riemann` (`RiemannLean/Bayes/Mixture.lean`:
+    /// `law_of_total_variance`, `mixtureVar_nonneg`).
     fn variance(&self) -> Option<f64> {
         let mut e_x2 = 0.0;
         for (&w, c) in self.weights.iter().zip(&self.components) {
@@ -190,6 +218,12 @@ mod tests {
         .unwrap();
         close(m.mean().unwrap(), 2.0, 1e-12);
         close(m.variance().unwrap(), 5.0, 1e-12);
+        // Law of total variance: within = ½·1 + ½·1 = 1, between = ½·2² + ½·2² = 4.
+        let (within, between) = m.variance_decomposition().unwrap();
+        close(within, 1.0, 1e-12);
+        close(between, 4.0, 1e-12);
+        // within + between == variance (law_of_total_variance).
+        close(within + between, m.variance().unwrap(), 1e-12);
     }
 
     #[test]

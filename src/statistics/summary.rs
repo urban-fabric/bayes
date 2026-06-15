@@ -198,6 +198,11 @@ pub fn covariance(a: &[f64], b: &[f64]) -> f64 {
 }
 
 /// Pearson correlation coefficient `cov(a,b) / (σ_a σ_b)`, in `[-1, 1]`.
+///
+/// The `[-1, 1]` bound is the covariance Cauchy–Schwarz inequality
+/// `Cov(a,b)² ≤ Var(a)·Var(b)`, proved in `riemann`
+/// (`RiemannLean/Bayes/Inequalities.lean`: `covariance_sq_le`,
+/// `correlation_abs_le_one`).
 pub fn correlation(a: &[f64], b: &[f64]) -> f64 {
     let denom = std_dev(a) * std_dev(b);
     if denom == 0.0 || denom.is_nan() {
@@ -222,6 +227,25 @@ mod tests {
         close(population_variance(&d), 4.0, 1e-12);
         close(variance(&d), 32.0 / 7.0, 1e-12);
         close(std_dev(&d), (32.0_f64 / 7.0).sqrt(), 1e-12);
+    }
+
+    #[test]
+    fn correlation_lies_in_the_unit_interval() {
+        // |ρ| ≤ 1, the covariance Cauchy–Schwarz bound (riemann correlation_abs_le_one).
+        let a = [1.0, 2.0, 3.0, 4.0, 5.0];
+        let pairs: [&[f64]; 3] = [
+            &[2.0, 4.0, 6.0, 8.0, 10.0],
+            &[5.0, 1.0, 4.0, 2.0, 3.0],
+            &[1.0, 0.0, 1.0, 0.0, 1.0],
+        ];
+        for b in pairs {
+            let r = correlation(&a, b);
+            assert!((-1.0 - 1e-12..=1.0 + 1e-12).contains(&r), "|ρ| > 1: {r}");
+        }
+        // Perfect positive linear dependence saturates ρ = 1.
+        close(correlation(&a, &[2.0, 4.0, 6.0, 8.0, 10.0]), 1.0, 1e-12);
+        // Perfect negative: ρ = −1.
+        close(correlation(&a, &[5.0, 4.0, 3.0, 2.0, 1.0]), -1.0, 1e-12);
     }
 
     #[test]

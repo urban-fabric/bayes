@@ -16,7 +16,11 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   (Mixture, Truncated, Transformed).
   Each provides PDF/PMF, CDF/quantile/survival (incl. stable `ln_cdf`/`ln_sf`/`isf`),
   analytic moments (`Option`-typed — Cauchy honestly has no mean), and `rand` sampling.
-  Same-family pairs also expose a closed-form `kl_divergence`.
+  Same-family pairs also expose a closed-form `kl_divergence` (and Jeffreys, JS,
+  Hellinger, total-variation, χ², Rényi, mutual information). The **f-divergence
+  umbrella** (`f_divergence`) unifies these into one generic `D_f(p ‖ q)` over
+  probability vectors with pluggable convex generators, plus a stochastic
+  `Channel` carrying the data-processing inequality.
   Functional adapters (`ContinuousFn`, `DiscreteFn`, `ContinuousDensity`,
   `DiscreteMass`) lift closures into the same trait spine for custom likelihoods.
 - **Special functions** (`function`) — gamma/beta/erf/Bessel families,
