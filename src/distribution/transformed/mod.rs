@@ -63,9 +63,9 @@ where
 /// Closed-form moments of an **affine-transformed** distribution `Y = aX + b`,
 /// propagated exactly from the base by the linearity of expectation.
 ///
-/// `E[Y] = a·E[X] + b` is `Moments.lean`'s `expectation_affine`
-/// (`RiemannLean/Bayes/Moments.lean`); `Var[Y] = a²·Var[X]` is its corollary
-/// applied to `(X − E[X])²`. The shape moments are scale/shift-equivariant:
+/// `E[Y] = a·E[X] + b` and `Var[Y] = a²·Var[X]` are `Moments.lean`'s
+/// `expectation_affine` and `variance_affine` (`RiemannLean/Bayes/Moments.lean`).
+/// The shape moments are scale/shift-equivariant:
 /// skewness flips sign with `a` (odd), excess kurtosis is invariant (even),
 /// the median and mode map through the monotone affine map, and the differential
 /// entropy gains `ln|a|`.
