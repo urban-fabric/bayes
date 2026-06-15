@@ -73,6 +73,60 @@ impl MultivariateNormal {
         })
     }
 
+    /// Fit a multivariate normal to data by maximum likelihood: the sample mean
+    /// and the (unbiased) sample covariance. Needs at least two finite,
+    /// equal-length observations of a positive dimension.
+    ///
+    /// The sample covariance is a scaled Gram matrix `XᵀX` of the centered data,
+    /// so it is **positive semidefinite by construction** — proved in `riemann`
+    /// (`RiemannLean/Bayes/Covariance.lean`: `gram_posSemidef`). Together with
+    /// [`new`](Self::new)'s tiny diagonal jitter that makes it a valid
+    /// positive-definite covariance, so the fit succeeds for any two-or-more
+    /// finite, equal-length observations. For rank-deficient data (fewer
+    /// independent samples than dimensions, or collinear columns) the result is
+    /// near-singular; [`from_samples_ridge`](Self::from_samples_ridge) adds a
+    /// chosen ridge for a better-conditioned covariance.
+    pub fn from_samples(samples: &[Vec<f64>]) -> Result<Self, BayesError> {
+        let cov = crate::statistics::covariance_matrix(samples);
+        if cov.rows() == 0 {
+            return Err(BayesError::Malformed {
+                what: "need at least two finite, equal-length observations",
+            });
+        }
+        Self::new(crate::statistics::mean_vector(samples), cov)
+    }
+
+    /// Like [`from_samples`](Self::from_samples) but adds a diagonal **ridge**
+    /// `ridge·I` to the sample covariance (Tikhonov / shrinkage toward a
+    /// spherical prior) — the control for ill-conditioned, near-singular sample
+    /// covariances from rank-deficient data (few samples, duplicates, collinearity).
+    ///
+    /// `ridge·I` is a positive-(semi)definite prior covariance, and adding it to
+    /// the PSD sample Gram stays positive semidefinite — proved in `riemann`
+    /// (`RiemannLean/Bayes/Covariance.lean`: `posSemidef_add_gram`). For any
+    /// `ridge > 0` the sum is strictly positive-definite (eigenvalues bounded
+    /// below by `ridge`), so the resulting covariance is well-conditioned rather
+    /// than resting on the construction jitter alone.
+    pub fn from_samples_ridge(samples: &[Vec<f64>], ridge: f64) -> Result<Self, BayesError> {
+        if !ridge.is_finite() || ridge < 0.0 {
+            return Err(BayesError::NotPositive {
+                name: "ridge",
+                value: ridge,
+            });
+        }
+        let cov = crate::statistics::covariance_matrix(samples);
+        let d = cov.rows();
+        if d == 0 {
+            return Err(BayesError::Malformed {
+                what: "need at least two finite, equal-length observations",
+            });
+        }
+        let regularized = DenseMatrix::from_fn(d, d, |i, j| {
+            cov.get(i, j) + if i == j { ridge } else { 0.0 }
+        });
+        Self::new(crate::statistics::mean_vector(samples), regularized)
+    }
+
     pub fn mean(&self) -> &[f64] {
         &self.mean
     }
@@ -266,5 +320,70 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn from_samples_recovers_the_generating_gaussian() {
+        // Sample a known correlated Gaussian, then refit by ML; the sample mean
+        // and (Gram → PSD, gram_posSemidef) sample covariance recover it.
+        let mut rng = ChaCha8Rng::seed_from_u64(11);
+        let mean = vec![1.0, -1.0];
+        let cov = DenseMatrix::from_rows(&[vec![2.0, 0.8], vec![0.8, 1.0]]);
+        let truth = MultivariateNormal::new(mean.clone(), cov.clone()).unwrap();
+        let data: Vec<Vec<f64>> = (0..40_000).map(|_| truth.sample(&mut rng)).collect();
+
+        let fit = MultivariateNormal::from_samples(&data).unwrap();
+        close(fit.mean()[0], mean[0], 0.05);
+        close(fit.mean()[1], mean[1], 0.05);
+        let c = fit.covariance();
+        close(c.get(0, 0), cov.get(0, 0), 0.05);
+        close(c.get(0, 1), cov.get(0, 1), 0.05);
+        close(c.get(1, 1), cov.get(1, 1), 0.05);
+
+        // Too few / ragged observations are rejected.
+        assert!(MultivariateNormal::from_samples(&[vec![1.0, 2.0]]).is_err());
+        assert!(MultivariateNormal::from_samples(&[]).is_err());
+    }
+
+    #[test]
+    fn ridge_regularizes_the_sample_covariance() {
+        // Three identical points: the sample covariance is the zero matrix
+        // (rank 0). gram_posSemidef + the construction jitter still yield a valid
+        // (if near-singular) covariance, so the plain fit succeeds…
+        let degenerate = vec![vec![1.0, 2.0], vec![1.0, 2.0], vec![1.0, 2.0]];
+        assert!(MultivariateNormal::from_samples(&degenerate).is_ok());
+
+        // …and a chosen ridge (posSemidef_add_gram) makes it the well-conditioned
+        // sample covariance + ridge·I — here 0 + 0.5·I.
+        let fit = MultivariateNormal::from_samples_ridge(&degenerate, 0.5).unwrap();
+        let c = fit.covariance();
+        close(c.get(0, 0), 0.5, 1e-12);
+        close(c.get(1, 1), 0.5, 1e-12);
+        close(c.get(0, 1), 0.0, 1e-12);
+        close(fit.mean()[0], 1.0, 1e-12);
+
+        // On full-rank data the ridge just shifts the diagonal by `ridge`.
+        let mut rng = ChaCha8Rng::seed_from_u64(3);
+        let truth = MultivariateNormal::new(
+            vec![0.0, 0.0],
+            DenseMatrix::from_rows(&[vec![2.0, 0.5], vec![0.5, 1.0]]),
+        )
+        .unwrap();
+        let data: Vec<Vec<f64>> = (0..5_000).map(|_| truth.sample(&mut rng)).collect();
+        let plain = MultivariateNormal::from_samples(&data).unwrap();
+        let ridged = MultivariateNormal::from_samples_ridge(&data, 0.25).unwrap();
+        close(
+            ridged.covariance().get(0, 0),
+            plain.covariance().get(0, 0) + 0.25,
+            1e-9,
+        );
+        close(
+            ridged.covariance().get(0, 1),
+            plain.covariance().get(0, 1),
+            1e-9,
+        );
+
+        // A negative ridge is rejected.
+        assert!(MultivariateNormal::from_samples_ridge(&degenerate, -1.0).is_err());
     }
 }
