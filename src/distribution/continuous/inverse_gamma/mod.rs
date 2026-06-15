@@ -5,7 +5,7 @@ use super::gamma::Gamma;
 use crate::distribution::numeric::inverse_cdf_bisect;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
-use crate::function::gamma::{gamma_ur, ln_gamma};
+use crate::function::gamma::{digamma, gamma_ur, ln_gamma};
 
 /// The inverse-gamma distribution with shape `α > 0` and scale `β > 0`, support
 /// `(0, ∞)` — the distribution of `1/X` for `X ~ Gamma(α, rate β)`. A common
@@ -103,6 +103,11 @@ impl Moments for InverseGamma {
     fn mode(&self) -> Option<f64> {
         Some(self.scale / (self.shape + 1.0))
     }
+    /// `H = α + ln(β Γ(α)) − (1+α)ψ(α)`.
+    fn entropy(&self) -> Option<f64> {
+        let (a, b) = (self.shape, self.scale);
+        Some(a + b.ln() + ln_gamma(a) - (1.0 + a) * digamma(a))
+    }
 }
 
 #[cfg(test)]
@@ -123,5 +128,15 @@ mod tests {
         close(ig.mean().unwrap(), 2.0 / 2.0, 1e-12);
         close(ig.mode().unwrap(), 2.0 / 4.0, 1e-12);
         assert!(InverseGamma::new(1.5, 1.0).unwrap().variance().is_none());
+    }
+
+    #[test]
+    fn entropy_known_value() {
+        // H = α + ln(β Γ(α)) − (1+α)ψ(α); for InverseGamma(3, 2): ≈ 0.69515702.
+        close(
+            InverseGamma::new(3.0, 2.0).unwrap().entropy().unwrap(),
+            0.695_157_02,
+            1e-6,
+        );
     }
 }

@@ -114,6 +114,37 @@ impl MultivariateMoments for MultivariateNormal {
     fn covariance(&self) -> DenseMatrix {
         self.cov.clone()
     }
+    /// `H = ½ ln((2πe)^d |Σ|) = ½(ln|2πΣ| + d)`, straight from the cached
+    /// `ln_det_2pi`.
+    fn entropy(&self) -> Option<f64> {
+        Some(0.5 * (self.ln_det_2pi + self.mean.len() as f64))
+    }
+}
+
+impl crate::distribution::KlDivergence for MultivariateNormal {
+    /// `D_KL(N₀ ‖ N₁) = ½[ ln(|Σ₁|/|Σ₀|) − d + tr(Σ₁⁻¹Σ₀) + (μ₁−μ₀)ᵀΣ₁⁻¹(μ₁−μ₀) ]`,
+    /// with the `Σ₁⁻¹` solves done through `other`'s cached Cholesky. `+∞` when
+    /// the dimensions differ.
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        let d = self.mean.len();
+        if other.mean.len() != d {
+            return f64::INFINITY;
+        }
+        // ln(|Σ₁|/|Σ₀|): the d·ln(2π) terms in `ln_det_2pi` cancel (same d).
+        let ln_det_ratio = other.ln_det_2pi - self.ln_det_2pi;
+        // tr(Σ₁⁻¹Σ₀): solve Σ₁ x = (column j of Σ₀), accumulate xⱼ.
+        let trace: f64 = (0..d)
+            .map(|j| {
+                let col: Vec<f64> = (0..d).map(|i| self.cov.get(i, j)).collect();
+                other.chol.solve(&col)[j]
+            })
+            .sum();
+        // (μ₁−μ₀)ᵀ Σ₁⁻¹ (μ₁−μ₀).
+        let diff: Vec<f64> = (0..d).map(|i| other.mean[i] - self.mean[i]).collect();
+        let solved = other.chol.solve(&diff);
+        let quad: f64 = diff.iter().zip(&solved).map(|(a, b)| a * b).sum();
+        0.5 * (ln_det_ratio - d as f64 + trace + quad)
+    }
 }
 
 #[cfg(test)]
@@ -175,6 +206,48 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn kl_and_entropy_factor_over_independent_marginals() {
+        use crate::distribution::{KlDivergence, Moments, Normal};
+
+        let diag = |a: f64, b: f64| DenseMatrix::from_rows(&[vec![a, 0.0], vec![0.0, b]]);
+        let p = MultivariateNormal::new(vec![0.0, 0.0], diag(1.0, 4.0)).unwrap();
+        let q = MultivariateNormal::new(vec![1.0, -1.0], diag(2.0, 3.0)).unwrap();
+
+        // A product of independents: joint KL and joint entropy are the sums of
+        // the per-axis Normal KLs / entropies.
+        let (p0, p1) = (
+            Normal::new(0.0, 1.0).unwrap(),
+            Normal::new(0.0, 2.0).unwrap(),
+        );
+        let (q0, q1) = (
+            Normal::new(1.0, 2.0_f64.sqrt()).unwrap(),
+            Normal::new(-1.0, 3.0_f64.sqrt()).unwrap(),
+        );
+        close(
+            p.kl_divergence(&q),
+            p0.kl_divergence(&q0) + p1.kl_divergence(&q1),
+            1e-10,
+        );
+        close(
+            p.entropy().unwrap(),
+            p0.entropy().unwrap() + p1.entropy().unwrap(),
+            1e-10,
+        );
+
+        // Gibbs: self-KL is zero even for a correlated covariance.
+        let r = MultivariateNormal::new(
+            vec![2.0, -3.0],
+            DenseMatrix::from_rows(&[vec![2.0, 0.8], vec![0.8, 1.0]]),
+        )
+        .unwrap();
+        close(r.kl_divergence(&r), 0.0, 1e-10);
+        assert!(p.kl_divergence(&q) > 0.0);
+        // Dimension mismatch → +∞.
+        let s = MultivariateNormal::new(vec![0.0], DenseMatrix::from_rows(&[vec![1.0]])).unwrap();
+        assert!(p.kl_divergence(&s).is_infinite());
     }
 
     #[test]

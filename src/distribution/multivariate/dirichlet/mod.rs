@@ -6,7 +6,7 @@ use ramanujan::DenseMatrix;
 use super::{MultivariateContinuous, MultivariateMoments};
 use crate::distribution::continuous::gamma::sample_standard_gamma;
 use crate::error::BayesError;
-use crate::function::gamma::ln_gamma;
+use crate::function::gamma::{digamma, ln_gamma};
 
 /// The Dirichlet distribution over the `k`-simplex (vectors of non-negative
 /// components summing to 1), with concentration parameters `α₁, …, α_k > 0`.
@@ -93,6 +93,15 @@ impl MultivariateMoments for Dirichlet {
                 -self.alpha[i] * self.alpha[j] / denom
             }
         })
+    }
+    /// `H = ln B(α) + (α₀ − K)ψ(α₀) − Σ(αᵢ − 1)ψ(αᵢ)`, with
+    /// `ln B(α) = Σ ln Γ(αᵢ) − ln Γ(α₀)`.
+    fn entropy(&self) -> Option<f64> {
+        let a0 = self.alpha_sum();
+        let k = self.alpha.len() as f64;
+        let ln_b = self.alpha.iter().map(|&a| ln_gamma(a)).sum::<f64>() - ln_gamma(a0);
+        let sum_terms: f64 = self.alpha.iter().map(|&a| (a - 1.0) * digamma(a)).sum();
+        Some(ln_b + (a0 - k) * digamma(a0) - sum_terms)
     }
 }
 

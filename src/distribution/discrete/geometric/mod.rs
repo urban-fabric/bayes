@@ -87,6 +87,15 @@ impl Moments for Geometric {
     fn skewness(&self) -> Option<f64> {
         Some((2.0 - self.p) / (1.0 - self.p).sqrt())
     }
+    /// `H = (−(1−p) ln(1−p) − p ln p) / p`; `0` for the degenerate `p = 1`.
+    fn entropy(&self) -> Option<f64> {
+        let p = self.p;
+        if p >= 1.0 {
+            return Some(0.0);
+        }
+        let q = 1.0 - p;
+        Some((-q * q.ln() - p * p.ln()) / p)
+    }
     fn mode(&self) -> Option<f64> {
         Some(1.0)
     }

@@ -95,6 +95,11 @@ impl Moments for DiscreteUniform {
     fn median(&self) -> Option<f64> {
         Some((self.lo + self.hi - 1) as f64 / 2.0)
     }
+    /// `H = ln n` over `n` equally-likely outcomes — the maximum-entropy
+    /// discrete law on its support.
+    fn entropy(&self) -> Option<f64> {
+        Some(self.n().ln())
+    }
 }
 
 #[cfg(test)]

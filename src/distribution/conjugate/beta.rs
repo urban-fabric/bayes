@@ -17,16 +17,12 @@ impl BetaBernoulli {
     pub fn prior(&self) -> Beta {
         self.prior
     }
-    /// The posterior-predictive for one future trial: `Bernoulli(α′/(α′+β′))`.
-    pub fn posterior_predictive(&self, data: &[bool]) -> Bernoulli {
-        let post = self.posterior(data);
-        Bernoulli::from_probability_saturating(post.alpha() / (post.alpha() + post.beta()))
-    }
 }
 
 impl Conjugate for BetaBernoulli {
     type Datum = bool;
     type Posterior = Beta;
+    type Predictive = Bernoulli;
     type Natural = Pair;
 
     /// One success or one failure: `T(true) = (1, 0)`, `T(false) = (0, 1)`.
@@ -42,6 +38,11 @@ impl Conjugate for BetaBernoulli {
     }
     fn posterior_from_natural(&self, p: Pair) -> Beta {
         Beta::new(p.a, p.b).unwrap_or(self.prior)
+    }
+    /// The posterior-predictive for one future trial: `Bernoulli(α′/(α′+β′))`.
+    fn posterior_predictive(&self, data: &[bool]) -> Bernoulli {
+        let post = self.posterior(data);
+        Bernoulli::from_probability_saturating(post.alpha() / (post.alpha() + post.beta()))
     }
 }
 
@@ -61,15 +62,12 @@ impl BetaBinomialModel {
     pub fn prior(&self) -> Beta {
         self.prior
     }
-    /// The posterior-predictive: a [`BetaBinomial`] over `trials` future draws.
-    pub fn posterior_predictive(&self, data: &[u64]) -> BetaBinomial {
-        BetaBinomial::from_beta(self.trials, self.posterior(data))
-    }
 }
 
 impl Conjugate for BetaBinomialModel {
     type Datum = u64;
     type Posterior = Beta;
+    type Predictive = BetaBinomial;
     type Natural = Pair;
 
     /// `k` successes out of `m` trials: `T(k) = (k, m − k)` (the riemann
@@ -83,6 +81,10 @@ impl Conjugate for BetaBinomialModel {
     }
     fn posterior_from_natural(&self, p: Pair) -> Beta {
         Beta::new(p.a, p.b).unwrap_or(self.prior)
+    }
+    /// The posterior-predictive: a [`BetaBinomial`] over `trials` future draws.
+    fn posterior_predictive(&self, data: &[u64]) -> BetaBinomial {
+        BetaBinomial::from_beta(self.trials, self.posterior(data))
     }
 }
 

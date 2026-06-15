@@ -99,6 +99,12 @@ impl Moments for Weibull {
             Some(0.0)
         }
     }
+    /// `H = γ(1 − 1/k) + ln(λ/k) + 1`, with `γ` the Euler–Mascheroni constant.
+    fn entropy(&self) -> Option<f64> {
+        const EULER_GAMMA: f64 = 0.577_215_664_901_532_9;
+        let (k, l) = (self.shape, self.scale);
+        Some(EULER_GAMMA * (1.0 - 1.0 / k) + (l / k).ln() + 1.0)
+    }
 }
 
 #[cfg(test)]

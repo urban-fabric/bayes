@@ -6,6 +6,7 @@ use crate::distribution::numeric::inverse_cdf_bisect;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::{beta_reg, ln_beta};
+use crate::function::gamma::digamma;
 
 /// The beta distribution on `(0, 1)` with shape parameters `α, β > 0`. Density
 /// `f(x) = x^{α-1}(1-x)^{β-1} / B(α, β)`.
@@ -99,6 +100,14 @@ impl Moments for Beta {
         } else {
             None
         }
+    }
+    /// `H = ln B(α,β) − (α−1)ψ(α) − (β−1)ψ(β) + (α+β−2)ψ(α+β)`.
+    fn entropy(&self) -> Option<f64> {
+        let (a, b) = (self.alpha, self.beta);
+        Some(
+            ln_beta(a, b) - (a - 1.0) * digamma(a) - (b - 1.0) * digamma(b)
+                + (a + b - 2.0) * digamma(a + b),
+        )
     }
 }
 

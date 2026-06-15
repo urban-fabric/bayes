@@ -35,4 +35,10 @@ pub trait MultivariateMoments {
     fn mean_vector(&self) -> Vec<f64>;
     /// The covariance matrix `Cov[X]`.
     fn covariance(&self) -> DenseMatrix;
+    /// Differential / Shannon entropy, in nats — the multivariate analogue of
+    /// [`Moments::entropy`](crate::distribution::Moments::entropy). `None` when
+    /// not available in closed form.
+    fn entropy(&self) -> Option<f64> {
+        None
+    }
 }

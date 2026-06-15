@@ -108,6 +108,10 @@ impl Moments for Triangular {
     fn mode(&self) -> Option<f64> {
         Some(self.mode)
     }
+    /// `H = ½ + ln((b − a)/2)` — independent of the mode `c`.
+    fn entropy(&self) -> Option<f64> {
+        Some(0.5 + ((self.hi - self.lo) / 2.0).ln())
+    }
 }
 
 #[cfg(test)]

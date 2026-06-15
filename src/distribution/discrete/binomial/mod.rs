@@ -95,6 +95,18 @@ impl Moments for Binomial {
     fn mode(&self) -> Option<f64> {
         Some(((self.n as f64 + 1.0) * self.p).floor())
     }
+    /// `H = −Σ_{k=0}^{n} P(k) ln P(k)`, the exact finite-support sum (no
+    /// elementary closed form exists). Zero-probability outcomes are skipped.
+    fn entropy(&self) -> Option<f64> {
+        let mut h = 0.0;
+        for k in 0..=self.n {
+            let lp = self.ln_pmf(k);
+            if lp.is_finite() {
+                h -= lp.exp() * lp;
+            }
+        }
+        Some(h)
+    }
 }
 
 #[cfg(test)]

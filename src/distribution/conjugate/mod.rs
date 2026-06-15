@@ -4,10 +4,11 @@
 //! family* as the prior, with parameters given by a direct formula — no MCMC, no
 //! optimisation. Each model wraps a prior distribution and exposes a closed-form
 //! [`posterior`](Conjugate::posterior) — the updated same-family distribution after
-//! observing data; most also expose a `posterior_predictive` — the distribution of a
+//! observing data — and a
+//! [`posterior_predictive`](Conjugate::posterior_predictive) — the distribution of a
 //! *future* observation with the parameter integrated out (often a compound
-//! distribution such as the [`BetaBinomial`](crate::BetaBinomial) or
-//! [`NegativeBinomial`](crate::NegativeBinomial)).
+//! distribution such as the [`BetaBinomial`](crate::BetaBinomial),
+//! [`NegativeBinomial`](crate::NegativeBinomial), or [`Lomax`](crate::Lomax)).
 //!
 //! This is the one genuinely *Bayesian* capability the library exposes, and it sits
 //! squarely on the closed-form side of the boundary: a posterior is just another
@@ -52,17 +53,24 @@ pub use normal::{NormalInverseGamma, NormalKnownVariance};
 /// `posterior_online_eq_batch`, `posterior_perm`); the named families specialize
 /// it in `Bayes/ConjugateFamilies.lean`.
 ///
-/// So an implementor supplies only the three family-specific pieces — the
-/// per-datum statistic [`statistic`](Self::statistic), the prior's natural
-/// coordinates [`prior_natural`](Self::prior_natural), and the map back to a
-/// distribution [`posterior_from_natural`](Self::posterior_from_natural) — and inherits the
-/// proved-correct [`posterior`](Self::posterior) accumulation (and its streaming
+/// So an implementor supplies only the family-specific pieces — the per-datum
+/// statistic [`statistic`](Self::statistic), the prior's natural coordinates
+/// [`prior_natural`](Self::prior_natural), the map back to a distribution
+/// [`posterior_from_natural`](Self::posterior_from_natural), and the family's
+/// [`posterior_predictive`](Self::posterior_predictive) closed form — and inherits
+/// the proved-correct [`posterior`](Self::posterior) accumulation (and its streaming
 /// accumulator [`posterior_natural`](Self::posterior_natural)) for free.
 pub trait Conjugate {
     /// The observation type of the likelihood.
     type Datum;
     /// The posterior distribution type (the same family as the prior).
     type Posterior;
+    /// The **posterior-predictive** type — the law of a *future* observation with
+    /// the parameter integrated out against the posterior. Usually a compound
+    /// distribution (Beta–Binomial, Negative-Binomial, Student-t, Lomax, …) in a
+    /// *different* family from the prior, which is why it is its own associated
+    /// type rather than [`Posterior`](Self::Posterior).
+    type Predictive;
     /// The natural-hyperparameter monoid this family accumulates in.
     type Natural: NaturalParams;
 
@@ -95,6 +103,13 @@ pub trait Conjugate {
     fn posterior(&self, data: &[Self::Datum]) -> Self::Posterior {
         self.posterior_from_natural(self.posterior_natural(data))
     }
+
+    /// The closed-form **posterior-predictive** after observing `data`: the
+    /// distribution of the next observation with the parameter marginalized out
+    /// against [`posterior`](Self::posterior). Each conjugate family supplies its
+    /// own compound form; the update half of conjugacy is generic
+    /// ([`posterior`](Self::posterior)), the predictive half is family-specific.
+    fn posterior_predictive(&self, data: &[Self::Datum]) -> Self::Predictive;
 }
 
 #[cfg(test)]
