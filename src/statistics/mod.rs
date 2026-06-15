@@ -13,7 +13,11 @@
 //!   ANOVA / Wilcoxon / Fisher's exact / binomial / McNemar, each returning a
 //!   [`TestResult`].
 //! * `confidence` — closed-form intervals for means, proportions, rates, variances,
-//!   standard deviations, and two-sample differences.
+//!   standard deviations, and two-sample differences, plus a distribution-free
+//!   (Chebyshev/Hoeffding/Popoviciu) concentration tier.
+//! * `estimation` — Cramér–Rao efficiency diagnostics and observed Fisher information.
+//! * `inequalities` — proof-backed moment certifiers: Cauchy–Schwarz consistency and
+//!   the Jensen gap.
 //! * `empirical` — empirical CDF ([`Ecdf`]) and [`histogram`]; `kde` — Gaussian KDE.
 //! * streaming accumulators — [`RunningStats`], [`RunningCovariance`], and the
 //!   [`TDigest`] quantile sketch (all single-pass and mergeable).
@@ -26,7 +30,9 @@ mod confidence;
 mod correlation;
 mod effect;
 mod empirical;
+mod estimation;
 pub mod hypothesis;
+mod inequalities;
 mod kde;
 mod multivariate;
 mod online;
@@ -38,8 +44,10 @@ mod tdigest;
 mod weighted;
 
 pub use confidence::{
-    ConfidenceInterval, mean_difference_welch_interval, mean_t_interval, mean_z_interval,
-    poisson_rate_interval, proportion_agresti_coull, proportion_clopper_pearson,
+    ConfidenceInterval, cantelli_bound, chebyshev_bound, chebyshev_sample_size, hoeffding_bound,
+    is_variance_admissible, markov_bound, max_variance_for_range, mean_chebyshev_interval,
+    mean_chebyshev_interval_bounded, mean_difference_welch_interval, mean_t_interval,
+    mean_z_interval, poisson_rate_interval, proportion_agresti_coull, proportion_clopper_pearson,
     proportion_difference_wald, proportion_jeffreys, proportion_wald, proportion_wilson,
     std_dev_chi_square_interval, variance_chi_square_interval,
 };
@@ -49,11 +57,15 @@ pub use effect::{
     risk_difference, risk_ratio,
 };
 pub use empirical::{Ecdf, Histogram, histogram};
+pub use estimation::{
+    cramer_rao_lower_bound, fisher_information_from_scores, is_cr_admissible, relative_efficiency,
+};
 pub use hypothesis::TestResult;
+pub use inequalities::{cauchy_schwarz_moment_holds, jensen_gap_lower_bound};
 pub use kde::KernelDensity;
 pub use multivariate::{
-    correlation_matrix, covariance_matrix, hotelling_t_squared, mahalanobis_squared, mean_vector,
-    pooled_covariance_matrix,
+    correlation_matrix, covariance_matrix, covariance_of_linear_combinations, hotelling_t_squared,
+    mahalanobis_squared, mean_vector, pooled_covariance_matrix, variance_of_linear_combination,
 };
 pub use online::{RunningCovariance, RunningStats};
 pub use order::{
