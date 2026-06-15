@@ -14,7 +14,7 @@ pub use bijector::{Affine, Bijector, Exp, Sigmoid};
 use rand::Rng;
 use rand::distr::Distribution;
 
-use crate::distribution::Continuous;
+use crate::distribution::{Continuous, Moments};
 
 /// A base distribution `D` pushed through a bijector `B`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -60,6 +60,40 @@ where
     }
 }
 
+/// Closed-form moments of an **affine-transformed** distribution `Y = aX + b`,
+/// propagated exactly from the base by the linearity of expectation.
+///
+/// `E[Y] = a·E[X] + b` is `Moments.lean`'s `expectation_affine`
+/// (`RiemannLean/Bayes/Moments.lean`); `Var[Y] = a²·Var[X]` is its corollary
+/// applied to `(X − E[X])²`. The shape moments are scale/shift-equivariant:
+/// skewness flips sign with `a` (odd), excess kurtosis is invariant (even),
+/// the median and mode map through the monotone affine map, and the differential
+/// entropy gains `ln|a|`.
+impl<D: Moments> Moments for Transformed<D, Affine> {
+    fn mean(&self) -> Option<f64> {
+        Some(self.bijector.scale * self.base.mean()? + self.bijector.shift)
+    }
+    fn variance(&self) -> Option<f64> {
+        Some(self.bijector.scale.powi(2) * self.base.variance()?)
+    }
+    fn skewness(&self) -> Option<f64> {
+        Some(self.bijector.scale.signum() * self.base.skewness()?)
+    }
+    fn kurtosis(&self) -> Option<f64> {
+        self.base.kurtosis()
+    }
+    /// Differential entropy `H[Y] = H[X] + ln|a|`.
+    fn entropy(&self) -> Option<f64> {
+        Some(self.base.entropy()? + self.bijector.scale.abs().ln())
+    }
+    fn median(&self) -> Option<f64> {
+        Some(self.bijector.scale * self.base.median()? + self.bijector.shift)
+    }
+    fn mode(&self) -> Option<f64> {
+        Some(self.bijector.scale * self.base.mode()? + self.bijector.shift)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -98,5 +132,39 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(2);
         let t = Transformed::new(Normal::new(0.0, 1.0).unwrap(), Exp);
         assert!((0..1000).all(|_| t.sample(&mut rng) > 0.0));
+    }
+
+    #[test]
+    fn affine_moments_match_the_equivalent_normal() {
+        use crate::distribution::Moments;
+        // Y = 2·N(1, 1.5) + 3  ==  N(5, 3): moments propagate by expectation_affine.
+        let t = Transformed::new(
+            Normal::new(1.0, 1.5).unwrap(),
+            Affine::new(2.0, 3.0).unwrap(),
+        );
+        let target = Normal::new(5.0, 3.0).unwrap();
+        close(t.mean().unwrap(), target.mean().unwrap(), 1e-12);
+        close(t.variance().unwrap(), target.variance().unwrap(), 1e-12);
+        close(t.std_dev().unwrap(), target.std_dev().unwrap(), 1e-12);
+        // Differential entropy gains ln|a|: H[N(1,1.5)] + ln 2 = H[N(5,3)].
+        close(t.entropy().unwrap(), target.entropy().unwrap(), 1e-12);
+        close(t.median().unwrap(), 5.0, 1e-12);
+        close(t.mode().unwrap(), 5.0, 1e-12);
+        // Normal is symmetric/mesokurtic, preserved under affine maps.
+        close(t.skewness().unwrap(), 0.0, 1e-12);
+        close(t.kurtosis().unwrap(), 0.0, 1e-12);
+    }
+
+    #[test]
+    fn negative_scale_reflects_odd_moments_only() {
+        use crate::distribution::{Exponential, Moments};
+        // Reflect/shift an Exponential: Y = −X + 5. Mean shifts, variance is a²·Var,
+        // skewness flips sign (odd), excess kurtosis is invariant (even).
+        let base = Exponential::new(2.0).unwrap(); // mean 0.5, var 0.25, skew 2, kurt 6
+        let t = Transformed::new(base, Affine::new(-1.0, 5.0).unwrap());
+        close(t.mean().unwrap(), -base.mean().unwrap() + 5.0, 1e-12);
+        close(t.variance().unwrap(), base.variance().unwrap(), 1e-12);
+        close(t.skewness().unwrap(), -base.skewness().unwrap(), 1e-12);
+        close(t.kurtosis().unwrap(), base.kurtosis().unwrap(), 1e-12);
     }
 }
