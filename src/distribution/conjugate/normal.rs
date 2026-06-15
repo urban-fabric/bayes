@@ -23,18 +23,12 @@ impl NormalKnownVariance {
     pub fn prior(&self) -> Normal {
         self.prior
     }
-    /// The posterior-predictive for a future observation:
-    /// `Normal(μₙ, √(σₙ² + σ²))` — posterior uncertainty plus likelihood noise.
-    pub fn posterior_predictive(&self, data: &[f64]) -> Normal {
-        let post = self.posterior(data);
-        let (m, s) = post.params();
-        Normal::new(m, (s * s + self.obs_std * self.obs_std).sqrt()).unwrap_or(post)
-    }
 }
 
 impl Conjugate for NormalKnownVariance {
     type Datum = f64;
     type Posterior = Normal;
+    type Predictive = Normal;
     /// Natural coordinates `(precision, precision·mean)` — the space in which
     /// the Gaussian (known variance) update is additive.
     type Natural = Pair;
@@ -59,6 +53,13 @@ impl Conjugate for NormalKnownVariance {
             return self.prior;
         }
         Normal::new(p.b / p.a, p.a.recip().sqrt()).unwrap_or(self.prior)
+    }
+    /// The posterior-predictive for a future observation:
+    /// `Normal(μₙ, √(σₙ² + σ²))` — posterior uncertainty plus likelihood noise.
+    fn posterior_predictive(&self, data: &[f64]) -> Normal {
+        let post = self.posterior(data);
+        let (m, s) = post.params();
+        Normal::new(m, (s * s + self.obs_std * self.obs_std).sqrt()).unwrap_or(post)
     }
 }
 
@@ -131,15 +132,12 @@ impl NormalInverseGamma {
         StudentT::new_location_scale(2.0 * self.alpha, self.mu, scale)
             .unwrap_or_else(|_| unreachable!())
     }
-    /// The posterior-predictive after observing `data`.
-    pub fn posterior_predictive(&self, data: &[f64]) -> StudentT {
-        self.posterior(data).predictive()
-    }
 }
 
 impl Conjugate for NormalInverseGamma {
     type Datum = f64;
     type Posterior = NormalInverseGamma;
+    type Predictive = StudentT;
     /// Natural coordinates `(λ, λμ, 2α, 2β + λμ²)` — the space in which the NIG
     /// update is additive (riemann `normalInverseGamma_online_eq_batch`).
     type Natural = NigNatural;
@@ -171,6 +169,11 @@ impl Conjugate for NormalInverseGamma {
         // β recovered from the natural sum-of-squares: 2β = (2β+λμ²) − λμ².
         let beta_n = (n.sum_sq - n.lambda_mu * n.lambda_mu / n.lambda) / 2.0;
         NormalInverseGamma::new(mu_n, n.lambda, alpha_n, beta_n).unwrap_or(*self)
+    }
+    /// The posterior-predictive after observing `data`: the posterior NIG's
+    /// location-scale Student-t [`predictive`](Self::predictive).
+    fn posterior_predictive(&self, data: &[f64]) -> StudentT {
+        self.posterior(data).predictive()
     }
 }
 

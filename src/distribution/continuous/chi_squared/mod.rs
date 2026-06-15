@@ -4,6 +4,7 @@ use rand::distr::Distribution;
 use super::gamma::Gamma;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::function::gamma::{digamma, ln_gamma};
 
 /// The chi-squared distribution with `k > 0` degrees of freedom — equivalently
 /// `Gamma(shape = k/2, rate = 1/2)`. Support `(0, ∞)`.
@@ -87,6 +88,11 @@ impl Moments for ChiSquared {
     fn mode(&self) -> Option<f64> {
         Some((self.freedom - 2.0).max(0.0))
     }
+    /// `H = k/2 + ln(2 Γ(k/2)) + (1 − k/2)ψ(k/2)`.
+    fn entropy(&self) -> Option<f64> {
+        let h = self.freedom / 2.0;
+        Some(h + std::f64::consts::LN_2 + ln_gamma(h) + (1.0 - h) * digamma(h))
+    }
 }
 
 #[cfg(test)]
@@ -106,6 +112,18 @@ mod tests {
         close(c.inverse_cdf(0.5), 4.351_460_191, 1e-4);
         for &p in &[0.1, 0.5, 0.9] {
             close(c.cdf(c.inverse_cdf(p)), p, 1e-8);
+        }
+    }
+
+    #[test]
+    fn entropy_matches_the_underlying_gamma() {
+        // χ²(k) ≡ Gamma(k/2, rate 1/2), so the entropies must coincide.
+        for &k in &[1.0, 2.0, 5.0, 9.0] {
+            close(
+                ChiSquared::new(k).unwrap().entropy().unwrap(),
+                Gamma::new(k / 2.0, 0.5).unwrap().entropy().unwrap(),
+                1e-12,
+            );
         }
     }
 }

@@ -154,12 +154,30 @@ pub trait DiscreteCdf<X = u64>: Support<X> {
 /// Analytic **moments** and summary points — all optional, since some are
 /// undefined for some parameters (e.g. the Cauchy mean/variance). `None` means
 /// "does not exist / not implemented".
+///
+/// [`mean`](Self::mean), [`variance`](Self::variance), and
+/// [`moment2`](Self::moment2) are tied by the **computational-variance
+/// identity** `Var(X) = E[X²] − E[X]²`, machine-checked in the `riemann` Lean
+/// development (`RiemannLean/Bayes/Moments.lean`: `variance_eq_moment2_sub_sq`,
+/// which also proves expectation is affine and variance nonnegative). The
+/// identity is what lets `moment2` be derived for free from the other two —
+/// and the same one-pass form underwrites the streaming variance in
+/// [`statistics`](crate::statistics).
 pub trait Moments {
     fn mean(&self) -> Option<f64> {
         None
     }
     fn variance(&self) -> Option<f64> {
         None
+    }
+    /// The raw **second moment** `E[X²] = Var(X) + E[X]²` — the
+    /// computational-variance identity `Var(X) = E[X²] − E[X]²` rearranged.
+    /// Provided for free from [`variance`](Self::variance) and
+    /// [`mean`](Self::mean); `None` when either is undefined. The identity is
+    /// proved generically in `riemann` (`Bayes/Moments.variance_eq_moment2_sub_sq`),
+    /// so this default is correct for every family without per-distribution code.
+    fn moment2(&self) -> Option<f64> {
+        Some(self.variance()? + self.mean()?.powi(2))
     }
     fn std_dev(&self) -> Option<f64> {
         self.variance().map(f64::sqrt)

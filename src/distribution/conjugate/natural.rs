@@ -27,6 +27,15 @@
 /// what make the generic conjugate update
 /// ([`Conjugate::posterior`](super::Conjugate::posterior)) agree across any
 /// batch split (online = batch) and ignore data order.
+///
+/// This is the same commutative-monoid shape as
+/// [`SufficientStatistic::merge`](crate::distribution::SufficientStatistic::merge),
+/// the exponential-family MLE accumulator: there the monoid pools sufficient
+/// statistics toward a point estimate, here it pools natural hyperparameters
+/// toward a posterior. Both get streaming-equals-batch and order-independence
+/// from the same associativity/commutativity; they stay distinct types because
+/// the carriers and recovered objects differ (a fitted distribution vs. a
+/// posterior law).
 pub trait NaturalParams: Clone {
     /// Pool two natural-hyperparameter increments (the monoid `+`).
     #[must_use]

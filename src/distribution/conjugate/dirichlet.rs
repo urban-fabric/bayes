@@ -19,16 +19,12 @@ impl DirichletCategorical {
     pub fn prior(&self) -> &Dirichlet {
         &self.prior
     }
-    /// The posterior-predictive for one future draw: `Categorical(α′/Σα′)`.
-    pub fn posterior_predictive(&self, data: &[u64]) -> Categorical {
-        let post = self.posterior(data);
-        Categorical::new(post.alpha()).unwrap_or_else(|_| unreachable!())
-    }
 }
 
 impl Conjugate for DirichletCategorical {
     type Datum = u64;
     type Posterior = Dirichlet;
+    type Predictive = Categorical;
     type Natural = Counts;
 
     /// A one-hot count for category `c` — the riemann `catStat`. Labels outside
@@ -49,6 +45,11 @@ impl Conjugate for DirichletCategorical {
     fn posterior_from_natural(&self, c: Counts) -> Dirichlet {
         Dirichlet::new(c.0).unwrap_or_else(|_| self.prior.clone())
     }
+    /// The posterior-predictive for one future draw: `Categorical(α′/Σα′)`.
+    fn posterior_predictive(&self, data: &[u64]) -> Categorical {
+        let post = self.posterior(data);
+        Categorical::new(post.alpha()).unwrap_or_else(|_| unreachable!())
+    }
 }
 
 /// **Dirichlet–Multinomial.** A `Dirichlet(α)` prior on category probabilities;
@@ -65,17 +66,12 @@ impl DirichletMultinomial {
     pub fn prior(&self) -> &Dirichlet {
         &self.prior
     }
-    /// The posterior-predictive category probabilities for one future trial:
-    /// `Categorical(α′/Σα′)`.
-    pub fn posterior_predictive(&self, data: &[Vec<u64>]) -> Categorical {
-        let post = self.posterior(data);
-        Categorical::new(post.alpha()).unwrap_or_else(|_| unreachable!())
-    }
 }
 
 impl Conjugate for DirichletMultinomial {
     type Datum = Vec<u64>;
     type Posterior = Dirichlet;
+    type Predictive = Categorical;
     type Natural = Counts;
 
     /// A per-trial count vector, truncated to the prior's `K` categories (counts
@@ -94,6 +90,12 @@ impl Conjugate for DirichletMultinomial {
     }
     fn posterior_from_natural(&self, c: Counts) -> Dirichlet {
         Dirichlet::new(c.0).unwrap_or_else(|_| self.prior.clone())
+    }
+    /// The posterior-predictive category probabilities for one future trial:
+    /// `Categorical(α′/Σα′)`.
+    fn posterior_predictive(&self, data: &[Vec<u64>]) -> Categorical {
+        let post = self.posterior(data);
+        Categorical::new(post.alpha()).unwrap_or_else(|_| unreachable!())
     }
 }
 

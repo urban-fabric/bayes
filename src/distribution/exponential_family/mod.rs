@@ -22,6 +22,12 @@ pub use statistic::{CountSum, MeanVar, Trials};
 
 /// A sufficient statistic: built from observations, mergeable, and the input to a
 /// closed-form fit. Implementors are small `Copy` summaries.
+///
+/// [`merge`](Self::merge) is a commutative-monoid `+` — the same algebraic shape
+/// as [`NaturalParams::combine`](crate::distribution::NaturalParams::combine) in
+/// the conjugate layer. Both accumulate independent-of-order, streaming-equals-
+/// batch; the difference is only what comes out the end — here a closed-form MLE
+/// ([`ExponentialFamily::from_sufficient`]), there a Bayesian posterior.
 pub trait SufficientStatistic: Copy {
     /// The observation type the statistic is computed from.
     type Datum: Copy;

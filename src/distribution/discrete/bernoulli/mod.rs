@@ -81,6 +81,11 @@ impl Moments for Bernoulli {
     fn mode(&self) -> Option<f64> {
         Some(if self.p > 0.5 { 1.0 } else { 0.0 })
     }
+    /// Binary entropy `H = −p ln p − (1−p) ln(1−p)`, with `0 ln 0 = 0`.
+    fn entropy(&self) -> Option<f64> {
+        let term = |x: f64| if x > 0.0 { x * x.ln() } else { 0.0 };
+        Some(-term(self.p) - term(1.0 - self.p))
+    }
 }
 
 #[cfg(test)]

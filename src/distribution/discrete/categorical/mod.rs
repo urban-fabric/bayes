@@ -124,6 +124,17 @@ impl Moments for Categorical {
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(i, _)| i as f64)
     }
+    /// Shannon entropy `H = −Σ pᵢ ln pᵢ` (with `0 ln 0 = 0`).
+    fn entropy(&self) -> Option<f64> {
+        Some(
+            -self
+                .p
+                .iter()
+                .filter(|&&pi| pi > 0.0)
+                .map(|&pi| pi * pi.ln())
+                .sum::<f64>(),
+        )
+    }
 }
 
 #[cfg(test)]

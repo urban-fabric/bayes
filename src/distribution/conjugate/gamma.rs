@@ -1,7 +1,7 @@
 //! Gamma-prior conjugate models: **Gamma–Poisson** and **Gamma–Exponential**.
 
 use super::{Conjugate, Pair};
-use crate::distribution::{Gamma, NegativeBinomial};
+use crate::distribution::{Gamma, Lomax, NegativeBinomial};
 
 /// **Gamma–Poisson.** A `Gamma(shape α, rate β)` prior on the Poisson rate;
 /// posterior `Gamma(α + Σk, β + n)`.
@@ -17,17 +17,12 @@ impl GammaPoisson {
     pub fn prior(&self) -> Gamma {
         self.prior
     }
-    /// The posterior-predictive: `NegativeBinomial(r = α′, p = β′/(β′+1))`.
-    pub fn posterior_predictive(&self, data: &[u64]) -> NegativeBinomial {
-        let post = self.posterior(data);
-        let (shape, rate) = (post.shape(), post.rate());
-        NegativeBinomial::new(shape, rate / (rate + 1.0)).unwrap_or_else(|_| unreachable!())
-    }
 }
 
 impl Conjugate for GammaPoisson {
     type Datum = u64;
     type Posterior = Gamma;
+    type Predictive = NegativeBinomial;
     type Natural = Pair;
 
     /// One Poisson count: `T(k) = (k, 1)` — adds `k` to the shape, `1` to the rate.
@@ -40,11 +35,17 @@ impl Conjugate for GammaPoisson {
     fn posterior_from_natural(&self, p: Pair) -> Gamma {
         Gamma::new(p.a, p.b).unwrap_or(self.prior)
     }
+    /// The posterior-predictive: `NegativeBinomial(r = α′, p = β′/(β′+1))`.
+    fn posterior_predictive(&self, data: &[u64]) -> NegativeBinomial {
+        let post = self.posterior(data);
+        let (shape, rate) = (post.shape(), post.rate());
+        NegativeBinomial::new(shape, rate / (rate + 1.0)).unwrap_or_else(|_| unreachable!())
+    }
 }
 
 /// **Gamma–Exponential.** A `Gamma(shape α, rate β)` prior on the exponential rate
-/// `λ`; posterior `Gamma(α + n, β + Σx)`. (The posterior-predictive is a Lomax /
-/// Pareto-II — available as [`Lomax`](crate::Lomax), but not auto-constructed here.)
+/// `λ`; posterior `Gamma(α + n, β + Σx)`. The posterior-predictive is a Lomax /
+/// Pareto-II [`Lomax(α′, β′)`](crate::Lomax).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GammaExponential {
     prior: Gamma,
@@ -62,6 +63,7 @@ impl GammaExponential {
 impl Conjugate for GammaExponential {
     type Datum = f64;
     type Posterior = Gamma;
+    type Predictive = Lomax;
     type Natural = Pair;
 
     /// One interarrival time: `T(x) = (1, x)` — adds `1` to the shape (a count),
@@ -74,6 +76,12 @@ impl Conjugate for GammaExponential {
     }
     fn posterior_from_natural(&self, p: Pair) -> Gamma {
         Gamma::new(p.a, p.b).unwrap_or(self.prior)
+    }
+    /// The posterior-predictive: `Lomax(shape α′, scale β′)` from the posterior
+    /// `Gamma(α′, β′)` — the rate marginalized out of the exponential likelihood.
+    fn posterior_predictive(&self, data: &[f64]) -> Lomax {
+        let post = self.posterior(data);
+        Lomax::new(post.shape(), post.rate()).unwrap_or_else(|_| unreachable!())
     }
 }
 
@@ -100,11 +108,16 @@ mod tests {
     }
 
     #[test]
-    fn gamma_exponential_posterior() {
+    fn gamma_exponential_posterior_and_lomax_predictive() {
         let model = GammaExponential::new(Gamma::new(1.0, 1.0).unwrap());
         let data = [0.5, 1.5, 2.0];
         let post = model.posterior(&data);
         close(post.shape(), 4.0, 1e-12);
         close(post.rate(), 5.0, 1e-12);
+        // Predictive is Lomax(α′, β′) = Lomax(4, 5); mean = β′/(α′−1) = 5/3.
+        let pred = model.posterior_predictive(&data);
+        close(pred.shape(), 4.0, 1e-12);
+        close(pred.scale(), 5.0, 1e-12);
+        close(pred.mean().unwrap(), 5.0 / 3.0, 1e-12);
     }
 }
