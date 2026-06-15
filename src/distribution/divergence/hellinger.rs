@@ -2,9 +2,13 @@
 //! divergence whose square root is a metric. Closed-form per family via the
 //! Bhattacharyya coefficient `BC = ∫√(pq)`.
 
-use crate::distribution::{Bernoulli, Beta, Exponential, Gamma, Normal, Poisson};
+use super::families::{gamma_bc, gaussian_bc};
+use crate::distribution::{
+    Bernoulli, Beta, Binomial, ChiSquared, DiscreteUniform, Exponential, Gamma, HalfNormal,
+    InverseGamma, LogNormal, NegativeBinomial, Normal, Poisson, Uniform, VonMises, Wald,
+};
+use crate::function::bessel::ln_i0;
 use crate::function::beta::ln_beta;
-use crate::function::gamma::ln_gamma;
 
 /// `H² = 1 − BC` clamped to `[0, ∞)` — the `max` only absorbs `O(ε)` rounding,
 /// since `BC ≤ 1` is proved (`bhattacharyya_le_one`).
@@ -33,9 +37,7 @@ impl HellingerDistance for Normal {
     fn hellinger_sq(&self, other: &Self) -> f64 {
         let (m1, s1) = self.params();
         let (m2, s2) = other.params();
-        let v = s1 * s1 + s2 * s2;
-        let bc = (2.0 * s1 * s2 / v).sqrt() * (-0.25 * (m1 - m2) * (m1 - m2) / v).exp();
-        hellinger_sq_from_bc(bc)
+        hellinger_sq_from_bc(gaussian_bc(m1, s1, m2, s2))
     }
 }
 
@@ -48,14 +50,7 @@ impl HellingerDistance for Exponential {
 
 impl HellingerDistance for Gamma {
     fn hellinger_sq(&self, other: &Self) -> f64 {
-        let (a1, b1) = (self.shape(), self.rate());
-        let (a2, b2) = (other.shape(), other.rate());
-        let a = 0.5 * (a1 + a2);
-        let b = 0.5 * (b1 + b2);
-        let ln_bc = ln_gamma(a) + 0.5 * (a1 * b1.ln() + a2 * b2.ln())
-            - 0.5 * (ln_gamma(a1) + ln_gamma(a2))
-            - a * b.ln();
-        hellinger_sq_from_bc(ln_bc.exp())
+        hellinger_sq_from_bc(gamma_bc(self.shape(), self.rate(), other.shape(), other.rate()))
     }
 }
 
@@ -80,5 +75,102 @@ impl HellingerDistance for Bernoulli {
     fn hellinger_sq(&self, other: &Self) -> f64 {
         let (p, q) = (self.p(), other.p());
         hellinger_sq_from_bc((p * q).sqrt() + ((1.0 - p) * (1.0 - q)).sqrt())
+    }
+}
+
+impl HellingerDistance for LogNormal {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        // H² is invariant under the monotone `exp` map, so this is the Gaussian
+        // affinity on (μ, σ).
+        hellinger_sq_from_bc(gaussian_bc(self.mu(), self.sigma(), other.mu(), other.sigma()))
+    }
+}
+
+impl HellingerDistance for HalfNormal {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        hellinger_sq_from_bc(gaussian_bc(0.0, self.scale(), 0.0, other.scale()))
+    }
+}
+
+impl HellingerDistance for ChiSquared {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        hellinger_sq_from_bc(gamma_bc(0.5 * self.freedom(), 0.5, 0.5 * other.freedom(), 0.5))
+    }
+}
+
+impl HellingerDistance for InverseGamma {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        hellinger_sq_from_bc(gamma_bc(self.shape(), self.scale(), other.shape(), other.scale()))
+    }
+}
+
+impl HellingerDistance for Wald {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        // BC = (λ₁λ₂)^¼ √(2/(λ₁+λ₂)) · exp[½(λ₁/μ₁+λ₂/μ₂) − ½√((λ₁/μ₁²+λ₂/μ₂²)(λ₁+λ₂))].
+        let (m1, l1) = (self.mu(), self.shape());
+        let (m2, l2) = (other.mu(), other.shape());
+        let s = ((l1 / (m1 * m1) + l2 / (m2 * m2)) * (l1 + l2)).sqrt();
+        let ln_bc = 0.25 * (l1 * l2).ln() + 0.5 * (2.0 / (l1 + l2)).ln()
+            + 0.5 * (l1 / m1 + l2 / m2)
+            - 0.5 * s;
+        hellinger_sq_from_bc(ln_bc.exp())
+    }
+}
+
+impl HellingerDistance for VonMises {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        // BC = I₀(R) / √(I₀(κ₁)I₀(κ₂)), R = ½√(κ₁²+κ₂²+2κ₁κ₂cos Δμ).
+        let (mu1, k1) = (self.mu(), self.kappa());
+        let (mu2, k2) = (other.mu(), other.kappa());
+        let r = 0.5 * (k1 * k1 + k2 * k2 + 2.0 * k1 * k2 * (mu1 - mu2).cos()).sqrt();
+        let ln_bc = ln_i0(r) - 0.5 * (ln_i0(k1) + ln_i0(k2));
+        hellinger_sq_from_bc(ln_bc.exp())
+    }
+}
+
+impl HellingerDistance for Uniform {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        // BC = |overlap| / √((b₁−a₁)(b₂−a₂)).
+        let (a1, b1) = (self.lo(), self.hi());
+        let (a2, b2) = (other.lo(), other.hi());
+        let overlap = (b1.min(b2) - a1.max(a2)).max(0.0);
+        hellinger_sq_from_bc(overlap / ((b1 - a1) * (b2 - a2)).sqrt())
+    }
+}
+
+impl HellingerDistance for DiscreteUniform {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        // BC = |overlap| / √(n₁ n₂).
+        let (a1, b1) = (self.lo(), self.hi());
+        let (a2, b2) = (other.lo(), other.hi());
+        let n1 = (b1 - a1 + 1) as f64;
+        let n2 = (b2 - a2 + 1) as f64;
+        let overlap = (b1.min(b2) - a1.max(a2) + 1).max(0) as f64;
+        hellinger_sq_from_bc(overlap / (n1 * n2).sqrt())
+    }
+}
+
+impl HellingerDistance for Binomial {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        // BC factorizes over the n iid Bernoulli trials: BC = BC_Bernoulli^n.
+        // Differing trial counts are treated as out-of-family (H² = 1).
+        if self.trials() != other.trials() {
+            return 1.0;
+        }
+        let (p, q) = (self.p(), other.p());
+        let bc = (p * q).sqrt() + ((1.0 - p) * (1.0 - q)).sqrt();
+        hellinger_sq_from_bc(bc.powf(self.trials() as f64))
+    }
+}
+
+impl HellingerDistance for NegativeBinomial {
+    fn hellinger_sq(&self, other: &Self) -> f64 {
+        // BC = [√(p₁p₂) / (1 − √((1−p₁)(1−p₂)))]^r, for matched successes `r`.
+        if self.successes() != other.successes() {
+            return 1.0;
+        }
+        let (p1, p2) = (self.p(), other.p());
+        let bc = (p1 * p2).sqrt() / (1.0 - ((1.0 - p1) * (1.0 - p2)).sqrt());
+        hellinger_sq_from_bc(bc.powf(self.successes()))
     }
 }

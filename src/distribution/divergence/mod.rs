@@ -10,19 +10,28 @@
 //!   `J = D_KL(p ‖ q) + D_KL(q ‖ p)`, closed-form for every KL family for free.
 //! - [`JensenShannon`] — the symmetric, **bounded** divergence `0 ≤ JS ≤ ln 2`.
 //! - [`HellingerDistance`] — the bounded metric `H² = 1 − ∫√(pq) ∈ [0, 1]`,
-//!   closed-form for all six families.
+//!   closed-form wherever the affinity `∫√(pq)` is analytic.
 //! - [`TotalVariation`] — `TV = ½∫|p − q| ∈ [0, 1]`.
 //! - [`ChiSquaredDivergence`] — `χ² = ∫(p − q)²/q`, with `D_KL ≤ χ²`.
 //! - [`RenyiDivergence`] — the order-`α` family interpolating KL (`α→1`),
 //!   Hellinger (`α=½`), and χ² (`α=2`).
 //! - [`mutual_information`] — `I(X;Y) = KL(p_{XY} ‖ p_X ⊗ p_Y) ≥ 0`.
 //!
-//! Jensen–Shannon and total variation are exact only where the relevant
-//! mixture/sum stays in-family — the finite-support discretes
-//! ([`Bernoulli`](crate::Bernoulli), [`Categorical`](crate::Categorical)); Rényi
-//! adds the Gaussian closed form ([`Normal`](crate::Normal),
-//! [`LogNormal`](crate::LogNormal)); KL, Jeffreys, and Hellinger are closed-form
-//! for every family.
+//! KL (and its free Jeffreys symmetrization) has the widest coverage. Hellinger,
+//! Rényi, and χ² are closed-form across the Gaussian
+//! ([`Normal`](crate::Normal), [`HalfNormal`](crate::HalfNormal),
+//! [`LogNormal`](crate::LogNormal)), gamma
+//! ([`Gamma`](crate::Gamma), [`ChiSquared`](crate::ChiSquared),
+//! [`InverseGamma`](crate::InverseGamma)), directional
+//! ([`VonMises`](crate::VonMises)), inverse-Gaussian ([`Wald`](crate::Wald)),
+//! uniform, and finite-support discrete ([`Binomial`](crate::Binomial),
+//! [`NegativeBinomial`](crate::NegativeBinomial), …) families where the relevant
+//! integral or sum collapses. Jensen–Shannon and total variation stay restricted
+//! to the finite-support discretes ([`Bernoulli`](crate::Bernoulli),
+//! [`Categorical`](crate::Categorical)), where the mixture/sum stays in-family.
+//! Several heavier-tailed families ([`Gumbel`](crate::Gumbel),
+//! [`Frechet`](crate::Frechet)) expose KL only — their other divergences have no
+//! general closed form.
 //!
 //! **Every guarantee is machine-checked** in the `riemann` Lean development
 //! (`RiemannLean/Bayes/Divergence.lean`): Gibbs `KL ≥ 0`; `0 ≤ JS ≤ ln 2`;
@@ -54,6 +63,7 @@
 //! `crossEntropy_eq_entropy_add_klDiv`, `jsDiv_le_log2`, `bhattacharyya_le_one`).
 
 mod chi_squared;
+mod families;
 mod fdiv;
 mod hellinger;
 mod info;
@@ -66,6 +76,10 @@ mod total_variation;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests;
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests_families;
 
 pub use chi_squared::ChiSquaredDivergence;
 pub use fdiv::{

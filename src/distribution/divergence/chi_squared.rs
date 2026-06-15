@@ -1,7 +1,12 @@
 //! **χ² (Pearson) divergence** `χ²(p ‖ q) = ∫(p − q)²/q`, the f-divergence for
 //! `f(t) = (t − 1)²` and an upper bound on KL.
 
-use crate::distribution::{Bernoulli, Categorical, Exponential, Poisson};
+use super::families::{gamma_chi_squared, gaussian_chi_squared};
+use crate::distribution::{
+    Bernoulli, Binomial, Categorical, ChiSquared, DiscreteUniform, Exponential, Gamma, HalfNormal,
+    InverseGamma, LogNormal, NegativeBinomial, Normal, Poisson, Uniform, VonMises, Wald,
+};
+use crate::function::bessel::ln_i0;
 
 /// The **χ² (Pearson) divergence** `χ²(p ‖ q) = ∫ (p − q)²/q = ∫ p²/q − 1`, in
 /// `[0, ∞]`. The `f`-divergence for `f(t) = (t − 1)²`, and an upper bound on KL:
@@ -63,5 +68,126 @@ impl ChiSquaredDivergence for Categorical {
                 }
             })
             .sum()
+    }
+}
+
+impl ChiSquaredDivergence for Normal {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        let (m1, s1) = self.params();
+        let (m2, s2) = other.params();
+        gaussian_chi_squared(m1, s1, m2, s2)
+    }
+}
+
+impl ChiSquaredDivergence for LogNormal {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        // χ² is invariant under the monotone `exp` map.
+        gaussian_chi_squared(self.mu(), self.sigma(), other.mu(), other.sigma())
+    }
+}
+
+impl ChiSquaredDivergence for HalfNormal {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        gaussian_chi_squared(0.0, self.scale(), 0.0, other.scale())
+    }
+}
+
+impl ChiSquaredDivergence for Gamma {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        gamma_chi_squared(self.shape(), self.rate(), other.shape(), other.rate())
+    }
+}
+
+impl ChiSquaredDivergence for ChiSquared {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        gamma_chi_squared(0.5 * self.freedom(), 0.5, 0.5 * other.freedom(), 0.5)
+    }
+}
+
+impl ChiSquaredDivergence for InverseGamma {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        gamma_chi_squared(self.shape(), self.scale(), other.shape(), other.scale())
+    }
+}
+
+impl ChiSquaredDivergence for Wald {
+    /// Inverse-Gaussian χ² (the `α = 2` member of the Rényi family). Finite only
+    /// when `2λ₁ > λ₂` and `2λ₁/μ₁² > λ₂/μ₂²`; `+∞` otherwise.
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        let (m1, l1) = (self.mu(), self.shape());
+        let (m2, l2) = (other.mu(), other.shape());
+        let la = 2.0 * l1 - l2;
+        let aa = 2.0 * l1 / (m1 * m1) - l2 / (m2 * m2);
+        if la <= 0.0 || aa <= 0.0 {
+            return f64::INFINITY;
+        }
+        let ln_int =
+            l1.ln() - 0.5 * l2.ln() + 2.0 * l1 / m1 - l2 / m2 - 0.5 * la.ln() - (aa * la).sqrt();
+        ln_int.exp() - 1.0
+    }
+}
+
+impl ChiSquaredDivergence for VonMises {
+    /// `χ² = I₀(R)·I₀(κ₂)/I₀(κ₁)² − 1`, `R = |2κ₁∠μ₁ − κ₂∠μ₂|`. Always finite.
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        let (mu1, k1) = (self.mu(), self.kappa());
+        let (mu2, k2) = (other.mu(), other.kappa());
+        let r = (4.0 * k1 * k1 + k2 * k2 - 4.0 * k1 * k2 * (mu1 - mu2).cos()).sqrt();
+        (ln_i0(r) + ln_i0(k2) - 2.0 * ln_i0(k1)).exp() - 1.0
+    }
+}
+
+impl ChiSquaredDivergence for Uniform {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        // Finite only when `[a₁,b₁] ⊆ [a₂,b₂]`; then `(b₂−a₂)/(b₁−a₁) − 1`.
+        let (a1, b1) = (self.lo(), self.hi());
+        let (a2, b2) = (other.lo(), other.hi());
+        if a1 < a2 || b1 > b2 {
+            return f64::INFINITY;
+        }
+        (b2 - a2) / (b1 - a1) - 1.0
+    }
+}
+
+impl ChiSquaredDivergence for DiscreteUniform {
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        let (a1, b1) = (self.lo(), self.hi());
+        let (a2, b2) = (other.lo(), other.hi());
+        if a1 < a2 || b1 > b2 {
+            return f64::INFINITY;
+        }
+        let n1 = (b1 - a1 + 1) as f64;
+        let n2 = (b2 - a2 + 1) as f64;
+        n2 / n1 - 1.0
+    }
+}
+
+impl ChiSquaredDivergence for Binomial {
+    /// `(1 + χ²_Bernoulli)^n − 1` for matched trial counts; differing counts are
+    /// treated as out-of-family (`+∞`).
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        if self.trials() != other.trials() {
+            return f64::INFINITY;
+        }
+        let (p, q) = (self.p(), other.p());
+        let chi_bern = (p - q).powi(2) / (q * (1.0 - q));
+        (1.0 + chi_bern).powf(self.trials() as f64) - 1.0
+    }
+}
+
+impl ChiSquaredDivergence for NegativeBinomial {
+    /// `p₁^{2r} p₂^{−r} (1 − (1−p₁)²/(1−p₂))^{−r} − 1`, for matched successes `r`.
+    /// Finite only when `(1−p₁)² < 1−p₂`; `+∞` otherwise (or when `r` differs).
+    fn chi_squared_divergence(&self, other: &Self) -> f64 {
+        if self.successes() != other.successes() {
+            return f64::INFINITY;
+        }
+        let r = self.successes();
+        let (p1, p2) = (self.p(), other.p());
+        let z = (1.0 - p1).powi(2) / (1.0 - p2);
+        if z >= 1.0 {
+            return f64::INFINITY;
+        }
+        (r * (2.0 * p1.ln() - p2.ln() - (1.0 - z).ln())).exp() - 1.0
     }
 }
