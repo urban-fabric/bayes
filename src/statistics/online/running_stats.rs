@@ -51,7 +51,13 @@ impl RunningStats {
         self.max = self.max.max(x);
     }
 
-    /// Combine another accumulator into this one (for parallel/streamed reduction).
+    /// Combine another accumulator into this one (for parallel/streamed reduction),
+    /// via Chan et al.'s parallel update. The result equals a single pass over the
+    /// pooled data, so `merge` is associative and commutative with
+    /// [`new`](Self::new) as identity. The mean and variance (`M2`) merge is proved
+    /// correct in `riemann` (`RiemannLean/Bayes/Streaming.lean`: `merge_mean`,
+    /// `merge_m2`); the `m3`/`m4` (skewness/kurtosis) merge is Terriberry's
+    /// higher-order extension, validated against the single pass by test.
     pub fn merge(&mut self, other: &Self) {
         if other.n == 0 {
             return;
@@ -151,6 +157,20 @@ impl FromIterator<f64> for RunningStats {
     }
 }
 
+impl std::iter::Sum for RunningStats {
+    /// Reduce a collection of partial accumulators into one by [`merge`](Self::merge)
+    /// — the map-reduce path: build a `RunningStats` per shard, then `.sum()` them.
+    /// Because `merge` equals a single pass over the pooled data (`riemann`'s
+    /// `merge_mean`/`merge_m2`), the reduction is order-independent and agrees with
+    /// accumulating the whole stream at once.
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::new(), |mut acc, s| {
+            acc.merge(&s);
+            acc
+        })
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -185,6 +205,25 @@ mod tests {
         close(a.variance(), whole.variance(), 1e-7);
         close(a.skewness(), whole.skewness(), 1e-6);
         close(a.kurtosis(), whole.kurtosis(), 1e-6);
+    }
+
+    #[test]
+    fn sum_of_shards_equals_one_pass() {
+        // Map-reduce: shard the data, accumulate each, then `.sum()` the parts.
+        let data: Vec<f64> = (0..400)
+            .map(|i| (i as f64 * 0.17).cos() * 5.0 - 1.0)
+            .collect();
+        let whole: RunningStats = data.iter().copied().collect();
+        let shards = [&data[..91], &data[91..210], &data[210..210], &data[210..]];
+        let merged: RunningStats = shards
+            .iter()
+            .map(|s| s.iter().copied().collect::<RunningStats>())
+            .sum();
+        close(merged.mean(), whole.mean(), 1e-9);
+        close(merged.variance(), whole.variance(), 1e-7); // merge_mean / merge_m2
+        close(merged.skewness(), whole.skewness(), 1e-6);
+        close(merged.kurtosis(), whole.kurtosis(), 1e-6);
+        assert_eq!(merged.count(), 400);
     }
 
     #[test]
