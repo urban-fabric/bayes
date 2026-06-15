@@ -9,6 +9,14 @@ use crate::error::BayesError;
 /// of a Normal likelihood whose standard deviation `obs_std` is known. The
 /// posterior precision is `1/τ₀² + n/σ²` and the posterior mean is the
 /// precision-weighted average of prior mean and sample mean.
+///
+/// The conjugacy mechanism — *why* the posterior is again Normal — is **completing the
+/// square**, and the update formulas are exact algebra, machine-checked in `riemann`
+/// `RiemannLean/Bayes/Conjugate.lean`: `normal_complete_square` (the prior + likelihood
+/// exponent collapses to one Gaussian exponent in `θ`), `postPrec_additive` (the posterior
+/// precision is additive in `n`, so streaming = batch), and `postMean_weighted` (the posterior
+/// mean is the precision-weighted average). [`posterior_precision`](Self::posterior_precision),
+/// [`shrinkage`](Self::shrinkage), and the free [`precision_weighted_mean`] expose that algebra.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NormalKnownVariance {
     prior: Normal,
@@ -23,6 +31,70 @@ impl NormalKnownVariance {
     pub fn prior(&self) -> Normal {
         self.prior
     }
+
+    /// The prior precision `1/τ₀²` (the prior's inverse variance).
+    fn prior_precision(&self) -> f64 {
+        let (_, tau0) = self.prior.params();
+        1.0 / (tau0 * tau0)
+    }
+
+    /// The known observation precision `1/σ²`; `0` for a degenerate (`σ ≤ 0`) likelihood,
+    /// which then contributes no information (matching [`statistic`](Conjugate::statistic)).
+    fn obs_precision(&self) -> f64 {
+        if self.obs_std <= 0.0 {
+            0.0
+        } else {
+            1.0 / (self.obs_std * self.obs_std)
+        }
+    }
+
+    /// **Posterior precision after `n` observations:** `1/τ₀² + n/σ²` — the prior precision
+    /// plus `n` times the observation precision. Precision is *additive*, so splitting the data
+    /// into any number of batches lands on the same posterior precision (riemann
+    /// `postPrec_additive`) — the reason the streaming [`posterior`](Conjugate::posterior)
+    /// equals the batch one. The posterior standard deviation is `1/√(posterior_precision)`.
+    pub fn posterior_precision(&self, n: usize) -> f64 {
+        self.prior_precision() + n as f64 * self.obs_precision()
+    }
+
+    /// **The shrinkage weight** `w = (n/σ²) / (1/τ₀² + n/σ²) ∈ [0, 1]` — the fraction of the way
+    /// the posterior mean moves from the prior mean toward the sample mean, since the
+    /// precision-weighted posterior mean is `μₙ = (1 − w)·μ₀ + w·x̄` (riemann `postMean_weighted`).
+    /// `w → 0` with a sharp prior or little data (stay near μ₀); `w → 1` with many observations
+    /// (follow the data). Returns `0` for the degenerate zero-precision case.
+    pub fn shrinkage(&self, n: usize) -> f64 {
+        let post = self.posterior_precision(n);
+        if post <= 0.0 {
+            return 0.0;
+        }
+        (n as f64 * self.obs_precision()) / post
+    }
+}
+
+/// **Precision-weighted (inverse-variance) pooling** of independent Gaussian estimates — the
+/// algebra of the Normal–Normal update generalized to a list, and the operation behind sensor
+/// fusion / Kalman measurement updates and fixed-effect (inverse-variance) meta-analysis. Each
+/// estimate is a `(mean, precision)` pair (precision `= 1/variance`); the pooled belief is
+///
+/// - pooled **precision** `= Σ precisionᵢ` — information adds (riemann `postPrec_additive`);
+/// - pooled **mean** `= (Σ precisionᵢ·meanᵢ) / Σ precisionᵢ` — precision-weighted
+///   (`postMean_weighted`).
+///
+/// The pool is itself Gaussian (`normal_complete_square`) and independent of how the estimates
+/// are grouped or ordered (precision additivity) — combining the prior with the data, or two
+/// posteriors, gives the same answer. Non-positive precisions are skipped (an
+/// infinitely-uncertain estimate carries no information). Returns `None` if no estimate has
+/// positive precision.
+pub fn precision_weighted_mean(estimates: &[(f64, f64)]) -> Option<(f64, f64)> {
+    let mut total_precision = 0.0;
+    let mut weighted_sum = 0.0;
+    for &(mean, precision) in estimates {
+        if precision > 0.0 {
+            total_precision += precision;
+            weighted_sum += precision * mean;
+        }
+    }
+    (total_precision > 0.0).then_some((weighted_sum / total_precision, total_precision))
 }
 
 impl Conjugate for NormalKnownVariance {
@@ -196,6 +268,65 @@ mod tests {
         assert!(post.variance().unwrap() < 1.0);
         let pred = model.posterior_predictive(&data);
         assert!(pred.variance().unwrap() > post.variance().unwrap());
+    }
+
+    #[test]
+    fn posterior_precision_and_shrinkage_match_the_posterior() {
+        // prior std 10 ⇒ prior precision 0.01; obs std 1 ⇒ obs precision 1.
+        let model = NormalKnownVariance::new(Normal::new(0.0, 10.0).unwrap(), 1.0);
+        let data = [4.8, 5.0, 5.2, 4.9, 5.1]; // n = 5
+        // posterior precision = 0.01 + 5·1 = 5.01 (additive — postPrec_additive).
+        close(model.posterior_precision(5), 5.01, 1e-12);
+        // the posterior std is 1/√precision.
+        close(
+            model.posterior(&data).variance().unwrap(),
+            1.0 / 5.01,
+            1e-12,
+        );
+        // shrinkage w = 5/5.01 (almost all the way to the data); μₙ = (1−w)·μ₀ + w·x̄.
+        let w = model.shrinkage(5);
+        close(w, 5.0 / 5.01, 1e-12);
+        let xbar = data.iter().sum::<f64>() / 5.0;
+        close(
+            model.posterior(&data).mean().unwrap(),
+            (1.0 - w) * 0.0 + w * xbar,
+            1e-12,
+        );
+        // no data ⇒ posterior precision is the prior precision, shrinkage 0.
+        close(model.posterior_precision(0), 0.01, 1e-12);
+        close(model.shrinkage(0), 0.0, 1e-12);
+    }
+
+    #[test]
+    fn precision_weighted_mean_pools_and_matches_the_conjugate_update() {
+        // Two equally-precise estimates average; precision adds.
+        let (m, p) = precision_weighted_mean(&[(0.0, 1.0), (10.0, 1.0)]).unwrap();
+        close(m, 5.0, 1e-12);
+        close(p, 2.0, 1e-12);
+        // Order- and grouping-independent (precision additivity / completing the square).
+        let est = [(1.0, 2.0), (4.0, 1.0), (9.0, 0.5)];
+        let direct = precision_weighted_mean(&est).unwrap();
+        let mut rev = est;
+        rev.reverse();
+        let reversed = precision_weighted_mean(&rev).unwrap();
+        close(direct.0, reversed.0, 1e-12);
+        close(direct.1, reversed.1, 1e-12);
+        let (ab_m, ab_p) = precision_weighted_mean(&est[..2]).unwrap();
+        let grouped = precision_weighted_mean(&[(ab_m, ab_p), est[2]]).unwrap();
+        close(direct.0, grouped.0, 1e-12);
+        close(direct.1, grouped.1, 1e-12);
+        // Pooling [prior, data…] reproduces the Normal–Normal posterior.
+        let model = NormalKnownVariance::new(Normal::new(0.0, 10.0).unwrap(), 1.0);
+        let data = [4.8, 5.0, 5.2, 4.9, 5.1];
+        let mut estimates = vec![(0.0, 0.01)]; // prior (μ₀, 1/τ₀²)
+        estimates.extend(data.iter().map(|&x| (x, 1.0))); // each datum (x, 1/σ²)
+        let (pm, pp) = precision_weighted_mean(&estimates).unwrap();
+        let post = model.posterior(&data);
+        close(pm, post.mean().unwrap(), 1e-12);
+        close(pp, model.posterior_precision(data.len()), 1e-12);
+        // Degenerate inputs: no positive-precision estimate ⇒ None.
+        assert!(precision_weighted_mean(&[]).is_none());
+        assert!(precision_weighted_mean(&[(1.0, 0.0), (2.0, -1.0)]).is_none());
     }
 
     #[test]

@@ -14,8 +14,10 @@
 //!   [`TestResult`].
 //! * `confidence` — closed-form intervals for means, proportions, rates, variances,
 //!   standard deviations, and two-sample differences, plus a distribution-free
-//!   (Chebyshev/Hoeffding/Popoviciu) concentration tier.
-//! * `estimation` — Cramér–Rao efficiency diagnostics and observed Fisher information.
+//!   (Chebyshev/Hoeffding/Chernoff/Bernstein/Paley–Zygmund/Popoviciu) concentration tier.
+//! * `estimation` — Cramér–Rao (and Bhattacharyya higher-order) efficiency diagnostics,
+//!   observed Fisher information, Rao–Blackwellization / the law-of-total-variance split, and
+//!   the Lehmann–Scheffé UMVU certifier.
 //! * `inequalities` — proof-backed moment certifiers: Cauchy–Schwarz consistency and
 //!   the Jensen gap.
 //! * `empirical` — empirical CDF ([`Ecdf`]) and [`histogram`]; `kde` — Gaussian KDE.
@@ -44,12 +46,13 @@ mod tdigest;
 mod weighted;
 
 pub use confidence::{
-    ConfidenceInterval, cantelli_bound, chebyshev_bound, chebyshev_sample_size, hoeffding_bound,
-    is_variance_admissible, markov_bound, max_variance_for_range, mean_chebyshev_interval,
-    mean_chebyshev_interval_bounded, mean_difference_welch_interval, mean_t_interval,
-    mean_z_interval, poisson_rate_interval, proportion_agresti_coull, proportion_clopper_pearson,
-    proportion_difference_wald, proportion_jeffreys, proportion_wald, proportion_wilson,
-    std_dev_chi_square_interval, variance_chi_square_interval,
+    ConfidenceInterval, bernstein_bound, cantelli_bound, chebyshev_bound, chebyshev_sample_size,
+    chernoff_bound, hoeffding_bound, is_variance_admissible, markov_bound, max_variance_for_range,
+    mean_chebyshev_interval, mean_chebyshev_interval_bounded, mean_difference_welch_interval,
+    mean_t_interval, mean_z_interval, paley_zygmund_bound, poisson_rate_interval,
+    proportion_agresti_coull, proportion_clopper_pearson, proportion_difference_wald,
+    proportion_jeffreys, proportion_wald, proportion_wilson, std_dev_chi_square_interval,
+    variance_chi_square_interval,
 };
 pub use correlation::{cramers_v, kendall_tau, ranks, spearman};
 pub use effect::{
@@ -58,7 +61,9 @@ pub use effect::{
 };
 pub use empirical::{Ecdf, Histogram, histogram};
 pub use estimation::{
-    cramer_rao_lower_bound, fisher_information_from_scores, is_cr_admissible, relative_efficiency,
+    bhattacharyya_lower_bound, conditional_variance, cramer_rao_lower_bound,
+    fisher_information_from_scores, is_bhattacharyya_admissible, is_cr_admissible, is_umvu,
+    rao_blackwell, relative_efficiency,
 };
 pub use hypothesis::TestResult;
 pub use inequalities::{cauchy_schwarz_moment_holds, jensen_gap_lower_bound};

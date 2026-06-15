@@ -13,6 +13,9 @@
 //! (`RiemannLean/Bayes/Divergence.lean`):
 //! - `shannon_entropy` — `entropy_nonneg` (`H ≥ 0`) and **maximum entropy**
 //!   `entropy_le_log_card` (`H(p) ≤ ln n`, the uniform is maximal).
+//! - `max_entropy` / `normalized_entropy` / `is_entropy_admissible` — the `ln n`
+//!   entropy ceiling, the `H/ln n ∈ [0, 1]` equitability index, and the admissibility
+//!   certifier, all backed by `entropy_le_log_card` (+ `entropy_nonneg`).
 //! - `cross_entropy` — `crossEntropy_eq_entropy_add_klDiv`
 //!   (`H(p, q) = H(p) + KL(p ‖ q)`, so `H(p, q) ≥ H(p)` by Gibbs).
 //! - `jensen_shannon` — `jsDiv_nonneg`, `jsDiv_symm`, and the bound
@@ -37,6 +40,58 @@ pub fn shannon_entropy(p: &[f64]) -> f64 {
         .filter(|&&pi| pi > 0.0)
         .map(|&pi| pi * pi.ln())
         .sum::<f64>()
+}
+
+/// **Maximum entropy** over `support_size` outcomes: `ln(n)`, the entropy of the
+/// uniform distribution and the ceiling *every* distribution on `n` categories obeys
+/// (`riemann`: `entropy_le_log_card`, `H(p) ≤ ln n`, the uniform maximal). Returns `0`
+/// for `n ≤ 1` (a certain outcome carries no uncertainty).
+///
+/// ```
+/// use bayes::{max_entropy, shannon_entropy};
+/// assert!((max_entropy(4) - 4.0_f64.ln()).abs() < 1e-12);
+/// // the uniform attains the ceiling; everything else is below it.
+/// assert!(shannon_entropy(&[0.7, 0.2, 0.1]) <= max_entropy(3) + 1e-12);
+/// ```
+pub fn max_entropy(support_size: usize) -> f64 {
+    if support_size <= 1 {
+        return 0.0;
+    }
+    (support_size as f64).ln()
+}
+
+/// **Normalized entropy** (the Shannon *equitability* / efficiency index):
+/// `H(p) / ln(n)` over `n = p.len()` categories, in `[0, 1]`. It is `1` exactly at the
+/// uniform distribution and `0` at a point mass — a scale-free measure of how *evenly*
+/// mass is spread. Lands in `[0, 1]` by `riemann`'s `entropy_nonneg` (`H ≥ 0`) and
+/// `entropy_le_log_card` (`H ≤ ln n`). Returns `0` for fewer than two categories (no
+/// spread is possible) and `NaN` for an empty slice.
+///
+/// ```
+/// use bayes::normalized_entropy;
+/// assert!((normalized_entropy(&[0.25; 4]) - 1.0).abs() < 1e-12); // uniform ⇒ 1
+/// assert_eq!(normalized_entropy(&[1.0, 0.0, 0.0]), 0.0);         // point mass ⇒ 0
+/// ```
+pub fn normalized_entropy(p: &[f64]) -> f64 {
+    if p.is_empty() {
+        return f64::NAN;
+    }
+    let ceiling = max_entropy(p.len());
+    if ceiling <= 0.0 {
+        return 0.0;
+    }
+    shannon_entropy(p) / ceiling
+}
+
+/// **Maximum-entropy admissibility check**: whether a computed entropy respects the
+/// ceiling `H ≤ ln n` for `support_size` outcomes (`riemann`: `entropy_le_log_card`),
+/// and is nonnegative (`entropy_nonneg`). A `false` flags an entropy above what *any*
+/// distribution on `n` categories can reach — impossible, so it signals a miscounted
+/// support or a units mismatch (e.g. bits read as nats). The information-theoretic
+/// mirror of the variance cap [`is_variance_admissible`](crate::statistics::is_variance_admissible).
+/// A small tolerance absorbs floating-point slack at the uniform boundary.
+pub fn is_entropy_admissible(entropy: f64, support_size: usize) -> bool {
+    entropy >= 0.0 && entropy <= max_entropy(support_size) + 1e-9
 }
 
 /// **Cross-entropy** `H(p, q) = −Σ pᵢ ln qᵢ`, in nats — the expected surprise of
@@ -159,6 +214,46 @@ mod tests {
         let mut point = vec![0.0; 4];
         point[2] = 1.0;
         close(shannon_entropy(&point), 0.0, 1e-12);
+    }
+
+    #[test]
+    fn max_entropy_is_the_uniform_ceiling() {
+        for n in [2usize, 3, 5, 8] {
+            let u = vec![1.0 / n as f64; n];
+            // the uniform attains ln n exactly.
+            close(shannon_entropy(&u), max_entropy(n), 1e-12);
+            close(max_entropy(n), (n as f64).ln(), 1e-12);
+        }
+        // a certain / single outcome carries no uncertainty.
+        assert_eq!(max_entropy(1), 0.0);
+        assert_eq!(max_entropy(0), 0.0);
+    }
+
+    #[test]
+    fn normalized_entropy_is_one_at_uniform_and_zero_at_a_point_mass() {
+        for n in [2usize, 4, 7] {
+            close(normalized_entropy(&vec![1.0 / n as f64; n]), 1.0, 1e-12);
+        }
+        // point mass ⇒ 0; intermediate spread ⇒ strictly inside (0, 1).
+        assert_eq!(normalized_entropy(&[1.0, 0.0, 0.0]), 0.0);
+        let h = normalized_entropy(&[0.7, 0.2, 0.1]);
+        assert!((0.0..1.0).contains(&h));
+        // degenerate inputs.
+        assert!(normalized_entropy(&[]).is_nan());
+        assert_eq!(normalized_entropy(&[1.0]), 0.0);
+    }
+
+    #[test]
+    fn entropy_admissibility_flags_the_impossible() {
+        // ln 3 is attainable on 3 categories; anything above is not.
+        assert!(is_entropy_admissible(3.0_f64.ln(), 3));
+        assert!(is_entropy_admissible(0.5, 3));
+        assert!(!is_entropy_admissible(3.0_f64.ln() + 0.1, 3));
+        // a point-mass entropy (0) is admissible even for a single outcome.
+        assert!(is_entropy_admissible(0.0, 1));
+        // a negative entropy is never valid; bits misread as nats (ln→log2) overflows.
+        assert!(!is_entropy_admissible(-0.01, 3));
+        assert!(!is_entropy_admissible((3.0_f64).log2(), 3)); // log2 3 ≈ 1.585 > ln 3 ≈ 1.099
     }
 
     #[test]

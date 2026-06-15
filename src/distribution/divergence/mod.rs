@@ -15,7 +15,10 @@
 //! - [`ChiSquaredDivergence`] — `χ² = ∫(p − q)²/q`, with `D_KL ≤ χ²`.
 //! - [`RenyiDivergence`] — the order-`α` family interpolating KL (`α→1`),
 //!   Hellinger (`α=½`), and χ² (`α=2`).
-//! - [`mutual_information`] — `I(X;Y) = KL(p_{XY} ‖ p_X ⊗ p_Y) ≥ 0`.
+//! - [`mutual_information`] / [`joint_entropy`] / [`conditional_entropy`] /
+//!   [`variation_of_information`] / [`normalized_mutual_information`] — the full information
+//!   diagram over a joint table: `I(X;Y) ≥ 0`, `H(X,Y)`, `H(Y|X) ≥ 0`, the VI metric, and
+//!   the `[0,1]`-normalized MI.
 //!
 //! KL (and its free Jeffreys symmetrization) has the widest coverage. Hellinger,
 //! Rényi, and χ² are closed-form across the Gaussian
@@ -58,9 +61,12 @@
 //! The [`info`] submodule rounds out the discrete information-theory toolkit on
 //! the same `&[f64]` representation: [`shannon_entropy`], [`cross_entropy`],
 //! [`jensen_shannon`], and [`bhattacharyya_coefficient`] — entropy/cross-entropy,
-//! the symmetric bounded JS divergence, and the Hellinger affinity, each cited to
-//! its `Divergence.lean` theorem (`entropy_le_log_card`,
-//! `crossEntropy_eq_entropy_add_klDiv`, `jsDiv_le_log2`, `bhattacharyya_le_one`).
+//! the symmetric bounded JS divergence, and the Hellinger affinity — plus the
+//! **maximum-entropy** surface [`max_entropy`], [`normalized_entropy`] (the
+//! `H/ln n ∈ [0, 1]` equitability index), and the [`is_entropy_admissible`]
+//! certifier. Each is cited to its `Divergence.lean` theorem (`entropy_le_log_card`,
+//! `entropy_nonneg`, `crossEntropy_eq_entropy_add_klDiv`, `jsDiv_le_log2`,
+//! `bhattacharyya_le_one`).
 
 mod chi_squared;
 mod families;
@@ -87,10 +93,16 @@ pub use fdiv::{
     SquaredHellinger, TotalVariation as TotalVariationGen, f_divergence,
 };
 pub use hellinger::HellingerDistance;
-pub use info::{bhattacharyya_coefficient, cross_entropy, jensen_shannon, shannon_entropy};
+pub use info::{
+    bhattacharyya_coefficient, cross_entropy, is_entropy_admissible, jensen_shannon, max_entropy,
+    normalized_entropy, shannon_entropy,
+};
 pub use jensen_shannon::JensenShannon;
 pub use kl::{Divergence, KlDivergence};
-pub use mutual_information::mutual_information;
+pub use mutual_information::{
+    conditional_entropy, joint_entropy, mutual_information, normalized_mutual_information,
+    variation_of_information,
+};
 pub use renyi::RenyiDivergence;
 pub use total_variation::TotalVariation;
 

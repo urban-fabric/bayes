@@ -9,11 +9,12 @@
 //! The shared [`ConfidenceInterval`] type and quantile helpers live here.
 //!
 //! The `concentration` group is the **distribution-free, proof-backed** companion:
-//! Markov/Chebyshev/Cantelli/Hoeffding tail bounds, a Chebyshev mean interval and
-//! sample-size calculator, and the Popoviciu variance cap. Unlike the parametric
-//! intervals above, these assume only finite variance (or bounded support) and carry a
-//! *guaranteed* bound — each backed by a machine-checked theorem in riemann
-//! `RiemannLean/Bayes/Inequalities.lean`.
+//! Markov/Chebyshev/Cantelli/Hoeffding tail bounds, the Chernoff-method and variance-aware
+//! Bernstein exponential tails, the Paley–Zygmund anti-concentration (lower) bound, a
+//! Chebyshev mean interval and sample-size calculator, and the Popoviciu variance cap.
+//! Unlike the parametric intervals above, these assume only finite variance (or bounded
+//! support) and carry a *guaranteed* bound — each backed by a machine-checked theorem in
+//! riemann `RiemannLean/Bayes/Inequalities.lean`.
 
 use crate::function::erf::erf_inv;
 use std::f64::consts::SQRT_2;
@@ -27,9 +28,9 @@ pub use chi_squared::{
     poisson_rate_interval, std_dev_chi_square_interval, variance_chi_square_interval,
 };
 pub use concentration::{
-    cantelli_bound, chebyshev_bound, chebyshev_sample_size, hoeffding_bound,
-    is_variance_admissible, markov_bound, max_variance_for_range, mean_chebyshev_interval,
-    mean_chebyshev_interval_bounded,
+    bernstein_bound, cantelli_bound, chebyshev_bound, chebyshev_sample_size, chernoff_bound,
+    hoeffding_bound, is_variance_admissible, markov_bound, max_variance_for_range,
+    mean_chebyshev_interval, mean_chebyshev_interval_bounded, paley_zygmund_bound,
 };
 pub use mean::{mean_difference_welch_interval, mean_t_interval, mean_z_interval};
 pub use proportion::{
