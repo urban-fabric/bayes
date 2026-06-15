@@ -152,6 +152,42 @@ pub fn hotelling_t_squared(samples: &[Vec<f64>], mu0: &[f64]) -> f64 {
     n as f64 * mahalanobis_squared(&means, mu0, &cov)
 }
 
+/// **Covariance of two linear combinations**: `Cov(aᵀX, bᵀX) = aᵀ Σ b` for a random
+/// vector `X` with covariance `Σ`. The bilinear form of the covariance — the variance
+/// of a weighted sum/portfolio, the covariance between two linear functionals, or one
+/// step of linear error-propagation. Backed by the covariance-bilinearity proofs in
+/// riemann `Bayes/Inequalities` (`covariance_sum_left` — additivity over a finite sum —
+/// composed with `covariance_smul_left`). Returns `NaN` on a shape/finiteness mismatch.
+pub fn covariance_of_linear_combinations(cov: &DenseMatrix, a: &[f64], b: &[f64]) -> f64 {
+    let p = a.len();
+    if p == 0
+        || b.len() != p
+        || cov.rows() != p
+        || cov.cols() != p
+        || a.iter().chain(b).any(|v| !v.is_finite())
+        || !cov.is_finite()
+    {
+        return f64::NAN;
+    }
+    let mut acc = 0.0;
+    for i in 0..p {
+        for j in 0..p {
+            acc += a[i] * cov.get(i, j) * b[j];
+        }
+    }
+    acc
+}
+
+/// **Variance of a linear combination**: `Var(wᵀX) = wᵀ Σ w` — portfolio variance /
+/// linear uncertainty propagation. The `a = b` case of [`covariance_of_linear_combinations`].
+/// For an uncorrelated (diagonal) `Σ` it reduces to `Σᵢ wᵢ² σᵢ²` (Bienaymé's identity,
+/// riemann `variance_sum_of_uncorrelated`), and the result is `≥ 0` for any genuine
+/// (PSD) covariance — a sum of weighted squares (`variance_nonneg`). Returns `NaN` on a
+/// shape/finiteness mismatch.
+pub fn variance_of_linear_combination(cov: &DenseMatrix, weights: &[f64]) -> f64 {
+    covariance_of_linear_combinations(cov, weights, weights)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -186,5 +222,74 @@ mod tests {
         let samples = vec![vec![1.0, 2.0], vec![2.0, 3.0], vec![3.0, 4.0]];
         let m = mean_vector(&samples);
         close(hotelling_t_squared(&samples, &m), 0.0, 1e-9);
+    }
+
+    #[test]
+    fn linear_combination_variance_is_the_quadratic_form() {
+        // Σ = [[4, 1], [1, 9]], w = (1, 2): wᵀΣw = 4 + 2·(2·1) + 4·9 = 44.
+        let cov = DenseMatrix::from_rows(&[vec![4.0, 1.0], vec![1.0, 9.0]]);
+        close(
+            variance_of_linear_combination(&cov, &[1.0, 2.0]),
+            44.0,
+            1e-12,
+        );
+        // a unit weight picks out the corresponding variance (Σ's diagonal).
+        close(
+            variance_of_linear_combination(&cov, &[1.0, 0.0]),
+            4.0,
+            1e-12,
+        );
+        // the bilinear form is the variance of the sum X₁+X₂: Var = σ₁²+2σ₁₂+σ₂² = 15.
+        close(
+            variance_of_linear_combination(&cov, &[1.0, 1.0]),
+            15.0,
+            1e-12,
+        );
+    }
+
+    #[test]
+    fn bienayme_diagonal_case_is_weighted_variances() {
+        // uncorrelated (diagonal Σ): Var(Σ wᵢXᵢ) = Σ wᵢ² σᵢ² (Bienaymé).
+        let cov = DenseMatrix::from_rows(&[vec![2.0, 0.0], vec![0.0, 5.0]]);
+        close(
+            variance_of_linear_combination(&cov, &[3.0, 4.0]),
+            9.0 * 2.0 + 16.0 * 5.0,
+            1e-12,
+        );
+    }
+
+    #[test]
+    fn covariance_of_combinations_is_symmetric_and_reduces_to_variance() {
+        let cov = DenseMatrix::from_rows(&[vec![4.0, 1.0], vec![1.0, 9.0]]);
+        let (a, b) = ([1.0, 2.0], [3.0, -1.0]);
+        // bilinear + symmetric for symmetric Σ.
+        close(
+            covariance_of_linear_combinations(&cov, &a, &b),
+            covariance_of_linear_combinations(&cov, &b, &a),
+            1e-12,
+        );
+        // a = b recovers the variance.
+        close(
+            covariance_of_linear_combinations(&cov, &a, &a),
+            variance_of_linear_combination(&cov, &a),
+            1e-12,
+        );
+        // shape mismatch ⇒ NaN.
+        assert!(covariance_of_linear_combinations(&cov, &a, &[1.0]).is_nan());
+    }
+
+    #[test]
+    fn portfolio_variance_is_nonnegative_for_a_real_covariance() {
+        // wᵀΣw ≥ 0 for any genuine (PSD) covariance — sum of weighted squares.
+        let samples = vec![
+            vec![1.0, 2.0, 0.5],
+            vec![2.0, 1.0, 1.5],
+            vec![3.0, 4.0, 0.0],
+            vec![0.5, 2.5, 2.0],
+        ];
+        let cov = covariance_matrix(&samples);
+        for w in [[1.0, -1.0, 2.0], [0.3, 0.3, 0.4], [-2.0, 1.0, -0.5]] {
+            assert!(variance_of_linear_combination(&cov, &w) >= -1e-12);
+        }
     }
 }
