@@ -4,16 +4,17 @@
 //! is a blanket trait giving every KL family the reverse direction, the Jeffreys
 //! divergence, and cross-entropy for free.
 
+use super::families::{EULER_GAMMA, gamma_kl, gaussian_kl, weibull_kl};
 use super::{discrete_kl, kl_term};
 use crate::distribution::{
-    Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, Geometric, Laplace,
-    LogNormal, Moments, Multinomial, Normal, Pareto, Poisson, Rayleigh, Weibull,
+    Bernoulli, Beta, Binomial, Categorical, Cauchy, ChiSquared, Dirichlet, DiscreteUniform,
+    Exponential, Frechet, Gamma, Geometric, Gumbel, HalfNormal, InverseGamma, Laplace, LogNormal,
+    Moments, Multinomial, NegativeBinomial, Normal, Pareto, Poisson, Rayleigh, Uniform, VonMises,
+    Wald, Weibull,
 };
+use crate::function::bessel::{i1_over_i0, ln_i0};
 use crate::function::beta::ln_beta;
 use crate::function::gamma::{digamma, gamma, ln_gamma};
-
-/// Euler–Mascheroni constant `γ`, for the Weibull cross-entropy term.
-const EULER_GAMMA: f64 = 0.577_215_664_901_532_9;
 
 /// Closed-form Kullback–Leibler divergence `D_KL(self ‖ other)`, in nats.
 ///
@@ -28,7 +29,7 @@ impl KlDivergence for Normal {
     fn kl_divergence(&self, other: &Self) -> f64 {
         let (m1, s1) = self.params();
         let (m2, s2) = other.params();
-        (s2 / s1).ln() + (s1 * s1 + (m1 - m2) * (m1 - m2)) / (2.0 * s2 * s2) - 0.5
+        gaussian_kl(m1, s1, m2, s2)
     }
 }
 
@@ -41,12 +42,7 @@ impl KlDivergence for Exponential {
 
 impl KlDivergence for Gamma {
     fn kl_divergence(&self, other: &Self) -> f64 {
-        let (a1, b1) = (self.shape(), self.rate());
-        let (a2, b2) = (other.shape(), other.rate());
-        (a1 - a2) * digamma(a1) - ln_gamma(a1)
-            + ln_gamma(a2)
-            + a2 * (b1.ln() - b2.ln())
-            + a1 * (b2 - b1) / b1
+        gamma_kl(self.shape(), self.rate(), other.shape(), other.rate())
     }
 }
 
@@ -79,9 +75,7 @@ impl KlDivergence for LogNormal {
     fn kl_divergence(&self, other: &Self) -> f64 {
         // A log-normal is a normal in log-space, and KL is invariant under that
         // monotone reparametrization, so this is the `Normal` formula on (μ, σ).
-        let (m1, s1) = (self.mu(), self.sigma());
-        let (m2, s2) = (other.mu(), other.sigma());
-        (s2 / s1).ln() + (s1 * s1 + (m1 - m2) * (m1 - m2)) / (2.0 * s2 * s2) - 0.5
+        gaussian_kl(self.mu(), self.sigma(), other.mu(), other.sigma())
     }
 }
 
@@ -158,12 +152,7 @@ impl KlDivergence for Weibull {
     fn kl_divergence(&self, other: &Self) -> f64 {
         // Bauckhage's closed form (shape `k`, scale `λ`); reduces to the
         // exponential KL at `k₁ = k₂ = 1` and to `0` on equal parameters.
-        let (k1, l1) = (self.shape(), self.scale());
-        let (k2, l2) = (other.shape(), other.scale());
-        (k1.ln() - k1 * l1.ln()) - (k2.ln() - k2 * l2.ln())
-            + (k1 - k2) * (l1.ln() - EULER_GAMMA / k1)
-            + (l1 / l2).powf(k2) * gamma(1.0 + k2 / k1)
-            - 1.0
+        weibull_kl(self.shape(), self.scale(), other.shape(), other.scale())
     }
 }
 
@@ -177,6 +166,127 @@ impl KlDivergence for Pareto {
             return f64::INFINITY;
         }
         (a1 / a2).ln() + a2 * (xm1 / xm2).ln() + a2 / a1 - 1.0
+    }
+}
+
+impl KlDivergence for ChiSquared {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // χ²(k) is Gamma(shape k/2, rate ½).
+        gamma_kl(0.5 * self.freedom(), 0.5, 0.5 * other.freedom(), 0.5)
+    }
+}
+
+impl KlDivergence for InverseGamma {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // KL is invariant under the `x ↦ 1/x` bijection, so an inverse-gamma KL
+        // equals the gamma KL on the same (shape, rate ≡ scale) parameters.
+        gamma_kl(self.shape(), self.scale(), other.shape(), other.scale())
+    }
+}
+
+impl KlDivergence for HalfNormal {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // Folding to x ≥ 0 cancels, leaving the zero-mean Gaussian KL on the scales.
+        gaussian_kl(0.0, self.scale(), 0.0, other.scale())
+    }
+}
+
+impl KlDivergence for Frechet {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // X ~ Fréchet(α, s) ⟺ 1/X ~ Weibull(shape α, scale 1/s); KL is invariant
+        // under that bijection.
+        weibull_kl(
+            self.shape(),
+            1.0 / self.scale(),
+            other.shape(),
+            1.0 / other.scale(),
+        )
+    }
+}
+
+impl KlDivergence for Gumbel {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // Closed form on (location μ, scale β); reduces to 0 on equal parameters.
+        let (mu1, b1) = (self.location(), self.scale());
+        let (mu2, b2) = (other.location(), other.scale());
+        (b2 / b1).ln() + EULER_GAMMA * (b1 / b2 - 1.0) + (mu1 - mu2) / b2
+            + ((mu2 - mu1) / b2).exp() * gamma(1.0 + b1 / b2)
+            - 1.0
+    }
+}
+
+impl KlDivergence for Wald {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // Inverse-Gaussian (mean μ, shape λ) closed form.
+        let (m1, l1) = (self.mu(), self.shape());
+        let (m2, l2) = (other.mu(), other.shape());
+        0.5 * (l1 / l2).ln() + l2 * (m1 - 2.0 * m2) / (2.0 * m2 * m2)
+            + 0.5 * l2 * (1.0 / m1 + 1.0 / l1)
+            - 0.5
+    }
+}
+
+impl KlDivergence for VonMises {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // `ln(I₀(κ₂)/I₀(κ₁)) + A(κ₁)(κ₁ − κ₂ cos Δμ)`, A = I₁/I₀ the mean
+        // resultant length.
+        let (mu1, k1) = (self.mu(), self.kappa());
+        let (mu2, k2) = (other.mu(), other.kappa());
+        ln_i0(k2) - ln_i0(k1) + i1_over_i0(k1) * (k1 - k2 * (mu1 - mu2).cos())
+    }
+}
+
+impl KlDivergence for Uniform {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // Finite only when the support `[a₁,b₁]` sits inside `[a₂,b₂]`; then
+        // `ln((b₂−a₂)/(b₁−a₁))`.
+        let (a1, b1) = (self.lo(), self.hi());
+        let (a2, b2) = (other.lo(), other.hi());
+        if a1 < a2 || b1 > b2 {
+            return f64::INFINITY;
+        }
+        ((b2 - a2) / (b1 - a1)).ln()
+    }
+}
+
+impl KlDivergence for Binomial {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // n iid Bernoulli trials: KL is `n ×` the per-trial Bernoulli KL — the
+        // binomial coefficient cancels in the log-ratio. Differing trial counts
+        // are treated as out-of-family (`+∞`).
+        if self.trials() != other.trials() {
+            return f64::INFINITY;
+        }
+        let (p, q) = (self.p(), other.p());
+        self.trials() as f64 * (kl_term(p, q) + kl_term(1.0 - p, 1.0 - q))
+    }
+}
+
+impl KlDivergence for NegativeBinomial {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // Closed form for a matched number of successes `r` (the `Γ` factors then
+        // cancel in the log-ratio); differing `r` is treated as out-of-family.
+        if self.successes() != other.successes() {
+            return f64::INFINITY;
+        }
+        let r = self.successes();
+        let (p1, p2) = (self.p(), other.p());
+        r * (p1 / p2).ln() + r * (1.0 - p1) / p1 * ((1.0 - p1) / (1.0 - p2)).ln()
+    }
+}
+
+impl KlDivergence for DiscreteUniform {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        // Finite only when the support `{a₁..b₁}` sits inside `{a₂..b₂}`; then
+        // `ln(n₂/n₁)`.
+        let (a1, b1) = (self.lo(), self.hi());
+        let (a2, b2) = (other.lo(), other.hi());
+        if a1 < a2 || b1 > b2 {
+            return f64::INFINITY;
+        }
+        let n1 = (b1 - a1 + 1) as f64;
+        let n2 = (b2 - a2 + 1) as f64;
+        (n2 / n1).ln()
     }
 }
 
