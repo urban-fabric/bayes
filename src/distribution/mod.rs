@@ -37,8 +37,9 @@ pub use discrete::{
     NegativeBinomial, Poisson,
 };
 pub use divergence::{
-    ChiSquaredDivergence, Divergence, HellingerDistance, JensenShannon, KlDivergence,
-    RenyiDivergence, TotalVariation, mutual_information,
+    Alpha, Channel, ChiSquaredDivergence, ChiSquaredGen, Custom, Divergence, FGenerator,
+    HellingerDistance, Jeffreys, JensenShannon, Kl, KlDivergence, RenyiDivergence, ReverseKl,
+    SquaredHellinger, TotalVariation, TotalVariationGen, f_divergence, mutual_information,
 };
 pub use exponential_family::{CountSum, ExponentialFamily, MeanVar, SufficientStatistic, Trials};
 pub use functional::{

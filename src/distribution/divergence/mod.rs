@@ -28,6 +28,24 @@
 //! inequality** (KL — and every f-divergence — only decreases under a stochastic
 //! channel); **joint convexity** of every f-divergence; the entropy identities
 //! (`H(p,q) = H(p) + KL`, max-entropy `H ≤ log n`); and `I(X;Y) ≥ 0`.
+//!
+//! ## The f-divergence umbrella
+//!
+//! The per-family closed forms above each instantiate one general object: the
+//! **f-divergence** `D_f(p ‖ q) = Σ qᵢ f(pᵢ/qᵢ)` for a convex generator `f` with
+//! `f(1) = 0`. The [`fdiv`] submodule exposes it generically over probability
+//! vectors — one [`f_divergence`] function with pluggable [`FGenerator`]s
+//! ([`Kl`], [`ReverseKl`], [`ChiSquaredGen`], [`SquaredHellinger`],
+//! [`TotalVariationGen`], [`Jeffreys`], [`Alpha`]) — plus the [`Channel`]
+//! (Markov kernel) carrying the **data-processing inequality**. The three
+//! universal guarantees (nonnegativity, data-processing monotonicity, joint
+//! convexity) are the `fDiv_*` theorems in `RiemannLean/Bayes/Divergence.lean`.
+
+mod fdiv;
+pub use fdiv::{
+    Alpha, Channel, ChiSquared as ChiSquaredGen, Custom, FGenerator, Jeffreys, Kl, ReverseKl,
+    SquaredHellinger, TotalVariation as TotalVariationGen, f_divergence,
+};
 
 use crate::distribution::{
     Bernoulli, Beta, Categorical, Cauchy, Dirichlet, Exponential, Gamma, Geometric, Laplace,
