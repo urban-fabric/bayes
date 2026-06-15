@@ -25,6 +25,7 @@ pub use combinator::{Mixture, Truncated};
 pub use conjugate::{
     BetaBernoulli, BetaBinomialModel, Conjugate, DirichletCategorical, DirichletMultinomial,
     GammaExponential, GammaPoisson, NaturalParams, NormalInverseGamma, NormalKnownVariance,
+    precision_weighted_mean,
 };
 pub use constraint::{Constrained, Constraint};
 pub use continuous::{
@@ -39,8 +40,10 @@ pub use discrete::{
 pub use divergence::{
     Alpha, Channel, ChiSquaredDivergence, ChiSquaredGen, Custom, Divergence, FGenerator,
     HellingerDistance, Jeffreys, JensenShannon, Kl, KlDivergence, RenyiDivergence, ReverseKl,
-    SquaredHellinger, TotalVariation, TotalVariationGen, bhattacharyya_coefficient, cross_entropy,
-    f_divergence, jensen_shannon, mutual_information, shannon_entropy,
+    SquaredHellinger, TotalVariation, TotalVariationGen, bhattacharyya_coefficient,
+    conditional_entropy, cross_entropy, f_divergence, is_entropy_admissible, jensen_shannon,
+    joint_entropy, max_entropy, mutual_information, normalized_entropy,
+    normalized_mutual_information, shannon_entropy, variation_of_information,
 };
 pub use exponential_family::{CountSum, ExponentialFamily, MeanVar, SufficientStatistic, Trials};
 pub use functional::{

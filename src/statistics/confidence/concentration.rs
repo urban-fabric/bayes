@@ -4,7 +4,9 @@
 //! *guaranteed* (not asymptotic) bound. Each is backed by a machine-checked theorem in
 //! riemann `RiemannLean/Bayes/Inequalities.lean` on the pinned 3-axiom basis:
 //!
-//! - tail bounds — `markov`, `chebyshev`, `cantelli`, `hoeffding_tail`;
+//! - tail bounds — `markov`, `chebyshev`, `cantelli`, `hoeffding_tail`, and the
+//!   exponential-MGF family `chernoff_bound` → `bernstein_tail` (variance-aware);
+//! - anti-concentration (a *lower* tail bound) — `paley_zygmund`;
 //! - the sample-mean interval / sample size — `chebyshev_sample_mean`
 //!   (`ε²·P(|S̄ − μ| ≥ ε) ≤ σ²/n`, Bienaymé variance scaling);
 //! - the bounded-support variance cap — `variance_le_sq_half_range` (Popoviciu).
@@ -51,6 +53,54 @@ pub fn hoeffding_bound(a: f64, b: f64, t: f64) -> f64 {
         return f64::NAN;
     }
     (-2.0 * t * t / ((b - a) * (b - a))).exp()
+}
+
+/// **Chernoff's method** — the generic exponential-Markov tail: for any tilt `s > 0`,
+/// `P(X ≥ t) ≤ e^{−s·t}·E[e^{sX}]`. Given a value (or upper bound) `mgf` of the moment
+/// generating function `E[e^{sX}]` at `s`, this returns that bound (clamped to a
+/// probability). It is the substrate every sub-Gaussian / sub-exponential tail in this
+/// module specializes — [`hoeffding_bound`] plugs in the bounded-range MGF, and
+/// [`bernstein_bound`] the sub-gamma one; the caller minimizes over `s` for the tightest
+/// bound. Backed by riemann `Bayes/Inequalities.chernoff_bound`. Returns `NaN` on invalid
+/// input (`s ≤ 0`, `mgf < 0`).
+pub fn chernoff_bound(mgf: f64, s: f64, t: f64) -> f64 {
+    if s <= 0.0 || mgf < 0.0 {
+        return f64::NAN;
+    }
+    ((-s * t).exp() * mgf).min(1.0)
+}
+
+/// **Bernstein's inequality** — the variance-aware exponential tail. For a variable whose
+/// MGF is *sub-gamma* with variance proxy `variance_proxy` (`v > 0`) and scale `scale`
+/// (`b > 0`) — `E[e^{sX}] ≤ exp(s²v/(2(1 − b·s)))` on `0 < s < 1/b` — an upper bound on
+/// `P(X ≥ t)`, namely `exp(−t²/(2(v + b·t)))` (`t ≥ 0`). It interpolates the two regimes:
+/// sub-Gaussian `exp(−t²/2v)` for small `t`, sub-exponential `exp(−t/2b)` for large `t` —
+/// **sharper than [`hoeffding_bound`] when the variance `v` is small** (Hoeffding sees only
+/// the range). A bounded mean-zero variable `|X| ≤ c` meets the sub-gamma condition with
+/// `v = E[X²]` (riemann `bennett_mgf`). Backed by riemann
+/// `Bayes/Inequalities.bernstein_tail` (the Chernoff optimization at `s = t/(v + b·t)`).
+/// Returns `NaN` on invalid input (`v ≤ 0`, `b ≤ 0`, `t < 0`).
+pub fn bernstein_bound(variance_proxy: f64, scale: f64, t: f64) -> f64 {
+    if variance_proxy <= 0.0 || scale <= 0.0 || t < 0.0 {
+        return f64::NAN;
+    }
+    (-t * t / (2.0 * (variance_proxy + scale * t))).exp()
+}
+
+/// **The Paley–Zygmund inequality** — anti-concentration, a *lower* bound on a tail and the
+/// complement of Markov/Chebyshev. For a **nonnegative** `X` with mean `mean` (`E[X] ≥ 0`)
+/// and second moment `mean_square` (`E[X²] > 0`), and any `θ ∈ [0, 1]`,
+/// `P(X ≥ θ·E[X]) ≥ (1 − θ)²·E[X]²/E[X²]`. Where the tail bounds above certify a variable is
+/// *not too large*, this certifies it is *not too small*: a nonnegative variable with a
+/// controlled second moment must put real mass near its mean — used to show a random
+/// quantity is positive / bounded away from zero with constant probability. Backed by
+/// riemann `Bayes/Inequalities.paley_zygmund`. Returns `NaN` on invalid input (`mean < 0`,
+/// `mean_square ≤ 0`, `θ ∉ [0, 1]`).
+pub fn paley_zygmund_bound(mean: f64, mean_square: f64, theta: f64) -> f64 {
+    if mean < 0.0 || mean_square <= 0.0 || !(0.0..=1.0).contains(&theta) {
+        return f64::NAN;
+    }
+    ((1.0 - theta).powi(2) * mean * mean / mean_square).min(1.0)
 }
 
 /// **Popoviciu's variance bound**: the largest possible variance of a variable bounded
@@ -152,6 +202,49 @@ mod tests {
         // Hoeffding: t=0 → 1; decreasing in t.
         close(hoeffding_bound(0.0, 1.0, 0.0), 1.0, 1e-12);
         assert!(hoeffding_bound(0.0, 1.0, 0.5) < 1.0);
+    }
+
+    #[test]
+    fn chernoff_recovers_hoeffding_with_the_bounded_mgf() {
+        // For a mean-zero X in [a, b], Hoeffding's MGF is E[e^{sX}] ≤ exp(s²(b−a)²/8).
+        // Chernoff at the optimal s = 4t/(b−a)² then equals exp(−2t²/(b−a)²) = hoeffding_bound.
+        let (a, b, t) = (0.0_f64, 1.0_f64, 0.5_f64);
+        let s = 4.0 * t / ((b - a) * (b - a));
+        let mgf = (s * s * (b - a) * (b - a) / 8.0).exp();
+        close(chernoff_bound(mgf, s, t), hoeffding_bound(a, b, t), 1e-12);
+        // it is a probability: an over-large mgf/over-small s clamps to 1.
+        assert_eq!(chernoff_bound(2.0, 0.1, 0.0), 1.0);
+        assert!(chernoff_bound(-1.0, 1.0, 1.0).is_nan());
+        assert!(chernoff_bound(1.0, 0.0, 1.0).is_nan());
+    }
+
+    #[test]
+    fn bernstein_is_sharper_than_hoeffding_for_small_variance() {
+        // v=1, b=1, t=2 ⇒ exp(−4/(2·3)) = exp(−2/3).
+        close(bernstein_bound(1.0, 1.0, 2.0), (-2.0f64 / 3.0).exp(), 1e-12);
+        // t=0 ⇒ 1; strictly decreasing in t.
+        close(bernstein_bound(1.0, 1.0, 0.0), 1.0, 1e-12);
+        assert!(bernstein_bound(1.0, 1.0, 1.0) < 1.0);
+        // a small-variance variable in [−1, 1] (v ≪ c²): Bernstein beats Hoeffding near 0.
+        // Hoeffding sees only the range (b−a)=2; Bernstein sees the true variance v=0.04.
+        assert!(bernstein_bound(0.04, 1.0, 0.2) < hoeffding_bound(-1.0, 1.0, 0.2));
+        assert!(bernstein_bound(0.0, 1.0, 1.0).is_nan());
+        assert!(bernstein_bound(1.0, 0.0, 1.0).is_nan());
+        assert!(bernstein_bound(1.0, 1.0, -0.1).is_nan());
+    }
+
+    #[test]
+    fn paley_zygmund_lower_bounds_the_tail() {
+        // mean=1, E[X²]=2 (Var=1), θ=0.5 ⇒ (0.5)²·1/2 = 0.125.
+        close(paley_zygmund_bound(1.0, 2.0, 0.5), 0.125, 1e-12);
+        // θ=0 ⇒ E[X]²/E[X²] = 1/2 (≤ 1 by Cauchy–Schwarz); θ=1 ⇒ 0.
+        close(paley_zygmund_bound(1.0, 2.0, 0.0), 0.5, 1e-12);
+        close(paley_zygmund_bound(1.0, 2.0, 1.0), 0.0, 1e-12);
+        // a degenerate constant X≡1 (E[X²]=E[X]²) at θ=0 gives the certain tail P=1.
+        close(paley_zygmund_bound(1.0, 1.0, 0.0), 1.0, 1e-12);
+        assert!(paley_zygmund_bound(-1.0, 2.0, 0.5).is_nan());
+        assert!(paley_zygmund_bound(1.0, 0.0, 0.5).is_nan());
+        assert!(paley_zygmund_bound(1.0, 2.0, 1.5).is_nan());
     }
 
     #[test]
