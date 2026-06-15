@@ -36,7 +36,10 @@ pub use discrete::{
     Bernoulli, BetaBinomial, Binomial, Categorical, DiscreteUniform, Geometric, Hypergeometric,
     NegativeBinomial, Poisson,
 };
-pub use divergence::KlDivergence;
+pub use divergence::{
+    ChiSquaredDivergence, Divergence, HellingerDistance, JensenShannon, KlDivergence,
+    RenyiDivergence, TotalVariation, mutual_information,
+};
 pub use exponential_family::{CountSum, ExponentialFamily, MeanVar, SufficientStatistic, Trials};
 pub use functional::{
     ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt, ContinuousFn,
