@@ -17,9 +17,10 @@
 //!   Hellinger (`α=½`), and χ² (`α=2`).
 //! - [`mutual_information`] — `I(X;Y) = KL(p_{XY} ‖ p_X ⊗ p_Y) ≥ 0`.
 //!
-//! Jensen–Shannon, total variation, and Rényi are exact only where the relevant
+//! Jensen–Shannon and total variation are exact only where the relevant
 //! mixture/sum stays in-family — the finite-support discretes ([`Bernoulli`],
-//! [`Categorical`]); KL, Jeffreys, and Hellinger are closed-form for every family.
+//! [`Categorical`]); Rényi adds the Gaussian closed form ([`Normal`],
+//! [`LogNormal`]); KL, Jeffreys, and Hellinger are closed-form for every family.
 //!
 //! **Every guarantee is machine-checked** in the `riemann` Lean development
 //! (`RiemannLean/Bayes/Divergence.lean`): Gibbs `KL ≥ 0`; `0 ≤ JS ≤ ln 2`;
@@ -544,6 +545,51 @@ impl RenyiDivergence for Categorical {
     }
 }
 
+/// The closed-form Rényi divergence `D_α(N(μ₀,σ₀) ‖ N(μ₁,σ₁))`, shared by the
+/// [`Normal`] and (via the log reparametrization) [`LogNormal`] impls.
+///
+/// `D_α = α(μ₀−μ₁)²/(2σ_α²) + [(1−α)ln σ₀ + α ln σ₁ − ln σ_α]/(α−1)` with
+/// `σ_α² = α σ₁² + (1−α) σ₀²` (from `∫ pᵅq¹⁻ᵅ`, a Gaussian integral). Finite only
+/// when `σ_α² > 0`: always for `α ∈ (0,1)`, and otherwise when the heavier-tailed
+/// power stays integrable. `α → 1` is the KL limit (passed through directly).
+fn normal_renyi(m0: f64, s0: f64, m1: f64, s1: f64, alpha: f64) -> f64 {
+    let var_alpha = alpha * s1 * s1 + (1.0 - alpha) * s0 * s0;
+    if var_alpha <= 0.0 {
+        return f64::INFINITY;
+    }
+    let mean_term = alpha * (m0 - m1).powi(2) / (2.0 * var_alpha);
+    let log_term =
+        ((1.0 - alpha) * s0.ln() + alpha * s1.ln() - 0.5 * var_alpha.ln()) / (alpha - 1.0);
+    mean_term + log_term
+}
+
+impl RenyiDivergence for Normal {
+    /// The closed-form Gaussian Rényi divergence
+    /// `D_α = α(μ₀−μ₁)²/(2σ_α²) + [(1−α)ln σ₀ + α ln σ₁ − ln σ_α]/(α−1)`,
+    /// `σ_α² = α σ₁² + (1−α) σ₀²`; `α = 1` returns the KL limit, and `+∞` when the
+    /// order-`α` integral diverges (`σ_α² ≤ 0`).
+    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
+        if (alpha - 1.0).abs() < 1e-12 {
+            return self.kl_divergence(other);
+        }
+        let (m0, s0) = self.params();
+        let (m1, s1) = other.params();
+        normal_renyi(m0, s0, m1, s1, alpha)
+    }
+}
+
+impl RenyiDivergence for LogNormal {
+    /// A log-normal is a normal in log-space and Rényi divergence is invariant
+    /// under that monotone reparametrization, so this is the [`Normal`] formula
+    /// on `(μ, σ)`.
+    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
+        if (alpha - 1.0).abs() < 1e-12 {
+            return self.kl_divergence(other);
+        }
+        normal_renyi(self.mu(), self.sigma(), other.mu(), other.sigma(), alpha)
+    }
+}
+
 /// **Mutual information** `I(X;Y) = Σ_{i,k} J[i][k]·ln( J[i][k] / (p_X[i]·p_Y[k]) )`,
 /// in nats, for a joint distribution `joint` (row `i` = outcome of `X`, column `k`
 /// = outcome of `Y`; entries should sum to 1). Equivalently `KL(p_{XY} ‖ p_X ⊗ p_Y)`.
@@ -999,6 +1045,62 @@ mod tests {
                 .unwrap()
                 .renyi_divergence(&Bernoulli::new(0.4).unwrap(), alpha);
             close(cat, bern, 1e-12);
+        }
+    }
+
+    #[test]
+    fn gaussian_renyi_matches_its_limits_and_the_integral() {
+        let p = Normal::new(0.0, 1.0).unwrap();
+        let q = Normal::new(1.5, 2.0).unwrap();
+        // Self-divergence is zero at every order.
+        for alpha in [0.3, 0.5, 1.0, 2.0, 3.0] {
+            close(p.renyi_divergence(&p, alpha), 0.0, 1e-12);
+        }
+        // α = 1 is exactly KL.
+        close(p.renyi_divergence(&q, 1.0), p.kl_divergence(&q), 1e-12);
+        // α = ½ is −2·ln(1 − H²) (Hellinger), reusing the closed-form affinity.
+        close(
+            p.renyi_divergence(&q, 0.5),
+            -2.0 * (1.0 - p.hellinger_sq(&q)).ln(),
+            1e-12,
+        );
+        // Direct check against D_α = ln(∫ pᵅ q¹⁻ᵅ)/(α−1) by numeric integration.
+        let renyi_integral = |alpha: f64| {
+            let n = 200_000usize;
+            let (lo, hi) = (-60.0, 60.0);
+            let h = (hi - lo) / n as f64;
+            let s: f64 = (0..=n)
+                .map(|k| {
+                    let x = lo + k as f64 * h;
+                    let w = if k == 0 || k == n { 0.5 } else { 1.0 };
+                    w * p.pdf(x).powf(alpha) * q.pdf(x).powf(1.0 - alpha)
+                })
+                .sum::<f64>()
+                * h;
+            s.ln() / (alpha - 1.0)
+        };
+        for alpha in [0.3, 0.7, 2.0] {
+            close(p.renyi_divergence(&q, alpha), renyi_integral(alpha), 2e-3);
+        }
+        // Monotone non-decreasing in α.
+        assert!(p.renyi_divergence(&q, 0.5) <= p.renyi_divergence(&q, 2.0) + 1e-12);
+        // Diverges when the order-α power is not integrable (σ_α² ≤ 0):
+        // α = 2, σ₀ = 3, σ₁ = 1 ⇒ 2·1 − 1·9 < 0.
+        assert!(
+            Normal::new(0.0, 3.0)
+                .unwrap()
+                .renyi_divergence(&Normal::new(0.0, 1.0).unwrap(), 2.0)
+                .is_infinite()
+        );
+        // LogNormal reuses the Normal formula on (μ, σ).
+        for alpha in [0.4, 2.0] {
+            close(
+                LogNormal::new(0.0, 1.0)
+                    .unwrap()
+                    .renyi_divergence(&LogNormal::new(1.5, 2.0).unwrap(), alpha),
+                p.renyi_divergence(&q, alpha),
+                1e-12,
+            );
         }
     }
 
