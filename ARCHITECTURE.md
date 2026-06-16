@@ -69,7 +69,8 @@ The concrete distributions are grouped by kind:
   Hypergeometric, NegativeBinomial, BetaBinomial, and related count families.
 - `multivariate/`: MultivariateNormal, MultivariateStudentT, Dirichlet,
   Multinomial, Wishart, InverseWishart, normalized von Mises-Fisher, and
-  Kent/Bingham unnormalized potentials, with a small multivariate trait spine.
+  Dirichlet-multinomial count distributions, Kent/Bingham unnormalized
+  potentials, with a small multivariate trait spine.
   MultivariateNormal owns direct Gaussian algebra: coordinate marginals,
   conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
   and precision fusion. Wishart families own matrix densities, entropy/KL,
@@ -77,9 +78,9 @@ The concrete distributions are grouped by kind:
   inverse-family transforms. Dirichlet owns the simplex algebra that stays
   closed under projection: component and subset-sum Beta marginals, category
   lumping into a smaller Dirichlet, conditional sub-simplex laws, and
-  Dirichlet-multinomial predictive moments. Kent/Bingham remain potential/ratio
-  APIs because their generic normalizers require special-function machinery
-  outside the current closed-form surface.
+  full Dirichlet-multinomial predictive count distributions. Kent/Bingham
+  remain potential/ratio APIs because their generic normalizers require
+  special-function machinery outside the current closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
   Constraint transforms expose both forward and inverse log-Jacobian corrections,
   using stable log-domain sigmoid identities in the logistic tails so downstream
@@ -101,7 +102,9 @@ The concrete distributions are grouped by kind:
   including Normal-Inverse-Gamma and Normal-Gamma for scalar Gaussian
   mean/variance or mean/precision conjugacy, plus Normal-Inverse-Wishart and
   Normal-Wishart for multivariate Gaussian mean/covariance or mean/precision
-  conjugacy.
+  conjugacy. Gamma-Poisson and Gamma-Exponential expose exposure/right-censoring
+  updates where the sufficient statistic is `(events, exposure)` rather than raw
+  observations.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
   only its statistic `T`, prior coordinates `η`, and the map back to a

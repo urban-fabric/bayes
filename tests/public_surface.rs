@@ -5,13 +5,13 @@
 use bayes::{
     Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, BinghamPotential, Conjugate,
     Constraint, Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt,
-    ContinuousFn, Dirichlet, DirichletCategorical, Discrete, DiscreteDistributionExt, DiscreteFn,
-    Ecdf, Exponential, ExponentialFamily, Gamma, GammaPoisson, InverseWishart, KentPotential,
-    KlDivergence, MarkovChain, MeanVar, Mixture, Moments, MultivariateContinuous,
-    MultivariateMoments, MultivariateNormal, MultivariateStudentT, Normal, NormalGamma,
-    NormalInverseGamma, NormalInverseWishart, NormalKnownVariance, NormalWishart, OrderStatistic,
-    Poisson, StudentT, SufficientStatistic, Uniform, Wishart, histogram,
-    is_correlation_matrix_admissible, is_covariance_matrix_admissible,
+    ContinuousFn, Dirichlet, DirichletCategorical, DirichletMultinomialDistribution, Discrete,
+    DiscreteDistributionExt, DiscreteFn, Ecdf, Exponential, ExponentialFamily, Gamma,
+    GammaExponential, GammaPoisson, InverseWishart, KentPotential, KlDivergence, MarkovChain,
+    MeanVar, Mixture, Moments, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
+    MultivariateStudentT, Normal, NormalGamma, NormalInverseGamma, NormalInverseWishart,
+    NormalKnownVariance, NormalWishart, OrderStatistic, Poisson, StudentT, SufficientStatistic,
+    Uniform, Wishart, histogram, is_correlation_matrix_admissible, is_covariance_matrix_admissible,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -93,6 +93,32 @@ fn beta_binomial_and_gamma_poisson_predictives() {
     let nb = gp.posterior_predictive(&[3, 5, 2, 4]);
     assert!(nb.pmf(3) > 0.0);
     assert!(gp.ln_marginal_likelihood(&[3, 5, 2, 4]).is_finite());
+    let exposed_post = gp.posterior_with_exposure(&[3, 2], &[0.5, 1.5]).unwrap();
+    close(exposed_post.shape(), 7.0, 1e-12);
+    assert!(
+        gp.posterior_predictive_with_exposure(&[3, 2], &[0.5, 1.5], 2.0)
+            .unwrap()
+            .pmf(4)
+            > 0.0
+    );
+    assert!(
+        gp.ln_marginal_likelihood_with_exposure(&[3, 2], &[0.5, 1.5])
+            .is_finite()
+    );
+
+    let ge = GammaExponential::new(Gamma::new(1.0, 1.0).unwrap());
+    close(
+        ge.posterior_with_exposure(2, 4.0).unwrap().rate(),
+        5.0,
+        1e-12,
+    );
+    close(
+        ge.posterior_predictive_with_exposure(2, 4.0)
+            .unwrap()
+            .scale(),
+        5.0,
+        1e-12,
+    );
 
     let gamma_sum = Gamma::sum_independent_same_rate(&[
         Gamma::new(2.0, 3.0).unwrap(),
@@ -181,6 +207,14 @@ fn dirichlet_categorical_conjugate_flow() {
     assert_eq!(lumped.alpha(), &[7.0, 3.0, 7.0]);
     let conditional = simplex.conditional_on_subset(&[3, 1, 0]).unwrap();
     assert_eq!(conditional.alpha(), &[7.0, 3.0, 2.0]);
+
+    let count_pred = model.posterior_predictive_counts(&[0u64, 0, 1, 2, 0], 4);
+    close(count_pred.mean_vector()[0], 2.0, 1e-12);
+    assert!(count_pred.pmf(&[2, 1, 1]) > 0.0);
+
+    let dm = DirichletMultinomialDistribution::new(4, vec![2.0, 3.0, 5.0]).unwrap();
+    close(dm.mean_vector()[2], 2.0, 1e-12);
+    assert!(dm.pmf(&[1, 1, 2]) > 0.0);
 }
 
 #[test]

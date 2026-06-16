@@ -7,6 +7,7 @@
 //! as a `ramanujan::DenseMatrix`.
 
 mod dirichlet;
+mod dirichlet_multinomial;
 pub(crate) mod matrix;
 mod multinomial;
 mod normal;
@@ -16,6 +17,7 @@ mod von_mises_fisher;
 mod wishart;
 
 pub use dirichlet::Dirichlet;
+pub use dirichlet_multinomial::DirichletMultinomialDistribution;
 pub use multinomial::Multinomial;
 pub use normal::MultivariateNormal;
 pub use orientation::{BinghamPotential, KentPotential};

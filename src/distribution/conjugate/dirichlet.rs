@@ -2,7 +2,9 @@
 //! **Dirichlet–Multinomial**.
 
 use super::{Conjugate, Counts};
-use crate::distribution::{Categorical, Dirichlet, MultivariateMoments};
+use crate::distribution::{
+    Categorical, Dirichlet, DirichletMultinomialDistribution, MultivariateMoments,
+};
 use crate::function::{ln_factorial, ln_multivariate_beta};
 use ramanujan::DenseMatrix;
 
@@ -56,6 +58,16 @@ impl DirichletCategorical {
     /// with the category probabilities integrated out.
     pub fn posterior_predictive_count_mean(&self, data: &[u64], future_trials: u64) -> Vec<f64> {
         self.posterior(data).predictive_count_mean(future_trials)
+    }
+
+    /// Full Dirichlet-multinomial posterior-predictive count distribution for
+    /// `future_trials` future categorical observations.
+    pub fn posterior_predictive_counts(
+        &self,
+        data: &[u64],
+        future_trials: u64,
+    ) -> DirichletMultinomialDistribution {
+        DirichletMultinomialDistribution::from_dirichlet(future_trials, self.posterior(data))
     }
 
     /// Dirichlet-multinomial covariance for `future_trials` future categorical
@@ -164,6 +176,16 @@ impl DirichletMultinomial {
         self.posterior(data).predictive_count_mean(future_trials)
     }
 
+    /// Full Dirichlet-multinomial posterior-predictive count distribution for a
+    /// future multinomial observation with `future_trials`.
+    pub fn posterior_predictive_counts(
+        &self,
+        data: &[Vec<u64>],
+        future_trials: u64,
+    ) -> DirichletMultinomialDistribution {
+        DirichletMultinomialDistribution::from_dirichlet(future_trials, self.posterior(data))
+    }
+
     /// Dirichlet-multinomial covariance for a future multinomial observation
     /// with `future_trials`, integrating out category probabilities.
     pub fn posterior_predictive_count_covariance(
@@ -229,6 +251,9 @@ mod tests {
         close(probs[0], 0.5, 1e-12);
         let mean = model.posterior_predictive_count_mean(&data, 4);
         close(mean[0], 2.0, 1e-12);
+        let counts = model.posterior_predictive_counts(&data, 4);
+        close(counts.mean_vector()[0], 2.0, 1e-12);
+        assert!(counts.pmf(&[2, 1, 1]) > 0.0);
         let cov = model.posterior_predictive_count_covariance(&data, 4);
         close(cov.get(0, 1), -4.0 * 0.5 * 0.25 * 12.0 / 9.0, 1e-12);
         close(
@@ -252,6 +277,9 @@ mod tests {
         close(probs[0], 0.6, 1e-12);
         let mean = model.posterior_predictive_count_mean(&data, 5);
         close(mean[0], 3.0, 1e-12);
+        let counts = model.posterior_predictive_counts(&data, 5);
+        close(counts.mean_vector()[0], 3.0, 1e-12);
+        assert!(counts.pmf(&[3, 2]) > 0.0);
         let cov = model.posterior_predictive_count_covariance(&data, 5);
         close(cov.get(0, 0), 5.0 * 0.6 * 0.4 * 15.0 / 11.0, 1e-12);
         let coeff = ln_factorial(4) - ln_factorial(3) - ln_factorial(1) + ln_factorial(4)
