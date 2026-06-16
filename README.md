@@ -16,9 +16,11 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   Dirichlet, Multinomial, Wishart, Inverse-Wishart), plus combinators
   (Mixture, Truncated, Transformed). MVNs include closed-form marginal,
   conditional, affine-transform, batch-likelihood, and Gaussian-product /
-  precision-fusion operations. Directional models include normalized von
-  Mises/von Mises-Fisher distributions and unnormalized Kent/Bingham potentials
-  for closed-form energy ratios where the generic normalizer is not closed form.
+  precision-fusion operations. Wishart families include matrix densities,
+  entropy/KL, expected log-determinants, entry covariances, and inverse-family
+  transforms. Directional models include normalized von Mises/von Mises-Fisher
+  distributions and unnormalized Kent/Bingham potentials for closed-form energy
+  ratios where the generic normalizer is not closed form.
   Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
   (incl. stable `ln_cdf`/`ln_sf`/`isf`),
   analytic moments (`Option`-typed — Cauchy honestly has no mean), and `rand` sampling.

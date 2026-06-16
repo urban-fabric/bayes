@@ -72,9 +72,11 @@ The concrete distributions are grouped by kind:
   Kent/Bingham unnormalized potentials, with a small multivariate trait spine.
   MultivariateNormal owns direct Gaussian algebra: coordinate marginals,
   conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
-  and precision fusion. Kent/Bingham remain potential/ratio APIs because their
-  generic normalizers require special-function machinery outside the current
-  closed-form surface.
+  and precision fusion. Wishart families own matrix densities, entropy/KL,
+  expected log-determinants, entry covariances where directly closed form, and
+  inverse-family transforms. Kent/Bingham remain potential/ratio APIs because
+  their generic normalizers require special-function machinery outside the
+  current closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
   Constraint transforms expose both forward and inverse log-Jacobian corrections,
   using stable log-domain sigmoid identities in the logistic tails so downstream

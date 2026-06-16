@@ -7,10 +7,10 @@ use bayes::{
     Constraint, Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt,
     ContinuousFn, Dirichlet, DirichletCategorical, Discrete, DiscreteDistributionExt, DiscreteFn,
     Ecdf, Exponential, ExponentialFamily, Gamma, GammaPoisson, InverseWishart, KentPotential,
-    MarkovChain, MeanVar, Mixture, Moments, MultivariateContinuous, MultivariateMoments,
-    MultivariateNormal, MultivariateStudentT, Normal, NormalInverseGamma, NormalInverseWishart,
-    NormalKnownVariance, Poisson, StudentT, SufficientStatistic, Wishart, histogram,
-    is_correlation_matrix_admissible, is_covariance_matrix_admissible,
+    KlDivergence, MarkovChain, MeanVar, Mixture, Moments, MultivariateContinuous,
+    MultivariateMoments, MultivariateNormal, MultivariateStudentT, Normal, NormalInverseGamma,
+    NormalInverseWishart, NormalKnownVariance, Poisson, StudentT, SufficientStatistic, Wishart,
+    histogram, is_correlation_matrix_admissible, is_covariance_matrix_admissible,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -362,11 +362,30 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
             .ln_pdf_matrix(&ramanujan::DenseMatrix::identity(2))
             .is_finite()
     );
+    assert!(wishart.entropy().is_finite());
+    assert!(wishart.expected_log_determinant().is_finite());
+    close(wishart.kl_divergence(&wishart), 0.0, 1e-10);
+    close(
+        wishart
+            .inverse_distribution()
+            .inverse_distribution()
+            .scale_matrix()
+            .get(0, 0),
+        1.0,
+        1e-10,
+    );
     let inverse_wishart = InverseWishart::new(6.0, ramanujan::DenseMatrix::identity(2)).unwrap();
     assert!(
         inverse_wishart
             .ln_pdf_matrix(&ramanujan::DenseMatrix::identity(2))
             .is_finite()
+    );
+    assert!(inverse_wishart.entropy().is_finite());
+    close(inverse_wishart.kl_divergence(&inverse_wishart), 0.0, 1e-10);
+    close(
+        inverse_wishart.expected_inverse_matrix().get(0, 0),
+        6.0,
+        1e-10,
     );
 
     let kent =
