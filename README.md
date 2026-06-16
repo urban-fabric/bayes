@@ -13,12 +13,14 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   Lomax, Frechet, Wald, VonMises, Uniform, Uniform2D), discrete (Bernoulli,
   Binomial, Poisson, Geometric, DiscreteUniform, NegativeBinomial, Hypergeometric,
   Categorical, BetaBinomial), multivariate (MVN, multivariate Student-t,
-  Dirichlet, Multinomial, Dirichlet-multinomial counts, Wishart, Inverse-Wishart), plus combinators
-  (Mixture, OrderStatistic, Truncated, Transformed). MVNs include closed-form marginal,
-  conditional, affine-transform, batch-likelihood, and Gaussian-product /
-  precision-fusion operations. Wishart families include matrix densities,
-  entropy/KL, expected log-determinants, entry covariances, and inverse-family
-  transforms. Dirichlet distributions include component/sum Beta marginals,
+  Dirichlet, Multinomial, Dirichlet-multinomial counts, Wishart,
+  Inverse-Wishart), plus combinators (Mixture, OrderStatistic, Truncated,
+  Transformed). MVNs include closed-form marginal, conditional,
+  affine-transform, batch-likelihood, and Gaussian-product / precision-fusion
+  operations. Multivariate Student-t distributions include closed-form
+  marginals, conditionals, and affine transforms. Wishart families include
+  matrix densities, entropy/KL, expected log-determinants, entry covariances,
+  and inverse-family transforms. Dirichlet distributions include component/sum Beta marginals,
   category lumping, conditional sub-simplex laws, and full Dirichlet-multinomial
   predictive count distributions. Directional models include normalized von Mises/von Mises-Fisher
   distributions and unnormalized Kent/Bingham potentials for closed-form energy
@@ -61,8 +63,10 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   sufficient statistics, plus conjugate posteriors, predictives, and exact log
   marginal likelihoods, including Normal-Inverse-Gamma / Normal-Gamma scalar
   Gaussian conjugacy and Normal-Inverse-Wishart / Normal-Wishart multivariate
-  Gaussian conjugacy. Gamma-Poisson and Gamma-Exponential conjugacy also support
-  closed-form exposure/right-censoring sufficient statistics.
+  Gaussian conjugacy. Scalar Gaussian conjugate models expose finite-batch
+  posterior predictives for future observations, sums, and means. Gamma-Poisson
+  and Gamma-Exponential conjugacy also support closed-form exposure/right-censoring
+  sufficient statistics.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};

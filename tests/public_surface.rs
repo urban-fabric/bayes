@@ -135,6 +135,20 @@ fn normal_normal_known_variance_posterior() {
     let post = model.posterior(&data);
     close(post.mean().unwrap(), 5.0, 0.02);
     assert!(post.variance().unwrap() < 1.0);
+    let future_mean = model.posterior_predictive_mean(&data, 4).unwrap();
+    close(future_mean.mean().unwrap(), post.mean().unwrap(), 1e-12);
+    let future_sum = model.posterior_predictive_sum(&data, 4).unwrap();
+    close(
+        future_sum.mean().unwrap(),
+        4.0 * post.mean().unwrap(),
+        1e-12,
+    );
+    let future_observations = model.posterior_predictive_observations(&data, 4).unwrap();
+    close(
+        future_observations.covariance_matrix().get(0, 1),
+        post.variance().unwrap(),
+        1e-12,
+    );
     assert!(model.ln_marginal_likelihood(&data).is_finite());
 
     let combo = Normal::linear_combination_independent(
@@ -159,6 +173,13 @@ fn normal_inverse_gamma_full_conjugate_flow() {
     let pred: StudentT = nig.posterior_predictive(&data);
     close(pred.freedom(), 7.0, 1e-12);
     close(pred.location(), 1.5, 1e-12);
+    close(pred.affine(2.0, -1.0).unwrap().location(), 2.0, 1e-12);
+    let future_mean = nig.posterior_predictive_mean(&data, 4).unwrap();
+    close(future_mean.scale(), 0.5_f64.sqrt(), 1e-12);
+    let future_sum = nig.posterior_predictive_sum(&data, 4).unwrap();
+    close(future_sum.location(), 6.0, 1e-12);
+    let future_observations = nig.posterior_predictive_observations(&data, 4).unwrap();
+    close(future_observations.scale_matrix().get(0, 1), 0.25, 1e-12);
     assert!(post.mean_marginal().scale() < pred.scale());
     assert!(post.variance_marginal().mean().is_some());
     assert!(nig.ln_marginal_likelihood(&data).is_finite());
@@ -172,6 +193,11 @@ fn normal_inverse_gamma_full_conjugate_flow() {
         1e-12,
     );
     assert!(precision_post.mean_conditional(2.0).unwrap().pdf(1.5) > 0.0);
+    close(
+        ng.posterior_predictive_sum(&data, 4).unwrap().location(),
+        6.0,
+        1e-12,
+    );
     close(
         ng.ln_marginal_likelihood(&data),
         nig.ln_marginal_likelihood(&data),
@@ -395,6 +421,34 @@ fn multivariate_normal_closed_form_operations_are_public() {
         mvn.ln_likelihood(&[vec![0.0, 0.0], vec![1.0, 1.0]])
             .is_finite()
     );
+}
+
+#[test]
+fn multivariate_student_t_closed_form_operations_are_public() {
+    let t = MultivariateStudentT::new(
+        5.0,
+        vec![0.0, 0.0],
+        ramanujan::DenseMatrix::from_rows(&[vec![4.0, 2.0], vec![2.0, 9.0]]),
+    )
+    .unwrap();
+
+    let marginal = t.marginal(&[1]).unwrap();
+    close(marginal.location()[0], 0.0, 1e-12);
+    close(marginal.scale_matrix().get(0, 0), 9.0, 1e-12);
+
+    let conditional = t.condition(&[0], &[4.0]).unwrap();
+    close(conditional.freedom(), 6.0, 1e-12);
+    close(conditional.location()[0], 2.0, 1e-10);
+
+    let affine = t
+        .affine_transform(
+            &ramanujan::DenseMatrix::from_rows(&[vec![1.0, 1.0]]),
+            &[0.5],
+        )
+        .unwrap();
+    close(affine.location()[0], 0.5, 1e-12);
+    close(affine.scale_matrix().get(0, 0), 17.0, 1e-12);
+    assert!(affine.ln_pdf(&[0.0]).is_finite());
 }
 
 #[test]

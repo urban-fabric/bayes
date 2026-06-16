@@ -73,7 +73,9 @@ The concrete distributions are grouped by kind:
   potentials, with a small multivariate trait spine.
   MultivariateNormal owns direct Gaussian algebra: coordinate marginals,
   conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
-  and precision fusion. Wishart families own matrix densities, entropy/KL,
+  and precision fusion. MultivariateStudentT owns the matching elliptical
+  algebra that remains closed form: coordinate marginals, affine images, and
+  conditional Student-t laws. Wishart families own matrix densities, entropy/KL,
   expected log-determinants, entry covariances where directly closed form, and
   inverse-family transforms. Dirichlet owns the simplex algebra that stays
   closed under projection: component and subset-sum Beta marginals, category
@@ -102,9 +104,10 @@ The concrete distributions are grouped by kind:
   including Normal-Inverse-Gamma and Normal-Gamma for scalar Gaussian
   mean/variance or mean/precision conjugacy, plus Normal-Inverse-Wishart and
   Normal-Wishart for multivariate Gaussian mean/covariance or mean/precision
-  conjugacy. Gamma-Poisson and Gamma-Exponential expose exposure/right-censoring
-  updates where the sufficient statistic is `(events, exposure)` rather than raw
-  observations.
+  conjugacy. Scalar Gaussian conjugate wrappers also expose finite-batch
+  posterior predictives for future observations, sums, and means. Gamma-Poisson
+  and Gamma-Exponential expose exposure/right-censoring updates where the
+  sufficient statistic is `(events, exposure)` rather than raw observations.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
   only its statistic `T`, prior coordinates `η`, and the map back to a

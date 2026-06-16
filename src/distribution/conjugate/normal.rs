@@ -4,8 +4,12 @@
 
 use std::f64::consts::PI;
 
+use ramanujan::DenseMatrix;
+
 use super::{Conjugate, NigNatural, Pair};
-use crate::distribution::{Gamma, InverseGamma, Normal, StudentT};
+use crate::distribution::{
+    Gamma, InverseGamma, MultivariateNormal, MultivariateStudentT, Normal, StudentT,
+};
 use crate::error::BayesError;
 use crate::function::ln_gamma;
 
@@ -94,6 +98,56 @@ impl NormalKnownVariance {
         let eta_n = eta0 + sum / sigma2;
         let quad = sum_sq / sigma2 + lambda0 * mu0 * mu0 - eta_n * eta_n / lambda_n;
         -0.5 * n * (2.0 * PI * sigma2).ln() + 0.5 * (lambda0.ln() - lambda_n.ln()) - 0.5 * quad
+    }
+
+    /// Closed-form posterior-predictive law of the mean of `future_n` future
+    /// observations.
+    ///
+    /// With posterior mean uncertainty `s_n²` and known observation variance
+    /// `σ²`, the future average has variance `s_n² + σ²/future_n`.
+    pub fn posterior_predictive_mean(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<Normal, BayesError> {
+        let (future_n, mean, posterior_variance, obs_variance) =
+            known_variance_future_parts(self, data, future_n)?;
+        Normal::new(mean, (posterior_variance + obs_variance / future_n).sqrt())
+    }
+
+    /// Closed-form posterior-predictive law of the sum of `future_n` future
+    /// observations.
+    ///
+    /// The shared uncertain mean induces covariance between future observations,
+    /// so the sum variance is `future_n σ² + future_n² s_n²`.
+    pub fn posterior_predictive_sum(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<Normal, BayesError> {
+        let (future_n, mean, posterior_variance, obs_variance) =
+            known_variance_future_parts(self, data, future_n)?;
+        Normal::new(
+            future_n * mean,
+            (future_n * obs_variance + future_n * future_n * posterior_variance).sqrt(),
+        )
+    }
+
+    /// Joint posterior-predictive law of `future_n` future observations.
+    ///
+    /// The covariance is `σ² I + s_n² 11ᵀ`: independent observation noise plus
+    /// the shared posterior uncertainty in the mean.
+    pub fn posterior_predictive_observations(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<MultivariateNormal, BayesError> {
+        let (_, mean, posterior_variance, obs_variance) =
+            known_variance_future_parts(self, data, future_n)?;
+        let covariance = DenseMatrix::from_fn(future_n, future_n, |i, j| {
+            posterior_variance + if i == j { obs_variance } else { 0.0 }
+        });
+        MultivariateNormal::new(vec![mean; future_n], covariance)
     }
 }
 
@@ -231,6 +285,60 @@ impl NormalInverseGamma {
             .unwrap_or_else(|_| unreachable!())
     }
 
+    /// Closed-form predictive law of the mean of `future_n` future observations.
+    pub fn predictive_mean(&self, future_n: usize) -> Result<StudentT, BayesError> {
+        student_t_future_mean(self.mu, self.lambda, self.alpha, self.beta, future_n)
+    }
+
+    /// Closed-form predictive law of the sum of `future_n` future observations.
+    pub fn predictive_sum(&self, future_n: usize) -> Result<StudentT, BayesError> {
+        student_t_future_sum(self.mu, self.lambda, self.alpha, self.beta, future_n)
+    }
+
+    /// Joint closed-form predictive law of `future_n` future observations.
+    ///
+    /// Integrating out the shared unknown variance and mean gives a multivariate
+    /// Student-t with exchangeable scale matrix
+    /// `(β/α)(I + 11ᵀ/λ)`.
+    pub fn predictive_observations(
+        &self,
+        future_n: usize,
+    ) -> Result<MultivariateStudentT, BayesError> {
+        student_t_future_observations(self.mu, self.lambda, self.alpha, self.beta, future_n)
+    }
+
+    /// Closed-form posterior-predictive law of the mean of `future_n` future
+    /// observations.
+    pub fn posterior_predictive_mean(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<StudentT, BayesError> {
+        validate_finite_data(data)?;
+        self.posterior(data).predictive_mean(future_n)
+    }
+
+    /// Closed-form posterior-predictive law of the sum of `future_n` future
+    /// observations.
+    pub fn posterior_predictive_sum(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<StudentT, BayesError> {
+        validate_finite_data(data)?;
+        self.posterior(data).predictive_sum(future_n)
+    }
+
+    /// Joint posterior-predictive law of `future_n` future observations.
+    pub fn posterior_predictive_observations(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<MultivariateStudentT, BayesError> {
+        validate_finite_data(data)?;
+        self.posterior(data).predictive_observations(future_n)
+    }
+
     /// Closed-form log marginal likelihood for Normal observations with both
     /// unknown mean and variance integrated out under the Normal-Inverse-Gamma
     /// prior.
@@ -336,6 +444,59 @@ impl NormalGamma {
             .unwrap_or_else(|_| unreachable!())
     }
 
+    /// Closed-form predictive law of the mean of `future_n` future observations.
+    pub fn predictive_mean(&self, future_n: usize) -> Result<StudentT, BayesError> {
+        student_t_future_mean(self.mu, self.lambda, self.alpha, self.beta, future_n)
+    }
+
+    /// Closed-form predictive law of the sum of `future_n` future observations.
+    pub fn predictive_sum(&self, future_n: usize) -> Result<StudentT, BayesError> {
+        student_t_future_sum(self.mu, self.lambda, self.alpha, self.beta, future_n)
+    }
+
+    /// Joint closed-form predictive law of `future_n` future observations.
+    ///
+    /// The precision-parameter form is algebraically the same finite-batch
+    /// Student-t predictive as [`NormalInverseGamma`].
+    pub fn predictive_observations(
+        &self,
+        future_n: usize,
+    ) -> Result<MultivariateStudentT, BayesError> {
+        student_t_future_observations(self.mu, self.lambda, self.alpha, self.beta, future_n)
+    }
+
+    /// Closed-form posterior-predictive law of the mean of `future_n` future
+    /// observations.
+    pub fn posterior_predictive_mean(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<StudentT, BayesError> {
+        validate_finite_data(data)?;
+        self.posterior(data).predictive_mean(future_n)
+    }
+
+    /// Closed-form posterior-predictive law of the sum of `future_n` future
+    /// observations.
+    pub fn posterior_predictive_sum(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<StudentT, BayesError> {
+        validate_finite_data(data)?;
+        self.posterior(data).predictive_sum(future_n)
+    }
+
+    /// Joint posterior-predictive law of `future_n` future observations.
+    pub fn posterior_predictive_observations(
+        &self,
+        data: &[f64],
+        future_n: usize,
+    ) -> Result<MultivariateStudentT, BayesError> {
+        validate_finite_data(data)?;
+        self.posterior(data).predictive_observations(future_n)
+    }
+
     /// Closed-form log marginal likelihood for Normal observations with both
     /// unknown mean and precision integrated out under the Normal-Gamma prior.
     pub fn ln_marginal_likelihood(&self, data: &[f64]) -> f64 {
@@ -349,6 +510,97 @@ impl NormalGamma {
             + 0.5 * (self.lambda.ln() - post.lambda().ln())
             - 0.5 * n * (2.0 * PI).ln()
     }
+}
+
+fn validate_future_n(future_n: usize) -> Result<f64, BayesError> {
+    if future_n == 0 {
+        return Err(BayesError::Malformed {
+            what: "future_n must be positive",
+        });
+    }
+    Ok(future_n as f64)
+}
+
+fn validate_finite_data(data: &[f64]) -> Result<(), BayesError> {
+    if data.iter().any(|x| !x.is_finite()) {
+        return Err(BayesError::Malformed {
+            what: "normal data must be finite",
+        });
+    }
+    Ok(())
+}
+
+fn validate_obs_std(obs_std: f64) -> Result<(), BayesError> {
+    if !obs_std.is_finite() {
+        return Err(BayesError::NonFinite {
+            name: "obs_std",
+            value: obs_std,
+        });
+    }
+    if obs_std <= 0.0 {
+        return Err(BayesError::NotPositive {
+            name: "obs_std",
+            value: obs_std,
+        });
+    }
+    Ok(())
+}
+
+fn known_variance_future_parts(
+    model: &NormalKnownVariance,
+    data: &[f64],
+    future_n: usize,
+) -> Result<(f64, f64, f64, f64), BayesError> {
+    let future_n = validate_future_n(future_n)?;
+    validate_obs_std(model.obs_std)?;
+    validate_finite_data(data)?;
+    let (mean, std_dev) = model.posterior(data).params();
+    Ok((
+        future_n,
+        mean,
+        std_dev * std_dev,
+        model.obs_std * model.obs_std,
+    ))
+}
+
+fn student_t_future_mean(
+    mu: f64,
+    lambda: f64,
+    alpha: f64,
+    beta: f64,
+    future_n: usize,
+) -> Result<StudentT, BayesError> {
+    let future_n = validate_future_n(future_n)?;
+    let scale = (beta / alpha * (lambda.recip() + future_n.recip())).sqrt();
+    StudentT::new_location_scale(2.0 * alpha, mu, scale)
+}
+
+fn student_t_future_sum(
+    mu: f64,
+    lambda: f64,
+    alpha: f64,
+    beta: f64,
+    future_n: usize,
+) -> Result<StudentT, BayesError> {
+    let future_n = validate_future_n(future_n)?;
+    let scale = (beta / alpha * (future_n * future_n / lambda + future_n)).sqrt();
+    StudentT::new_location_scale(2.0 * alpha, future_n * mu, scale)
+}
+
+fn student_t_future_observations(
+    mu: f64,
+    lambda: f64,
+    alpha: f64,
+    beta: f64,
+    future_n: usize,
+) -> Result<MultivariateStudentT, BayesError> {
+    validate_future_n(future_n)?;
+    let scale_factor = beta / alpha;
+    let inv_lambda = lambda.recip();
+    let scale = DenseMatrix::from_fn(future_n, future_n, |i, j| {
+        scale_factor * (if i == j { 1.0 } else { 0.0 } + inv_lambda)
+    });
+    MultivariateStudentT::new(2.0 * alpha, vec![mu; future_n], scale)
 }
 
 impl Conjugate for NormalInverseGamma {
@@ -456,6 +708,38 @@ mod tests {
         assert!(post.variance().unwrap() < 1.0);
         let pred = model.posterior_predictive(&data);
         assert!(pred.variance().unwrap() > post.variance().unwrap());
+        let future_mean = model.posterior_predictive_mean(&data, 4).unwrap();
+        close(future_mean.mean().unwrap(), post.mean().unwrap(), 1e-12);
+        close(
+            future_mean.variance().unwrap(),
+            post.variance().unwrap() + 0.25,
+            1e-12,
+        );
+        let future_sum = model.posterior_predictive_sum(&data, 4).unwrap();
+        close(
+            future_sum.mean().unwrap(),
+            4.0 * post.mean().unwrap(),
+            1e-12,
+        );
+        close(
+            future_sum.variance().unwrap(),
+            4.0 + 16.0 * post.variance().unwrap(),
+            1e-12,
+        );
+        let future = model.posterior_predictive_observations(&data, 4).unwrap();
+        close(future.mean()[0], post.mean().unwrap(), 1e-12);
+        close(
+            future.covariance_matrix().get(0, 0),
+            1.0 + post.variance().unwrap(),
+            1e-12,
+        );
+        close(
+            future.covariance_matrix().get(0, 1),
+            post.variance().unwrap(),
+            1e-12,
+        );
+        assert!(model.posterior_predictive_mean(&data, 0).is_err());
+        assert!(model.posterior_predictive_sum(&[f64::NAN], 1).is_err());
         assert!(model.ln_marginal_likelihood(&data).is_finite());
         close(model.ln_marginal_likelihood(&[]), 0.0, 1e-12);
         assert!(model.ln_marginal_likelihood(&[f64::NAN]).is_nan());
@@ -536,6 +820,19 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.freedom(), 7.0, 1e-12);
         close(pred.scale(), 1.25_f64.sqrt(), 1e-12);
+        let future_mean = model.posterior_predictive_mean(&data, 4).unwrap();
+        close(future_mean.freedom(), 7.0, 1e-12);
+        close(future_mean.location(), 1.5, 1e-12);
+        close(future_mean.scale(), 0.5_f64.sqrt(), 1e-12);
+        let future_sum = model.posterior_predictive_sum(&data, 4).unwrap();
+        close(future_sum.location(), 6.0, 1e-12);
+        close(future_sum.scale(), 8.0_f64.sqrt(), 1e-12);
+        let future = model.posterior_predictive_observations(&data, 4).unwrap();
+        close(future.freedom(), 7.0, 1e-12);
+        close(future.location()[0], 1.5, 1e-12);
+        close(future.scale_matrix().get(0, 0), 1.25, 1e-12);
+        close(future.scale_matrix().get(0, 1), 0.25, 1e-12);
+        assert!(model.posterior_predictive_observations(&data, 0).is_err());
         let ig = post.variance_marginal();
         close(ig.shape(), 3.5, 1e-12);
         close(ig.scale(), 3.5, 1e-12);
@@ -571,6 +868,14 @@ mod tests {
         close(pred.freedom(), 7.0, 1e-12);
         close(pred.location(), 1.5, 1e-12);
         close(pred.scale(), 1.25_f64.sqrt(), 1e-12);
+        let future_mean = model.posterior_predictive_mean(&data, 4).unwrap();
+        close(future_mean.scale(), 0.5_f64.sqrt(), 1e-12);
+        let future_sum = model.posterior_predictive_sum(&data, 4).unwrap();
+        close(future_sum.location(), 6.0, 1e-12);
+        close(future_sum.scale(), 8.0_f64.sqrt(), 1e-12);
+        let future = model.posterior_predictive_observations(&data, 4).unwrap();
+        close(future.scale_matrix().get(0, 0), 1.25, 1e-12);
+        close(future.scale_matrix().get(0, 1), 0.25, 1e-12);
 
         let mut natural = model.posterior_natural(&[1.0, 2.0]);
         natural = natural.combine(&model.statistic(&3.0));

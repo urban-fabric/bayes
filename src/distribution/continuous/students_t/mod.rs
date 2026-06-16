@@ -78,6 +78,35 @@ impl StudentT {
     pub fn scale(&self) -> f64 {
         self.scale
     }
+
+    /// Affine image `aX + b`.
+    ///
+    /// A zero scale coefficient would collapse the law to a point mass, which is
+    /// outside this non-degenerate Student-t type.
+    pub fn affine(self, scale: f64, shift: f64) -> Result<Self, BayesError> {
+        if !scale.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "scale",
+                value: scale,
+            });
+        }
+        if !shift.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "shift",
+                value: shift,
+            });
+        }
+        if scale == 0.0 {
+            return Err(BayesError::Malformed {
+                what: "student-t affine scale must be non-zero",
+            });
+        }
+        Self::new_location_scale(
+            self.freedom,
+            scale * self.location + shift,
+            scale.abs() * self.scale,
+        )
+    }
 }
 
 impl Distribution<f64> for StudentT {
@@ -193,5 +222,11 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(ls.cdf(ls.inverse_cdf(p)), p, 1e-6);
         }
+
+        let affine = ls.affine(-1.5, 4.0).unwrap();
+        close(affine.freedom(), 8.0, 1e-12);
+        close(affine.location(), -0.5, 1e-12);
+        close(affine.scale(), 3.0, 1e-12);
+        assert!(ls.affine(0.0, 1.0).is_err());
     }
 }
