@@ -25,7 +25,7 @@ pub use distribution::{
     Geometric, Gumbel, HalfNormal, HellingerDistance, Hypergeometric, InverseGamma, InverseWishart,
     Jeffreys, JensenShannon, KentPotential, Kl, KlDivergence, Laplace, LogNormal, Logistic, Lomax,
     MeanVar, Mixture, Moments, Multinomial, MultivariateContinuous, MultivariateMoments,
-    MultivariateNormal, MultivariateStudentT, NaturalParams, NegativeBinomial, Normal,
+    MultivariateNormal, MultivariateStudentT, NaturalParams, NegativeBinomial, Normal, NormalGamma,
     NormalInverseGamma, NormalInverseWishart, NormalKnownVariance, NormalWishart, OrderStatistic,
     PROBABILITY_TOLERANCE, Pareto, Poisson, Rayleigh, RenyiDivergence, ReverseKl, Sigmoid,
     SquaredHellinger, StudentT, SufficientStatistic, Support, TotalVariation, TotalVariationGen,

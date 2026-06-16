@@ -25,8 +25,8 @@ pub mod transformed;
 pub use combinator::{Mixture, OrderStatistic, Truncated};
 pub use conjugate::{
     BetaBernoulli, BetaBinomialModel, Conjugate, DirichletCategorical, DirichletMultinomial,
-    GammaExponential, GammaPoisson, NaturalParams, NormalInverseGamma, NormalInverseWishart,
-    NormalKnownVariance, NormalWishart, precision_weighted_mean,
+    GammaExponential, GammaPoisson, NaturalParams, NormalGamma, NormalInverseGamma,
+    NormalInverseWishart, NormalKnownVariance, NormalWishart, precision_weighted_mean,
 };
 pub use constraint::{Constrained, Constraint};
 pub use continuous::{

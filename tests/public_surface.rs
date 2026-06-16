@@ -8,10 +8,10 @@ use bayes::{
     ContinuousFn, Dirichlet, DirichletCategorical, Discrete, DiscreteDistributionExt, DiscreteFn,
     Ecdf, Exponential, ExponentialFamily, Gamma, GammaPoisson, InverseWishart, KentPotential,
     KlDivergence, MarkovChain, MeanVar, Mixture, Moments, MultivariateContinuous,
-    MultivariateMoments, MultivariateNormal, MultivariateStudentT, Normal, NormalInverseGamma,
-    NormalInverseWishart, NormalKnownVariance, NormalWishart, OrderStatistic, Poisson, StudentT,
-    SufficientStatistic, Uniform, Wishart, histogram, is_correlation_matrix_admissible,
-    is_covariance_matrix_admissible,
+    MultivariateMoments, MultivariateNormal, MultivariateStudentT, Normal, NormalGamma,
+    NormalInverseGamma, NormalInverseWishart, NormalKnownVariance, NormalWishart, OrderStatistic,
+    Poisson, StudentT, SufficientStatistic, Uniform, Wishart, histogram,
+    is_correlation_matrix_admissible, is_covariance_matrix_admissible,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -136,6 +136,21 @@ fn normal_inverse_gamma_full_conjugate_flow() {
     assert!(post.mean_marginal().scale() < pred.scale());
     assert!(post.variance_marginal().mean().is_some());
     assert!(nig.ln_marginal_likelihood(&data).is_finite());
+
+    let ng = NormalGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
+    let precision_post = ng.posterior(&data);
+    close(precision_post.mu(), post.mu(), 1e-12);
+    close(
+        precision_post.precision_marginal().mean().unwrap(),
+        1.0,
+        1e-12,
+    );
+    assert!(precision_post.mean_conditional(2.0).unwrap().pdf(1.5) > 0.0);
+    close(
+        ng.ln_marginal_likelihood(&data),
+        nig.ln_marginal_likelihood(&data),
+        1e-12,
+    );
 }
 
 #[test]
@@ -155,6 +170,17 @@ fn dirichlet_categorical_conjugate_flow() {
             .ln_marginal_likelihood(&[0u64, 0, 1, 2, 0])
             .is_finite()
     );
+
+    let simplex = Dirichlet::new(vec![2.0, 3.0, 5.0, 7.0]).unwrap();
+    let component = simplex.component_marginal(2).unwrap();
+    close(component.alpha(), 5.0, 1e-12);
+    close(component.beta(), 12.0, 1e-12);
+    let selected_sum = simplex.sum_marginal(&[0, 2]).unwrap();
+    close(selected_sum.alpha(), 7.0, 1e-12);
+    let lumped = simplex.lump(&[vec![0, 2], vec![1], vec![3]]).unwrap();
+    assert_eq!(lumped.alpha(), &[7.0, 3.0, 7.0]);
+    let conditional = simplex.conditional_on_subset(&[3, 1, 0]).unwrap();
+    assert_eq!(conditional.alpha(), &[7.0, 3.0, 2.0]);
 }
 
 #[test]

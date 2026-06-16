@@ -74,9 +74,12 @@ The concrete distributions are grouped by kind:
   conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
   and precision fusion. Wishart families own matrix densities, entropy/KL,
   expected log-determinants, entry covariances where directly closed form, and
-  inverse-family transforms. Kent/Bingham remain potential/ratio APIs because
-  their generic normalizers require special-function machinery outside the
-  current closed-form surface.
+  inverse-family transforms. Dirichlet owns the simplex algebra that stays
+  closed under projection: component and subset-sum Beta marginals, category
+  lumping into a smaller Dirichlet, conditional sub-simplex laws, and
+  Dirichlet-multinomial predictive moments. Kent/Bingham remain potential/ratio
+  APIs because their generic normalizers require special-function machinery
+  outside the current closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
   Constraint transforms expose both forward and inverse log-Jacobian corrections,
   using stable log-domain sigmoid identities in the logistic tails so downstream
@@ -95,8 +98,10 @@ The concrete distributions are grouped by kind:
   order statistics, truncation, and bijective composition.
 - `exponential_family/`: mergeable sufficient statistics and closed-form fits.
 - `conjugate/`: closed-form conjugate prior/posterior updates and predictives,
-  including Normal-Inverse-Wishart and Normal-Wishart for multivariate Gaussian
-  mean/covariance or mean/precision conjugacy.
+  including Normal-Inverse-Gamma and Normal-Gamma for scalar Gaussian
+  mean/variance or mean/precision conjugacy, plus Normal-Inverse-Wishart and
+  Normal-Wishart for multivariate Gaussian mean/covariance or mean/precision
+  conjugacy.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
   only its statistic `T`, prior coordinates `η`, and the map back to a

@@ -39,7 +39,7 @@ pub use dirichlet::{DirichletCategorical, DirichletMultinomial};
 pub use gamma::{GammaExponential, GammaPoisson};
 pub use multivariate_normal::{NormalInverseWishart, NormalWishart};
 pub use natural::{Counts, NaturalParams, NigNatural, Pair};
-pub use normal::{NormalInverseGamma, NormalKnownVariance, precision_weighted_mean};
+pub use normal::{NormalGamma, NormalInverseGamma, NormalKnownVariance, precision_weighted_mean};
 
 /// A conjugate prior/likelihood pair whose posterior is computable in closed
 /// form by the **one** algebraic move every conjugate family shares: add the

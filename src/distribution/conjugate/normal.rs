@@ -1,10 +1,11 @@
-//! Normal-prior conjugate models: **Normal–Normal** (known variance) and
-//! **Normal–Inverse-Gamma** (unknown mean and variance).
+//! Normal-prior conjugate models: **Normal–Normal** (known variance),
+//! **Normal–Inverse-Gamma** (unknown mean and variance), and
+//! **Normal-Gamma** (unknown mean and precision).
 
 use std::f64::consts::PI;
 
 use super::{Conjugate, NigNatural, Pair};
-use crate::distribution::{InverseGamma, Normal, StudentT};
+use crate::distribution::{Gamma, InverseGamma, Normal, StudentT};
 use crate::error::BayesError;
 use crate::function::ln_gamma;
 
@@ -246,6 +247,110 @@ impl NormalInverseGamma {
     }
 }
 
+/// **Normal-Gamma.** The conjugate prior for a Normal with unknown mean and
+/// precision: `μ | τ ~ Normal(μ₀, 1/(λτ))` and `τ ~ Gamma(α, β)`, where `β` is
+/// the Gamma rate. This is the precision-parameter twin of
+/// [`NormalInverseGamma`].
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NormalGamma {
+    mu: f64,
+    lambda: f64,
+    alpha: f64,
+    beta: f64,
+}
+
+impl NormalGamma {
+    /// `mu` prior mean; `lambda` the prior pseudo-count on the mean; `alpha`/`beta`
+    /// the Gamma shape/rate on the precision (`lambda, alpha, beta > 0`).
+    pub fn new(mu: f64, lambda: f64, alpha: f64, beta: f64) -> Result<Self, BayesError> {
+        for (name, v) in [("lambda", lambda), ("alpha", alpha), ("beta", beta)] {
+            if !v.is_finite() {
+                return Err(BayesError::NonFinite { name, value: v });
+            }
+            if v <= 0.0 {
+                return Err(BayesError::NotPositive { name, value: v });
+            }
+        }
+        if !mu.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "mu",
+                value: mu,
+            });
+        }
+        Ok(Self {
+            mu,
+            lambda,
+            alpha,
+            beta,
+        })
+    }
+
+    pub fn mu(&self) -> f64 {
+        self.mu
+    }
+    pub fn lambda(&self) -> f64 {
+        self.lambda
+    }
+    pub fn alpha(&self) -> f64 {
+        self.alpha
+    }
+    pub fn beta(&self) -> f64 {
+        self.beta
+    }
+
+    /// The marginal distribution of the precision `τ`: `Gamma(α, β)`.
+    pub fn precision_marginal(&self) -> Gamma {
+        Gamma::new(self.alpha, self.beta).unwrap_or_else(|_| unreachable!())
+    }
+
+    /// Conditional distribution of the mean `μ | τ`.
+    pub fn mean_conditional(&self, precision: f64) -> Result<Normal, BayesError> {
+        if !precision.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "precision",
+                value: precision,
+            });
+        }
+        if precision <= 0.0 {
+            return Err(BayesError::NotPositive {
+                name: "precision",
+                value: precision,
+            });
+        }
+        Normal::new(self.mu, (self.lambda * precision).recip().sqrt())
+    }
+
+    /// The marginal distribution of the mean `μ`: Student-t with `ν = 2α`, location
+    /// `μ`, scale `√(β/(αλ))`.
+    pub fn mean_marginal(&self) -> StudentT {
+        let scale = (self.beta / (self.alpha * self.lambda)).sqrt();
+        StudentT::new_location_scale(2.0 * self.alpha, self.mu, scale)
+            .unwrap_or_else(|_| unreachable!())
+    }
+
+    /// The (prior-)predictive of a future observation: Student-t with `ν = 2α`,
+    /// location `μ`, scale `√(β(λ+1)/(αλ))`.
+    pub fn predictive(&self) -> StudentT {
+        let scale = (self.beta * (self.lambda + 1.0) / (self.alpha * self.lambda)).sqrt();
+        StudentT::new_location_scale(2.0 * self.alpha, self.mu, scale)
+            .unwrap_or_else(|_| unreachable!())
+    }
+
+    /// Closed-form log marginal likelihood for Normal observations with both
+    /// unknown mean and precision integrated out under the Normal-Gamma prior.
+    pub fn ln_marginal_likelihood(&self, data: &[f64]) -> f64 {
+        if data.iter().any(|x| !x.is_finite()) {
+            return f64::NAN;
+        }
+        let post = self.posterior(data);
+        let n = data.len() as f64;
+        ln_gamma(post.alpha()) - ln_gamma(self.alpha) + self.alpha * self.beta.ln()
+            - post.alpha() * post.beta().ln()
+            + 0.5 * (self.lambda.ln() - post.lambda().ln())
+            - 0.5 * n * (2.0 * PI).ln()
+    }
+}
+
 impl Conjugate for NormalInverseGamma {
     type Datum = f64;
     type Posterior = NormalInverseGamma;
@@ -289,11 +394,54 @@ impl Conjugate for NormalInverseGamma {
     }
 }
 
+impl Conjugate for NormalGamma {
+    type Datum = f64;
+    type Posterior = NormalGamma;
+    type Predictive = StudentT;
+    /// Natural coordinates `(λ, λμ, 2α, 2β + λμ²)`, shared with
+    /// [`NormalInverseGamma`]. The difference is interpretive: `β` is a Gamma
+    /// rate for precision instead of an Inverse-Gamma scale for variance.
+    type Natural = NigNatural;
+
+    fn statistic(&self, &x: &f64) -> NigNatural {
+        NigNatural {
+            lambda: 1.0,
+            lambda_mu: x,
+            two_alpha: 1.0,
+            sum_sq: x * x,
+        }
+    }
+
+    fn prior_natural(&self) -> NigNatural {
+        NigNatural {
+            lambda: self.lambda,
+            lambda_mu: self.lambda * self.mu,
+            two_alpha: 2.0 * self.alpha,
+            sum_sq: 2.0 * self.beta + self.lambda * self.mu * self.mu,
+        }
+    }
+
+    fn posterior_from_natural(&self, n: NigNatural) -> NormalGamma {
+        if n.lambda <= 0.0 {
+            return *self;
+        }
+        let mu_n = n.lambda_mu / n.lambda;
+        let alpha_n = n.two_alpha / 2.0;
+        let beta_n = (n.sum_sq - n.lambda_mu * n.lambda_mu / n.lambda) / 2.0;
+        NormalGamma::new(mu_n, n.lambda, alpha_n, beta_n).unwrap_or(*self)
+    }
+
+    fn posterior_predictive(&self, data: &[f64]) -> StudentT {
+        self.posterior(data).predictive()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
     use crate::distribution::Moments;
+    use crate::distribution::conjugate::NaturalParams;
 
     fn close(a: f64, b: f64, tol: f64) {
         assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
@@ -397,5 +545,48 @@ mod tests {
         close(model.ln_marginal_likelihood(&data), evidence, 1e-12);
         close(model.ln_marginal_likelihood(&[]), 0.0, 1e-12);
         assert!(model.ln_marginal_likelihood(&[f64::NAN]).is_nan());
+    }
+
+    #[test]
+    fn normal_gamma_matches_precision_parameter_closed_form() {
+        let model = NormalGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
+        let data = [1.0, 2.0, 3.0];
+        let post = model.posterior(&data);
+        close(post.mu(), 1.5, 1e-12);
+        close(post.lambda(), 4.0, 1e-12);
+        close(post.alpha(), 3.5, 1e-12);
+        close(post.beta(), 3.5, 1e-12);
+
+        let precision = post.precision_marginal();
+        close(precision.shape(), 3.5, 1e-12);
+        close(precision.rate(), 3.5, 1e-12);
+        close(post.mean_marginal().scale(), 0.5, 1e-12);
+        close(
+            post.mean_conditional(2.0).unwrap().variance().unwrap(),
+            0.125,
+            1e-12,
+        );
+
+        let pred = model.posterior_predictive(&data);
+        close(pred.freedom(), 7.0, 1e-12);
+        close(pred.location(), 1.5, 1e-12);
+        close(pred.scale(), 1.25_f64.sqrt(), 1e-12);
+
+        let mut natural = model.posterior_natural(&[1.0, 2.0]);
+        natural = natural.combine(&model.statistic(&3.0));
+        let online = model.posterior_from_natural(natural);
+        close(online.mu(), post.mu(), 1e-12);
+        close(online.beta(), post.beta(), 1e-12);
+
+        let nig = NormalInverseGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
+        close(
+            model.ln_marginal_likelihood(&data),
+            nig.ln_marginal_likelihood(&data),
+            1e-12,
+        );
+        close(model.ln_marginal_likelihood(&[]), 0.0, 1e-12);
+        assert!(model.ln_marginal_likelihood(&[f64::NAN]).is_nan());
+        assert!(NormalGamma::new(0.0, 0.0, 2.0, 1.0).is_err());
+        assert!(model.mean_conditional(0.0).is_err());
     }
 }

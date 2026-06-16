@@ -4,6 +4,7 @@ use rand::distr::Distribution;
 use ramanujan::DenseMatrix;
 
 use super::{MultivariateContinuous, MultivariateMoments};
+use crate::distribution::continuous::Beta;
 use crate::distribution::continuous::gamma::sample_standard_gamma;
 use crate::error::BayesError;
 use crate::function::gamma::{digamma, ln_gamma};
@@ -45,6 +46,96 @@ impl Dirichlet {
     /// Alias for [`concentration`](Self::concentration).
     pub fn alpha_sum(&self) -> f64 {
         self.concentration()
+    }
+
+    /// Marginal distribution of component `P_i`.
+    ///
+    /// If `P ~ Dirichlet(α)`, then `P_i ~ Beta(α_i, α₀ - α_i)`.
+    pub fn component_marginal(&self, index: usize) -> Result<Beta, BayesError> {
+        let Some(&alpha_i) = self.alpha.get(index) else {
+            return Err(BayesError::Malformed {
+                what: "Dirichlet component index out of range",
+            });
+        };
+        Beta::new(alpha_i, self.concentration() - alpha_i)
+    }
+
+    /// Marginal Beta distributions of all components.
+    pub fn component_marginals(&self) -> Vec<Beta> {
+        let a0 = self.concentration();
+        self.alpha
+            .iter()
+            .map(|&a| Beta::new(a, a0 - a).unwrap_or_else(|_| unreachable!()))
+            .collect()
+    }
+
+    /// Marginal distribution of the sum of a proper non-empty subset:
+    /// `Σ_{i∈S} P_i ~ Beta(Σ_{i∈S} α_i, α₀ - Σ_{i∈S} α_i)`.
+    pub fn sum_marginal(&self, indices: &[usize]) -> Result<Beta, BayesError> {
+        let selected = self.subset_alpha_sum(indices)?;
+        Beta::new(selected, self.concentration() - selected)
+    }
+
+    /// Lump categories by a partition of the original coordinates.
+    ///
+    /// If `P ~ Dirichlet(α)`, then grouped sums over a disjoint exhaustive
+    /// partition are again Dirichlet with concentrations equal to group sums.
+    pub fn lump(&self, groups: &[Vec<usize>]) -> Result<Self, BayesError> {
+        if groups.len() < 2 {
+            return Err(BayesError::Malformed {
+                what: "Dirichlet lumping needs at least two groups",
+            });
+        }
+        let mut seen = vec![false; self.alpha.len()];
+        let mut alpha = Vec::with_capacity(groups.len());
+        for group in groups {
+            if group.is_empty() {
+                return Err(BayesError::Malformed {
+                    what: "Dirichlet lumping groups must be non-empty",
+                });
+            }
+            let mut sum = 0.0;
+            for &idx in group {
+                if idx >= self.alpha.len() || seen[idx] {
+                    return Err(BayesError::Malformed {
+                        what: "Dirichlet lumping groups must form a disjoint partition",
+                    });
+                }
+                seen[idx] = true;
+                sum += self.alpha[idx];
+            }
+            alpha.push(sum);
+        }
+        if seen.iter().any(|&hit| !hit) {
+            return Err(BayesError::Malformed {
+                what: "Dirichlet lumping groups must cover every component",
+            });
+        }
+        Self::new(alpha)
+    }
+
+    /// Conditional law of the normalized selected coordinates given their sum.
+    ///
+    /// For `|S| >= 2`, `(P_i / Σ_{j∈S} P_j)_{i∈S} ~ Dirichlet((α_i)_{i∈S})`
+    /// and is independent of the subset sum.
+    pub fn conditional_on_subset(&self, indices: &[usize]) -> Result<Self, BayesError> {
+        if indices.len() < 2 {
+            return Err(BayesError::Malformed {
+                what: "Dirichlet conditional subset needs at least two components",
+            });
+        }
+        let mut seen = vec![false; self.alpha.len()];
+        let mut alpha = Vec::with_capacity(indices.len());
+        for &idx in indices {
+            if idx >= self.alpha.len() || seen[idx] {
+                return Err(BayesError::Malformed {
+                    what: "Dirichlet subset indices must be distinct and in range",
+                });
+            }
+            seen[idx] = true;
+            alpha.push(self.alpha[idx]);
+        }
+        Self::new(alpha)
     }
 
     /// Component variances of a Dirichlet random probability vector.
@@ -93,6 +184,31 @@ impl Dirichlet {
                 -n * p[i] * p[j] * inflation
             }
         })
+    }
+
+    fn subset_alpha_sum(&self, indices: &[usize]) -> Result<f64, BayesError> {
+        if indices.is_empty() {
+            return Err(BayesError::Malformed {
+                what: "Dirichlet subset must be non-empty",
+            });
+        }
+        let mut seen = vec![false; self.alpha.len()];
+        let mut sum = 0.0;
+        for &idx in indices {
+            if idx >= self.alpha.len() || seen[idx] {
+                return Err(BayesError::Malformed {
+                    what: "Dirichlet subset indices must be distinct and in range",
+                });
+            }
+            seen[idx] = true;
+            sum += self.alpha[idx];
+        }
+        if seen.iter().all(|&hit| hit) {
+            return Err(BayesError::Malformed {
+                what: "Dirichlet subset must be a proper subset",
+            });
+        }
+        Ok(sum)
     }
 }
 
@@ -222,5 +338,35 @@ mod tests {
         let inflation = 14.0 / 11.0;
         close(cov.get(0, 0), 4.0 * 0.2 * 0.8 * inflation, 1e-12);
         close(cov.get(0, 2), -4.0 * 0.2 * 0.5 * inflation, 1e-12);
+    }
+
+    #[test]
+    fn simplex_marginals_lumping_and_conditioning_follow_dirichlet_algebra() {
+        let d = Dirichlet::new(vec![2.0, 3.0, 5.0, 7.0]).unwrap();
+
+        let component = d.component_marginal(2).unwrap();
+        close(component.alpha(), 5.0, 1e-12);
+        close(component.beta(), 12.0, 1e-12);
+        close(d.component_marginals()[0].beta(), 15.0, 1e-12);
+
+        let selected_sum = d.sum_marginal(&[0, 2]).unwrap();
+        close(selected_sum.alpha(), 7.0, 1e-12);
+        close(selected_sum.beta(), 10.0, 1e-12);
+
+        let lumped = d.lump(&[vec![0, 2], vec![1], vec![3]]).unwrap();
+        assert_eq!(lumped.alpha(), &[7.0, 3.0, 7.0]);
+        close(lumped.mean_vector()[0], 7.0 / 17.0, 1e-12);
+
+        let conditional = d.conditional_on_subset(&[3, 1, 0]).unwrap();
+        assert_eq!(conditional.alpha(), &[7.0, 3.0, 2.0]);
+        close(conditional.mean_vector()[0], 7.0 / 12.0, 1e-12);
+
+        assert!(d.component_marginal(4).is_err());
+        assert!(d.sum_marginal(&[]).is_err());
+        assert!(d.sum_marginal(&[0, 0]).is_err());
+        assert!(d.sum_marginal(&[0, 1, 2, 3]).is_err());
+        assert!(d.lump(&[vec![0, 1], vec![1, 2], vec![3]]).is_err());
+        assert!(d.lump(&[vec![0, 1], vec![2]]).is_err());
+        assert!(d.conditional_on_subset(&[1]).is_err());
     }
 }

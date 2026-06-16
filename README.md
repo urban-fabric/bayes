@@ -18,7 +18,9 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   conditional, affine-transform, batch-likelihood, and Gaussian-product /
   precision-fusion operations. Wishart families include matrix densities,
   entropy/KL, expected log-determinants, entry covariances, and inverse-family
-  transforms. Directional models include normalized von Mises/von Mises-Fisher
+  transforms. Dirichlet distributions include component/sum Beta marginals,
+  category lumping, conditional sub-simplex laws, and Dirichlet-multinomial
+  predictive moments. Directional models include normalized von Mises/von Mises-Fisher
   distributions and unnormalized Kent/Bingham potentials for closed-form energy
   ratios where the generic normalizer is not closed form.
   Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
@@ -57,8 +59,9 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   walks.
 - **Closed-form Bayesian layer** — exponential-family fitting via mergeable
   sufficient statistics, plus conjugate posteriors, predictives, and exact log
-  marginal likelihoods, including Normal-Inverse-Wishart and Normal-Wishart
-  multivariate Gaussian conjugacy.
+  marginal likelihoods, including Normal-Inverse-Gamma / Normal-Gamma scalar
+  Gaussian conjugacy and Normal-Inverse-Wishart / Normal-Wishart multivariate
+  Gaussian conjugacy.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};
