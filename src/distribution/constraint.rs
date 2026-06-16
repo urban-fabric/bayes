@@ -12,6 +12,8 @@
 //! but the smooth unconstraining map uses the positive interior and reaches the
 //! boundary only at an infinite unconstrained coordinate.
 
+use crate::function::stable::ln_1p_exp;
+
 /// The domain of a scalar random variable.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Constraint {
@@ -30,7 +32,20 @@ pub enum Constraint {
 }
 
 fn sigmoid(y: f64) -> f64 {
-    1.0 / (1.0 + (-y).exp())
+    if y >= 0.0 {
+        1.0 / (1.0 + (-y).exp())
+    } else {
+        let ey = y.exp();
+        ey / (1.0 + ey)
+    }
+}
+
+fn log_sigmoid(y: f64) -> f64 {
+    -ln_1p_exp(-y)
+}
+
+fn log1m_sigmoid(y: f64) -> f64 {
+    -ln_1p_exp(y)
 }
 
 impl Constraint {
@@ -72,10 +87,10 @@ impl Constraint {
         match *self {
             Constraint::Real => x,
             Constraint::Positive | Constraint::NonNegative => x.ln(),
-            Constraint::UnitInterval => (x / (1.0 - x)).ln(),
+            Constraint::UnitInterval => x.ln() - (-x).ln_1p(),
             Constraint::Interval { lo, hi } => {
                 let u = (x - lo) / (hi - lo);
-                (u / (1.0 - u)).ln()
+                u.ln() - (-u).ln_1p()
             }
             Constraint::Integer => f64::NAN,
         }
@@ -100,13 +115,61 @@ impl Constraint {
         match *self {
             Constraint::Real => 0.0,
             Constraint::Positive | Constraint::NonNegative => y,
+            Constraint::UnitInterval => log_sigmoid(y) + log1m_sigmoid(y),
+            Constraint::Interval { lo, hi } => (hi - lo).ln() + log_sigmoid(y) + log1m_sigmoid(y),
+            Constraint::Integer => f64::NAN,
+        }
+    }
+
+    /// `ln |d to_unconstrained(x) / dx|`, evaluated in constrained coordinates.
+    ///
+    /// This is the inverse change-of-variables correction for the smooth
+    /// unconstraining map. It is the negative of
+    /// [`log_abs_det_jacobian`](Self::log_abs_det_jacobian) at
+    /// `to_unconstrained(x)` for interior support points. Boundary points on
+    /// closed supports return `+∞`; points outside the support return `NaN`.
+    pub fn log_abs_det_inverse_jacobian(&self, x: f64) -> f64 {
+        match *self {
+            Constraint::Real => {
+                if x.is_finite() {
+                    0.0
+                } else {
+                    f64::NAN
+                }
+            }
+            Constraint::Positive => {
+                if x > 0.0 {
+                    -x.ln()
+                } else {
+                    f64::NAN
+                }
+            }
+            Constraint::NonNegative => {
+                if x > 0.0 {
+                    -x.ln()
+                } else if x == 0.0 {
+                    f64::INFINITY
+                } else {
+                    f64::NAN
+                }
+            }
             Constraint::UnitInterval => {
-                let s = sigmoid(y);
-                (s * (1.0 - s)).ln()
+                if x > 0.0 && x < 1.0 {
+                    -x.ln() - (-x).ln_1p()
+                } else if x == 0.0 || x == 1.0 {
+                    f64::INFINITY
+                } else {
+                    f64::NAN
+                }
             }
             Constraint::Interval { lo, hi } => {
-                let s = sigmoid(y);
-                (hi - lo).ln() + (s * (1.0 - s)).ln()
+                if x > lo && x < hi {
+                    (hi - lo).ln() - (x - lo).ln() - (hi - x).ln()
+                } else if x == lo || x == hi {
+                    f64::INFINITY
+                } else {
+                    f64::NAN
+                }
             }
             Constraint::Integer => f64::NAN,
         }
@@ -184,6 +247,11 @@ mod tests {
         assert!(Constraint::Integer.to_unconstrained(3.0).is_nan());
         assert!(Constraint::Integer.to_constrained(3.0).is_nan());
         assert!(Constraint::Integer.log_abs_det_jacobian(3.0).is_nan());
+        assert!(
+            Constraint::Integer
+                .log_abs_det_inverse_jacobian(3.0)
+                .is_nan()
+        );
     }
 
     #[test]
@@ -193,5 +261,49 @@ mod tests {
         let h = 1e-6;
         let numeric = ((c.to_constrained(y + h) - c.to_constrained(y - h)) / (2.0 * h)).ln();
         close(c.log_abs_det_jacobian(y), numeric, 1e-5);
+    }
+
+    #[test]
+    fn logistic_jacobian_is_stable_in_the_tails() {
+        let unit = Constraint::UnitInterval;
+        close(unit.log_abs_det_jacobian(1000.0), -1000.0, 1e-12);
+        close(unit.log_abs_det_jacobian(-1000.0), -1000.0, 1e-12);
+
+        let interval = Constraint::Interval { lo: -2.0, hi: 3.0 };
+        close(
+            interval.log_abs_det_jacobian(1000.0),
+            5.0_f64.ln() - 1000.0,
+            1e-12,
+        );
+    }
+
+    #[test]
+    fn inverse_jacobian_cancels_forward_jacobian() {
+        let cases = [
+            Constraint::Real,
+            Constraint::Positive,
+            Constraint::NonNegative,
+            Constraint::UnitInterval,
+            Constraint::Interval { lo: -2.0, hi: 5.0 },
+        ];
+        for c in cases {
+            for &y in &[-3.0, -0.5, 0.0, 1.2, 4.0] {
+                let x = c.to_constrained(y);
+                close(
+                    c.log_abs_det_jacobian(y) + c.log_abs_det_inverse_jacobian(x),
+                    0.0,
+                    1e-9,
+                );
+            }
+        }
+        assert_eq!(
+            Constraint::NonNegative.log_abs_det_inverse_jacobian(0.0),
+            f64::INFINITY
+        );
+        assert!(
+            Constraint::UnitInterval
+                .log_abs_det_inverse_jacobian(2.0)
+                .is_nan()
+        );
     }
 }

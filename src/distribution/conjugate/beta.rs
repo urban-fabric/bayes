@@ -2,6 +2,7 @@
 
 use super::{Conjugate, Pair};
 use crate::distribution::{Bernoulli, Beta, BetaBinomial};
+use crate::function::{ln_beta, ln_binomial};
 
 /// **Beta–Bernoulli.** A `Beta(α, β)` prior on a Bernoulli success probability;
 /// posterior `Beta(α + #successes, β + #failures)`.
@@ -16,6 +17,16 @@ impl BetaBernoulli {
     }
     pub fn prior(&self) -> Beta {
         self.prior
+    }
+
+    /// Closed-form log marginal likelihood `ln p(data | α, β)` with the
+    /// Bernoulli probability integrated out:
+    /// `ln B(α+s, β+f) - ln B(α, β)`.
+    pub fn ln_marginal_likelihood(&self, data: &[bool]) -> f64 {
+        let successes = data.iter().filter(|&&b| b).count() as f64;
+        let failures = data.len() as f64 - successes;
+        ln_beta(self.prior.alpha() + successes, self.prior.beta() + failures)
+            - ln_beta(self.prior.alpha(), self.prior.beta())
     }
 }
 
@@ -62,6 +73,25 @@ impl BetaBinomialModel {
     pub fn prior(&self) -> Beta {
         self.prior
     }
+
+    /// Closed-form log marginal likelihood for fixed-trial binomial observations
+    /// with the success probability integrated out:
+    /// `Σ ln C(m,kᵢ) + ln B(α+Σkᵢ, β+Σ(m-kᵢ)) - ln B(α, β)`.
+    ///
+    /// Returns `-∞` if any observed success count exceeds the model's trial count.
+    pub fn ln_marginal_likelihood(&self, data: &[u64]) -> f64 {
+        if data.iter().any(|&k| k > self.trials) {
+            return f64::NEG_INFINITY;
+        }
+        let successes = data.iter().sum::<u64>() as f64;
+        let failures = self.trials as f64 * data.len() as f64 - successes;
+        let coeff = data
+            .iter()
+            .map(|&k| ln_binomial(self.trials, k))
+            .sum::<f64>();
+        coeff + ln_beta(self.prior.alpha() + successes, self.prior.beta() + failures)
+            - ln_beta(self.prior.alpha(), self.prior.beta())
+    }
 }
 
 impl Conjugate for BetaBinomialModel {
@@ -106,6 +136,11 @@ mod tests {
         close(post.alpha(), 5.0, 1e-12);
         close(post.beta(), 3.0, 1e-12);
         close(model.posterior_predictive(&data).p(), 5.0 / 8.0, 1e-12);
+        close(
+            model.ln_marginal_likelihood(&data),
+            ln_beta(5.0, 3.0) - ln_beta(2.0, 2.0),
+            1e-12,
+        );
     }
 
     #[test]
@@ -117,5 +152,11 @@ mod tests {
         close(post.beta(), 11.0, 1e-12);
         let pred = model.posterior_predictive(&data);
         close(pred.mean().unwrap(), 10.0 * 31.0 / 42.0, 1e-12);
+        let evidence =
+            (ln_binomial(10, 7) + ln_binomial(10, 8) + ln_binomial(10, 6) + ln_binomial(10, 9))
+                + ln_beta(31.0, 11.0)
+                - ln_beta(1.0, 1.0);
+        close(model.ln_marginal_likelihood(&data), evidence, 1e-12);
+        assert_eq!(model.ln_marginal_likelihood(&[11]), f64::NEG_INFINITY);
     }
 }

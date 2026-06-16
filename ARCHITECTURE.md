@@ -68,9 +68,19 @@ The concrete distributions are grouped by kind:
 - `discrete/`: Bernoulli, Binomial, Poisson, Geometric, Categorical,
   Hypergeometric, NegativeBinomial, BetaBinomial, and related count families.
 - `multivariate/`: MultivariateNormal, Dirichlet, Multinomial, with a small
-  multivariate trait spine.
+  multivariate trait spine. MultivariateNormal owns direct Gaussian algebra:
+  coordinate marginals, conditioning, affine transforms, batch likelihoods,
+  Gaussian product integrals, and precision fusion.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
-- `combinator/`: Mixture and Truncated.
+  Constraint transforms expose both forward and inverse log-Jacobian corrections,
+  using stable log-domain sigmoid identities in the logistic tails so downstream
+  inference layers do not rederive transform math.
+- `probability.rs`: Probability-vector and row-stochastic kernel/matrix
+  validation, probability weight normalization, and closed-form proper scoring
+  rules for categorical forecasts.
+- `combinator/`: Mixture and Truncated. Mixtures expose stable component
+  responsibilities via the same log-softmax/log-sum-exp substrate used by
+  log-densities.
 - `transformed/`: Bijectors and `Transformed<D, B>`.
 - `functional/`: closure-backed density/mass/CDF adapters plus extension traits
   for log-likelihoods, interval probabilities, truncation, and bijective
@@ -83,6 +93,8 @@ The concrete distributions are grouped by kind:
   distribution; the streaming `posterior_natural` accumulator and the
   online-equals-batch / order-independence guarantees are proved generically in
   `riemann` (`Bayes/ExponentialFamily`, `Bayes/ConjugateFamilies`).
+  Family wrappers also expose exact log marginal likelihoods where the likelihood
+  parameters are integrated out analytically.
 - `divergence/`: the closed-form divergence toolkit. `mod.rs` holds the
   per-family closed forms — KL (17 families), Jeffreys/reverse-KL, Jensen–Shannon,
   squared Hellinger, total variation, Pearson χ², Rényi, and mutual information.
@@ -115,7 +127,8 @@ same traits.
 - factorial/binomial helpers;
 - Bessel helpers for circular distributions;
 - multivariate gamma and beta functions;
-- stable log-domain helpers such as log-sum-exp and `xlogy`.
+- stable log-domain helpers such as log-sum-exp, log-mean-exp, softmax/log-softmax,
+  and `xlogy`.
 
 These functions are dependency-light and `f64`-first. More general numeric
 abstractions should wait for a concrete consumer.
@@ -132,12 +145,22 @@ implementation groups with their public functions re-exported from
 - `correlation`: Spearman, Kendall, Cramer's V;
 - `effect`: standardized mean effects, ANOVA effect sizes, and 2x2 risk/odds
   effects;
-- `weighted`: weighted means, variance, covariance, correlation, quantiles, and
-  effective sample size;
-- `multivariate`: mean/covariance/correlation matrices, pooled covariance,
-  Mahalanobis distance, and Hotelling's T-squared;
+- `weighted`: raw/log-domain weight normalization, weighted means, variance,
+  covariance, correlation, quantiles, and effective sample size/admissibility. The
+  log-weight helpers are the closed-form numeric part of the riemann
+  `Markov/LogSumExp` and `Markov/ImportanceSampling` proofs: softmax/normalized
+  weights form a probability vector, and normalized nonnegative weights have
+  `1 <= ESS <= n`;
+- `multivariate`: mean/covariance/correlation matrices, covariance/correlation
+  admissibility predicates, pooled covariance, Mahalanobis distance, and
+  Hotelling's T-squared;
 - `regression`: simple OLS diagnostics and explicit-design least squares;
 - `resampling`: bootstrap, jackknife, percentile intervals;
+- `estimation`: Fisher-information diagnostics, Cramér–Rao/Bhattacharyya variance
+  floors, Rao–Blackwellization, grouped variance decomposition, and UMVU
+  certification. The grouped decomposition is the direct finite-sample form of
+  riemann `Markov/Diagnostics`: within-group plus between-group sums of squares
+  recover total spread about the grand mean;
 - `hypothesis`: z/t/Welch/F, Pearson correlation, chi-squared, Fisher exact, exact
   binomial, McNemar, KS, Jarque-Bera, ANOVA, Mann-Whitney, Wilcoxon, sign test;
 - `confidence`: closed-form confidence intervals for means, proportions, rates,
@@ -159,7 +182,11 @@ module convention. It should not panic for user-provided sample shape issues.
 - covariance kernels (`Rbf`, `Matern`, `Linear`, `Periodic`);
 - Poisson processes;
 - Gaussian random walks and Wiener paths;
-- finite-state Markov chains.
+- finite-state Markov chains, including direct stationary distributions,
+  communicating/recurrent/transient classes, hitting and absorption quantities,
+  first-return probabilities, exact finite-step transition/distribution
+  evolution, fundamental matrices/visit counts, recurrence times, reversibility,
+  and time reversal.
 
 These are direct/generative APIs. Markov chains here are random processes, not
 MCMC inference machinery.
@@ -182,8 +209,8 @@ MCMC inference machinery.
 
 Near-term improvements that fit the current structure:
 
-- Consider a small public matrix/input validation helper if matrix-shaped APIs
-  keep expanding.
+- Extend the existing validation helpers only when a second caller needs the same
+  matrix-shaped invariant.
 - Decide whether kernel constructors should gain fallible `try_new` variants.
 - Expand root-level examples for process and conjugate-update surfaces.
 - Add package/readme examples as doctests where practical.

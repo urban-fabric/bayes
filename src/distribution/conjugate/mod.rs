@@ -9,6 +9,8 @@
 //! *future* observation with the parameter integrated out (often a compound
 //! distribution such as the [`BetaBinomial`](crate::BetaBinomial),
 //! [`NegativeBinomial`](crate::NegativeBinomial), or [`Lomax`](crate::Lomax)).
+//! Family wrappers also expose exact log marginal likelihoods (`ln p(data)`)
+//! where the likelihood parameter is analytically integrated out.
 //!
 //! This is the one genuinely *Bayesian* capability the library exposes, and it sits
 //! squarely on the closed-form side of the boundary: a posterior is just another

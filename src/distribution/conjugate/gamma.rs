@@ -2,6 +2,7 @@
 
 use super::{Conjugate, Pair};
 use crate::distribution::{Gamma, Lomax, NegativeBinomial};
+use crate::function::{ln_factorial, ln_gamma};
 
 /// **Gamma–Poisson.** A `Gamma(shape α, rate β)` prior on the Poisson rate;
 /// posterior `Gamma(α + Σk, β + n)`.
@@ -16,6 +17,20 @@ impl GammaPoisson {
     }
     pub fn prior(&self) -> Gamma {
         self.prior
+    }
+
+    /// Closed-form log marginal likelihood for Poisson counts with the rate
+    /// integrated out under a Gamma(shape, rate) prior:
+    ///
+    /// `α ln β - ln Γ(α) - Σ ln(kᵢ!) + ln Γ(α+Σkᵢ) - (α+Σkᵢ) ln(β+n)`.
+    pub fn ln_marginal_likelihood(&self, data: &[u64]) -> f64 {
+        let sum = data.iter().sum::<u64>() as f64;
+        let n = data.len() as f64;
+        let shape = self.prior.shape();
+        let rate = self.prior.rate();
+        shape * rate.ln() - ln_gamma(shape) - data.iter().map(|&k| ln_factorial(k)).sum::<f64>()
+            + ln_gamma(shape + sum)
+            - (shape + sum) * (rate + n).ln()
     }
 }
 
@@ -57,6 +72,23 @@ impl GammaExponential {
     }
     pub fn prior(&self) -> Gamma {
         self.prior
+    }
+
+    /// Closed-form log marginal likelihood for exponential observations with
+    /// the rate integrated out under a Gamma(shape, rate) prior:
+    ///
+    /// `α ln β - ln Γ(α) + ln Γ(α+n) - (α+n) ln(β+Σxᵢ)`.
+    ///
+    /// Returns `NaN` for negative or non-finite observations.
+    pub fn ln_marginal_likelihood(&self, data: &[f64]) -> f64 {
+        if data.iter().any(|&x| !x.is_finite() || x < 0.0) {
+            return f64::NAN;
+        }
+        let sum = data.iter().sum::<f64>();
+        let n = data.len() as f64;
+        let shape = self.prior.shape();
+        let rate = self.prior.rate();
+        shape * rate.ln() - ln_gamma(shape) + ln_gamma(shape + n) - (shape + n) * (rate + sum).ln()
     }
 }
 
@@ -105,6 +137,11 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.mean().unwrap(), 16.0 / 5.0, 1e-12);
         assert!(pred.pmf(3) > 0.0);
+        let evidence =
+            2.0 * 1.0_f64.ln() - ln_gamma(2.0) - data.iter().map(|&k| ln_factorial(k)).sum::<f64>()
+                + ln_gamma(16.0)
+                - 16.0 * 5.0_f64.ln();
+        close(model.ln_marginal_likelihood(&data), evidence, 1e-12);
     }
 
     #[test]
@@ -119,5 +156,11 @@ mod tests {
         close(pred.shape(), 4.0, 1e-12);
         close(pred.scale(), 5.0, 1e-12);
         close(pred.mean().unwrap(), 5.0 / 3.0, 1e-12);
+        close(
+            model.ln_marginal_likelihood(&data),
+            1.0 * 1.0_f64.ln() - ln_gamma(1.0) + ln_gamma(4.0) - 4.0 * 5.0_f64.ln(),
+            1e-12,
+        );
+        assert!(model.ln_marginal_likelihood(&[-1.0]).is_nan());
     }
 }

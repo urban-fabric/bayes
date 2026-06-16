@@ -50,7 +50,12 @@ impl HellingerDistance for Exponential {
 
 impl HellingerDistance for Gamma {
     fn hellinger_sq(&self, other: &Self) -> f64 {
-        hellinger_sq_from_bc(gamma_bc(self.shape(), self.rate(), other.shape(), other.rate()))
+        hellinger_sq_from_bc(gamma_bc(
+            self.shape(),
+            self.rate(),
+            other.shape(),
+            other.rate(),
+        ))
     }
 }
 
@@ -82,7 +87,12 @@ impl HellingerDistance for LogNormal {
     fn hellinger_sq(&self, other: &Self) -> f64 {
         // H² is invariant under the monotone `exp` map, so this is the Gaussian
         // affinity on (μ, σ).
-        hellinger_sq_from_bc(gaussian_bc(self.mu(), self.sigma(), other.mu(), other.sigma()))
+        hellinger_sq_from_bc(gaussian_bc(
+            self.mu(),
+            self.sigma(),
+            other.mu(),
+            other.sigma(),
+        ))
     }
 }
 
@@ -94,13 +104,23 @@ impl HellingerDistance for HalfNormal {
 
 impl HellingerDistance for ChiSquared {
     fn hellinger_sq(&self, other: &Self) -> f64 {
-        hellinger_sq_from_bc(gamma_bc(0.5 * self.freedom(), 0.5, 0.5 * other.freedom(), 0.5))
+        hellinger_sq_from_bc(gamma_bc(
+            0.5 * self.freedom(),
+            0.5,
+            0.5 * other.freedom(),
+            0.5,
+        ))
     }
 }
 
 impl HellingerDistance for InverseGamma {
     fn hellinger_sq(&self, other: &Self) -> f64 {
-        hellinger_sq_from_bc(gamma_bc(self.shape(), self.scale(), other.shape(), other.scale()))
+        hellinger_sq_from_bc(gamma_bc(
+            self.shape(),
+            self.scale(),
+            other.shape(),
+            other.scale(),
+        ))
     }
 }
 
@@ -110,9 +130,9 @@ impl HellingerDistance for Wald {
         let (m1, l1) = (self.mu(), self.shape());
         let (m2, l2) = (other.mu(), other.shape());
         let s = ((l1 / (m1 * m1) + l2 / (m2 * m2)) * (l1 + l2)).sqrt();
-        let ln_bc = 0.25 * (l1 * l2).ln() + 0.5 * (2.0 / (l1 + l2)).ln()
-            + 0.5 * (l1 / m1 + l2 / m2)
-            - 0.5 * s;
+        let ln_bc =
+            0.25 * (l1 * l2).ln() + 0.5 * (2.0 / (l1 + l2)).ln() + 0.5 * (l1 / m1 + l2 / m2)
+                - 0.5 * s;
         hellinger_sq_from_bc(ln_bc.exp())
     }
 }

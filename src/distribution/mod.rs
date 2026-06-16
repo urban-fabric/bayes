@@ -19,6 +19,7 @@ pub mod exponential_family;
 pub mod functional;
 pub mod multivariate;
 mod numeric;
+mod probability;
 pub mod transformed;
 
 pub use combinator::{Mixture, Truncated};
@@ -53,6 +54,15 @@ pub use functional::{
 pub use multivariate::{
     Dirichlet, Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
     VonMisesFisher,
+};
+pub use probability::{
+    PROBABILITY_TOLERANCE, brier_score, is_probability_vector,
+    is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_matrix,
+    is_row_stochastic_matrix_with_tolerance, is_row_stochastic_with_tolerance, log_loss, log_score,
+    normalize_probability_rows, normalize_probability_weights, probability_sum,
+    ranked_probability_score, spherical_score, validate_probability_vector,
+    validate_row_stochastic, validate_row_stochastic_matrix,
+    validate_row_stochastic_matrix_with_tolerance, validate_row_stochastic_with_tolerance,
 };
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};
 

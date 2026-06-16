@@ -3,6 +3,7 @@
 
 use super::{Conjugate, Counts};
 use crate::distribution::{Categorical, Dirichlet};
+use crate::function::{ln_factorial, ln_multivariate_beta};
 
 /// **Dirichlet–Categorical.** A `Dirichlet(α)` prior on category probabilities;
 /// posterior `Dirichlet(α + counts)` from observed category labels in `{0,…,K−1}`
@@ -18,6 +19,31 @@ impl DirichletCategorical {
     }
     pub fn prior(&self) -> &Dirichlet {
         &self.prior
+    }
+
+    /// Closed-form log marginal likelihood for categorical labels with the
+    /// category probabilities integrated out:
+    /// `ln B(α + counts) - ln B(α)`.
+    ///
+    /// Returns `-∞` if any label is outside the prior's category support.
+    pub fn ln_marginal_likelihood(&self, data: &[u64]) -> f64 {
+        let k = self.prior.alpha().len();
+        let mut counts = vec![0.0; k];
+        for &label in data {
+            let label = label as usize;
+            if label >= k {
+                return f64::NEG_INFINITY;
+            }
+            counts[label] += 1.0;
+        }
+        let posterior_alpha: Vec<f64> = self
+            .prior
+            .alpha()
+            .iter()
+            .zip(counts)
+            .map(|(&a, c)| a + c)
+            .collect();
+        ln_multivariate_beta(&posterior_alpha) - ln_multivariate_beta(self.prior.alpha())
     }
 }
 
@@ -65,6 +91,39 @@ impl DirichletMultinomial {
     }
     pub fn prior(&self) -> &Dirichlet {
         &self.prior
+    }
+
+    /// Closed-form log marginal likelihood for multinomial count vectors with
+    /// the category probabilities integrated out:
+    ///
+    /// `Σ [ln(nᵢ!) - Σₖ ln(cᵢₖ!)] + ln B(α + Σᵢ cᵢ) - ln B(α)`.
+    ///
+    /// Count vectors may be shorter than the prior support (missing categories
+    /// are zeros). Returns `-∞` if a vector has positive counts beyond the prior
+    /// support.
+    pub fn ln_marginal_likelihood(&self, data: &[Vec<u64>]) -> f64 {
+        let k = self.prior.alpha().len();
+        let mut counts = vec![0.0; k];
+        let mut coeff = 0.0;
+        for row in data {
+            if row.iter().skip(k).any(|&c| c > 0) {
+                return f64::NEG_INFINITY;
+            }
+            let n = row.iter().sum::<u64>();
+            coeff += ln_factorial(n);
+            for (j, &count) in row.iter().take(k).enumerate() {
+                coeff -= ln_factorial(count);
+                counts[j] += count as f64;
+            }
+        }
+        let posterior_alpha: Vec<f64> = self
+            .prior
+            .alpha()
+            .iter()
+            .zip(counts)
+            .map(|(&a, c)| a + c)
+            .collect();
+        coeff + ln_multivariate_beta(&posterior_alpha) - ln_multivariate_beta(self.prior.alpha())
     }
 }
 
@@ -117,6 +176,12 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.probabilities()[0], 0.5, 1e-12);
         close(pred.probabilities()[1], 0.25, 1e-12);
+        close(
+            model.ln_marginal_likelihood(&data),
+            ln_multivariate_beta(&[4.0, 2.0, 2.0]) - ln_multivariate_beta(&[1.0, 1.0, 1.0]),
+            1e-12,
+        );
+        assert_eq!(model.ln_marginal_likelihood(&[3]), f64::NEG_INFINITY);
     }
 
     #[test]
@@ -128,5 +193,17 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.probabilities()[0], 0.6, 1e-12);
         close(pred.probabilities()[1], 0.4, 1e-12);
+        let coeff = ln_factorial(4) - ln_factorial(3) - ln_factorial(1) + ln_factorial(4)
+            - ln_factorial(2)
+            - ln_factorial(2);
+        close(
+            model.ln_marginal_likelihood(&data),
+            coeff + ln_multivariate_beta(&[6.0, 4.0]) - ln_multivariate_beta(&[1.0, 1.0]),
+            1e-12,
+        );
+        assert_eq!(
+            model.ln_marginal_likelihood(&[vec![0, 0, 1]]),
+            f64::NEG_INFINITY
+        );
     }
 }

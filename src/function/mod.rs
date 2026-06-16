@@ -9,10 +9,11 @@
 //! continued fractions for the incomplete gamma/beta). `f64`-only for now.
 //!
 //! [`stable`] adds numerically stable log-domain helpers (`ln_sum_exp`,
-//! `ln_sub_exp`, `ln_1p_exp`, `ln_1m_exp`, `xlogy`, `erfcx`) used for
-//! mixture/categorical log-densities and accurate distribution tails; [`bessel`]
-//! provides the modified Bessel functions `I₀`/`I₁` (plus the stable ratio
-//! `I₁/I₀` and `ln I₀`) for directional distributions.
+//! `ln_mean_exp`, `softmax`, `log_softmax`, `ln_sub_exp`, `ln_1p_exp`,
+//! `ln_1m_exp`, `xlogy`, `erfcx`) used for mixture/categorical log-densities,
+//! normalized log-weights, and accurate distribution tails; [`bessel`] provides
+//! the modified Bessel functions `I₀`/`I₁` (plus the stable ratio `I₁/I₀` and
+//! `ln I₀`) for directional distributions.
 
 pub mod bessel;
 pub mod beta;
@@ -30,4 +31,7 @@ pub use gamma::{digamma, gamma, gamma_lr, gamma_ur, ln_gamma, trigamma};
 pub use multivariate::{
     ln_multivariate_beta, ln_multivariate_gamma, multivariate_beta, multivariate_gamma,
 };
-pub use stable::{erfcx, ln_1m_exp, ln_1p_exp, ln_add_exp, ln_sub_exp, ln_sum_exp, xlogy};
+pub use stable::{
+    erfcx, ln_1m_exp, ln_1p_exp, ln_add_exp, ln_mean_exp, ln_sub_exp, ln_sum_exp, log_softmax,
+    softmax, xlogy,
+};

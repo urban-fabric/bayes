@@ -1,9 +1,12 @@
 //! Normal-prior conjugate models: **Normal–Normal** (known variance) and
 //! **Normal–Inverse-Gamma** (unknown mean and variance).
 
+use std::f64::consts::PI;
+
 use super::{Conjugate, NigNatural, Pair};
 use crate::distribution::{InverseGamma, Normal, StudentT};
 use crate::error::BayesError;
+use crate::function::ln_gamma;
 
 /// **Normal–Normal (known variance).** A `Normal(μ₀, τ₀)` prior on the unknown mean
 /// of a Normal likelihood whose standard deviation `obs_std` is known. The
@@ -68,6 +71,28 @@ impl NormalKnownVariance {
             return 0.0;
         }
         (n as f64 * self.obs_precision()) / post
+    }
+
+    /// Closed-form log marginal likelihood for observations from
+    /// `Normal(μ, σ²)` with known `σ` and Normal prior over `μ`.
+    ///
+    /// This is the Gaussian integral obtained by completing the square in `μ`;
+    /// no optimization or sampling is involved.
+    pub fn ln_marginal_likelihood(&self, data: &[f64]) -> f64 {
+        if self.obs_std <= 0.0 || data.iter().any(|x| !x.is_finite()) {
+            return f64::NAN;
+        }
+        let (mu0, tau0) = self.prior.params();
+        let sigma2 = self.obs_std * self.obs_std;
+        let lambda0 = 1.0 / (tau0 * tau0);
+        let eta0 = lambda0 * mu0;
+        let n = data.len() as f64;
+        let sum = data.iter().sum::<f64>();
+        let sum_sq = data.iter().map(|x| x * x).sum::<f64>();
+        let lambda_n = lambda0 + n / sigma2;
+        let eta_n = eta0 + sum / sigma2;
+        let quad = sum_sq / sigma2 + lambda0 * mu0 * mu0 - eta_n * eta_n / lambda_n;
+        -0.5 * n * (2.0 * PI * sigma2).ln() + 0.5 * (lambda0.ln() - lambda_n.ln()) - 0.5 * quad
     }
 }
 
@@ -204,6 +229,21 @@ impl NormalInverseGamma {
         StudentT::new_location_scale(2.0 * self.alpha, self.mu, scale)
             .unwrap_or_else(|_| unreachable!())
     }
+
+    /// Closed-form log marginal likelihood for Normal observations with both
+    /// unknown mean and variance integrated out under the Normal-Inverse-Gamma
+    /// prior.
+    pub fn ln_marginal_likelihood(&self, data: &[f64]) -> f64 {
+        if data.iter().any(|x| !x.is_finite()) {
+            return f64::NAN;
+        }
+        let post = self.posterior(data);
+        let n = data.len() as f64;
+        ln_gamma(post.alpha()) - ln_gamma(self.alpha) + self.alpha * self.beta.ln()
+            - post.alpha() * post.beta().ln()
+            + 0.5 * (self.lambda.ln() - post.lambda().ln())
+            - 0.5 * n * (2.0 * PI).ln()
+    }
 }
 
 impl Conjugate for NormalInverseGamma {
@@ -268,6 +308,9 @@ mod tests {
         assert!(post.variance().unwrap() < 1.0);
         let pred = model.posterior_predictive(&data);
         assert!(pred.variance().unwrap() > post.variance().unwrap());
+        assert!(model.ln_marginal_likelihood(&data).is_finite());
+        close(model.ln_marginal_likelihood(&[]), 0.0, 1e-12);
+        assert!(model.ln_marginal_likelihood(&[f64::NAN]).is_nan());
     }
 
     #[test]
@@ -348,5 +391,11 @@ mod tests {
         let ig = post.variance_marginal();
         close(ig.shape(), 3.5, 1e-12);
         close(ig.scale(), 3.5, 1e-12);
+        let evidence = ln_gamma(3.5) - ln_gamma(2.0) - 3.5 * 3.5_f64.ln()
+            + 0.5 * (1.0_f64.ln() - 4.0_f64.ln())
+            - 1.5 * (2.0 * PI).ln();
+        close(model.ln_marginal_likelihood(&data), evidence, 1e-12);
+        close(model.ln_marginal_likelihood(&[]), 0.0, 1e-12);
+        assert!(model.ln_marginal_likelihood(&[f64::NAN]).is_nan());
     }
 }

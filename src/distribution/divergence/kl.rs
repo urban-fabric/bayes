@@ -209,7 +209,9 @@ impl KlDivergence for Gumbel {
         // Closed form on (location μ, scale β); reduces to 0 on equal parameters.
         let (mu1, b1) = (self.location(), self.scale());
         let (mu2, b2) = (other.location(), other.scale());
-        (b2 / b1).ln() + EULER_GAMMA * (b1 / b2 - 1.0) + (mu1 - mu2) / b2
+        (b2 / b1).ln()
+            + EULER_GAMMA * (b1 / b2 - 1.0)
+            + (mu1 - mu2) / b2
             + ((mu2 - mu1) / b2).exp() * gamma(1.0 + b1 / b2)
             - 1.0
     }
@@ -220,7 +222,8 @@ impl KlDivergence for Wald {
         // Inverse-Gaussian (mean μ, shape λ) closed form.
         let (m1, l1) = (self.mu(), self.shape());
         let (m2, l2) = (other.mu(), other.shape());
-        0.5 * (l1 / l2).ln() + l2 * (m1 - 2.0 * m2) / (2.0 * m2 * m2)
+        0.5 * (l1 / l2).ln()
+            + l2 * (m1 - 2.0 * m2) / (2.0 * m2 * m2)
             + 0.5 * l2 * (1.0 / m1 + 1.0 / l1)
             - 0.5
     }

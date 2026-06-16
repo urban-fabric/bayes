@@ -3,7 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, Discrete, Moments};
 use crate::error::BayesError;
-use crate::function::stable::ln_sum_exp;
+use crate::function::stable::{ln_sum_exp, log_softmax};
 
 /// A finite **mixture distribution**: a weighted blend of `components`, all of the
 /// same type `D`. Sampling picks a component by weight then samples it; the density
@@ -58,6 +58,56 @@ impl<D> Mixture<D> {
     }
     pub fn components(&self) -> &[D] {
         &self.components
+    }
+
+    fn log_weighted_terms_by<F>(&self, mut log_component_likelihood: F) -> Vec<f64>
+    where
+        F: FnMut(&D) -> f64,
+    {
+        self.weights
+            .iter()
+            .zip(&self.components)
+            .map(|(&w, component)| {
+                if w == 0.0 {
+                    f64::NEG_INFINITY
+                } else {
+                    w.ln() + log_component_likelihood(component)
+                }
+            })
+            .collect()
+    }
+
+    /// Posterior log responsibilities for the mixture component indicator, from
+    /// arbitrary per-component log likelihoods.
+    ///
+    /// The returned vector is `log P(Z = i | observation) =
+    /// log(wᵢ likelihoodᵢ) - log Σⱼ wⱼ likelihoodⱼ`, computed with stable
+    /// log-softmax. This is the finite mixture analogue of riemann's
+    /// `Markov/LogSumExp.softmax_isDistribution`: when the result is non-empty,
+    /// exponentiating it gives a probability vector. Returns an empty vector when
+    /// the observation has zero likelihood under every positive-weight component
+    /// (or if any log likelihood is `NaN`).
+    pub fn ln_responsibilities_by<F>(&self, log_component_likelihood: F) -> Vec<f64>
+    where
+        F: FnMut(&D) -> f64,
+    {
+        let terms = self.log_weighted_terms_by(log_component_likelihood);
+        log_softmax(&terms)
+    }
+
+    /// Posterior responsibilities for the mixture component indicator, from
+    /// arbitrary per-component log likelihoods.
+    ///
+    /// See [`ln_responsibilities_by`](Self::ln_responsibilities_by) for the log
+    /// form. This exponentiates the stable log-softmax result.
+    pub fn responsibilities_by<F>(&self, log_component_likelihood: F) -> Vec<f64>
+    where
+        F: FnMut(&D) -> f64,
+    {
+        self.ln_responsibilities_by(log_component_likelihood)
+            .into_iter()
+            .map(f64::exp)
+            .collect()
     }
 }
 
@@ -116,13 +166,25 @@ where
     /// component log-densities are very negative (the naive `pdf().ln()` would
     /// underflow each term to `0` before summing).
     fn ln_pdf(&self, x: f64) -> f64 {
-        let terms: Vec<f64> = self
-            .weights
-            .iter()
-            .zip(&self.components)
-            .map(|(&w, c)| w.ln() + c.ln_pdf(x))
-            .collect();
+        let terms = self.log_weighted_terms_by(|c| c.ln_pdf(x));
         ln_sum_exp(&terms)
+    }
+}
+
+impl<D> Mixture<D>
+where
+    D: Continuous,
+{
+    /// Component log responsibilities for a continuous observation `x`.
+    ///
+    /// Entry `i` is `log(wᵢ fᵢ(x) / Σⱼ wⱼ fⱼ(x))`, computed in log space.
+    pub fn ln_pdf_responsibilities(&self, x: f64) -> Vec<f64> {
+        self.ln_responsibilities_by(|c| c.ln_pdf(x))
+    }
+
+    /// Component responsibilities for a continuous observation `x`.
+    pub fn pdf_responsibilities(&self, x: f64) -> Vec<f64> {
+        self.responsibilities_by(|c| c.ln_pdf(x))
     }
 }
 
@@ -139,13 +201,25 @@ where
     }
     /// `ln Σ wᵢ Pᵢ(k)` via log-sum-exp (see [`Continuous::ln_pdf`] for the mixture).
     fn ln_pmf(&self, k: u64) -> f64 {
-        let terms: Vec<f64> = self
-            .weights
-            .iter()
-            .zip(&self.components)
-            .map(|(&w, c)| w.ln() + c.ln_pmf(k))
-            .collect();
+        let terms = self.log_weighted_terms_by(|c| c.ln_pmf(k));
         ln_sum_exp(&terms)
+    }
+}
+
+impl<D> Mixture<D>
+where
+    D: Discrete<u64>,
+{
+    /// Component log responsibilities for a discrete observation `k`.
+    ///
+    /// Entry `i` is `log(wᵢ pᵢ(k) / Σⱼ wⱼ pⱼ(k))`, computed in log space.
+    pub fn ln_pmf_responsibilities(&self, k: u64) -> Vec<f64> {
+        self.ln_responsibilities_by(|c| c.ln_pmf(k))
+    }
+
+    /// Component responsibilities for a discrete observation `k`.
+    pub fn pmf_responsibilities(&self, k: u64) -> Vec<f64> {
+        self.responsibilities_by(|c| c.ln_pmf(k))
     }
 }
 
@@ -182,7 +256,7 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::distribution::Normal;
+    use crate::distribution::{Normal, Poisson};
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
@@ -204,6 +278,67 @@ mod tests {
         let expect = 0.3 * Normal::new(-2.0, 1.0).unwrap().pdf(x)
             + 0.7 * Normal::new(3.0, 2.0).unwrap().pdf(x);
         close(m.pdf(x), expect, 1e-12);
+    }
+
+    #[test]
+    fn continuous_responsibilities_are_stable_posteriors_over_components() {
+        let m = Mixture::new(
+            vec![0.25, 0.75],
+            vec![
+                Normal::new(0.0, 1.0).unwrap(),
+                Normal::new(10.0, 1.0).unwrap(),
+            ],
+        )
+        .unwrap();
+
+        let x = 0.25;
+        let resp = m.pdf_responsibilities(x);
+        assert_eq!(resp.len(), 2);
+        close(resp.iter().sum(), 1.0, 1e-12);
+        close(resp[0], 0.25 * m.components()[0].pdf(x) / m.pdf(x), 1e-12);
+        close(resp[1], 0.75 * m.components()[1].pdf(x) / m.pdf(x), 1e-12);
+        assert!(resp[0] > 0.999);
+
+        let log_resp = m.ln_pdf_responsibilities(-80.0);
+        assert_eq!(log_resp.len(), 2);
+        assert!(log_resp[0].is_finite());
+        assert!(log_resp[1] < -700.0);
+        close(log_resp[0].exp(), 1.0, 1e-12);
+    }
+
+    #[test]
+    fn responsibilities_handle_zero_weights_and_discrete_components() {
+        let m = Mixture::new(
+            vec![0.0, 1.0],
+            vec![
+                Normal::new(0.0, 1.0).unwrap(),
+                Normal::new(5.0, 1.0).unwrap(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(m.pdf_responsibilities(0.0), vec![0.0, 1.0]);
+        assert_eq!(m.ln_pdf_responsibilities(0.0), vec![f64::NEG_INFINITY, 0.0]);
+
+        let counts = Mixture::new(
+            vec![0.4, 0.6],
+            vec![Poisson::new(2.0).unwrap(), Poisson::new(8.0).unwrap()],
+        )
+        .unwrap();
+        let k = 7;
+        let resp = counts.pmf_responsibilities(k);
+        assert_eq!(resp.len(), 2);
+        close(resp.iter().sum(), 1.0, 1e-12);
+        close(
+            resp[0],
+            0.4 * counts.components()[0].pmf(k) / counts.pmf(k),
+            1e-12,
+        );
+        close(
+            resp[1],
+            0.6 * counts.components()[1].pmf(k) / counts.pmf(k),
+            1e-12,
+        );
+        assert!(resp[1] > resp[0]);
     }
 
     #[test]

@@ -51,6 +51,7 @@
 //! finite value where the generator allows it (total variation, Hellinger) and
 //! `+∞` where it does not (KL, χ²).
 
+use crate::distribution::validate_row_stochastic;
 use crate::error::BayesError;
 
 /// A convex **generator** `f : (0, ∞) → ℝ` with `f(1) = 0`, defining the
@@ -308,32 +309,7 @@ impl Channel {
     /// row-stochastic (each row finite, non-negative, summing to `1`).
     pub fn new(rows: Vec<Vec<f64>>) -> Result<Self, BayesError> {
         let outputs = rows.first().map(Vec::len).unwrap_or(0);
-        if rows.is_empty() || outputs == 0 {
-            return Err(BayesError::Malformed {
-                what: "channel needs at least one input row and one output column",
-            });
-        }
-        for row in &rows {
-            if row.len() != outputs {
-                return Err(BayesError::Malformed {
-                    what: "channel rows must all have the same number of outputs",
-                });
-            }
-            let mut sum = 0.0;
-            for &v in row {
-                if !v.is_finite() || v < 0.0 {
-                    return Err(BayesError::Malformed {
-                        what: "channel entries must be finite and non-negative",
-                    });
-                }
-                sum += v;
-            }
-            if (sum - 1.0).abs() > 1e-9 {
-                return Err(BayesError::Malformed {
-                    what: "each channel row must sum to 1",
-                });
-            }
-        }
+        validate_row_stochastic(&rows)?;
         Ok(Self { rows, outputs })
     }
 

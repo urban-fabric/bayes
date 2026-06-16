@@ -12,11 +12,56 @@
 //!   conditioning an estimator on a sufficient statistic never increases its variance;
 //! - `lehmann_scheffe_unique` (same module) — an unbiased function of a complete sufficient
 //!   statistic is the *unique* UMVU estimator ([`is_umvu`]).
+//! - `sum_sq_decomp_chains` (riemann `Markov/Diagnostics.lean`) — the finite-sample
+//!   within/between/total sum-of-squares partition behind grouped variance diagnostics.
 //!
 //! The Cramér–Rao functions take the Fisher information as an input — like
 //! [`super::confidence::concentration`] takes a tail/MGF bound — so no per-distribution
 //! score machinery is needed; [`fisher_information_from_scores`] supplies it empirically.
 //! [`rao_blackwell`] / [`conditional_variance`] act directly on grouped sample data.
+
+/// A grouped finite-sample variance partition using the population (`/ n`) convention.
+///
+/// The fields satisfy `total_ss = within_ss + between_ss` and therefore
+/// `total_variance = within_variance + between_variance`, up to floating-point
+/// roundoff. This is the direct data-analysis form of riemann
+/// `Markov/Diagnostics.sum_sq_decomp_chains`: within-group spread plus group-mean
+/// spread recovers total spread about the grand mean.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VarianceDecomposition {
+    /// Number of observations.
+    pub count: usize,
+    /// Number of distinct groups.
+    pub groups: usize,
+    /// Mean over all observations.
+    pub grand_mean: f64,
+    /// `Σᵢ (xᵢ - grand_mean)²`.
+    pub total_ss: f64,
+    /// `Σ_g Σ_{i∈g} (xᵢ - mean_g)²`.
+    pub within_ss: f64,
+    /// `Σ_g n_g (mean_g - grand_mean)²`.
+    pub between_ss: f64,
+    /// `total_ss / count`.
+    pub total_variance: f64,
+    /// `within_ss / count`.
+    pub within_variance: f64,
+    /// `between_ss / count`.
+    pub between_variance: f64,
+}
+
+impl VarianceDecomposition {
+    /// Fraction of total variation explained by group means, `between_ss / total_ss`.
+    ///
+    /// This is the same one-way ANOVA effect-size ratio usually called η².
+    /// Returns `NaN` for a zero-total-variance decomposition.
+    pub fn explained_fraction(self) -> f64 {
+        if self.total_ss <= 0.0 {
+            f64::NAN
+        } else {
+            self.between_ss / self.total_ss
+        }
+    }
+}
 
 /// **Observed Fisher information** from a sample of **score** values
 /// `U(xᵢ) = ∂/∂θ log p(xᵢ; θ)`: `I = E[U²]`. This equals the variance of the score
@@ -145,6 +190,69 @@ pub fn conditional_variance(values: &[f64], groups: &[usize]) -> f64 {
         .map(|(&v, &m)| (v - m) * (v - m))
         .sum::<f64>()
         / values.len() as f64
+}
+
+/// **Grouped variance decomposition** — split finite-sample spread into within-group and
+/// between-group components:
+/// `Σᵢ(xᵢ − μ)² = Σ_g Σ_{i∈g}(xᵢ − μ_g)² + Σ_g n_g(μ_g − μ)²`.
+///
+/// The return value uses population (`/ n`) scaling, so the variance partition mirrors
+/// the sum-of-squares identity exactly. This generalizes [`conditional_variance`] by
+/// returning the full within/between/total partition and the explained fraction
+/// [`VarianceDecomposition::explained_fraction`]. Backed by riemann
+/// `Markov/Diagnostics.sum_sq_decomp` / `sum_sq_decomp_chains`. Returns `None` on
+/// empty input, length mismatch, or non-finite values.
+pub fn variance_decomposition(values: &[f64], groups: &[usize]) -> Option<VarianceDecomposition> {
+    use std::collections::HashMap;
+
+    if values.is_empty() || values.len() != groups.len() || values.iter().any(|x| !x.is_finite()) {
+        return None;
+    }
+
+    let count = values.len();
+    let grand_mean = values.iter().sum::<f64>() / count as f64;
+    let mut group_acc: HashMap<usize, (f64, usize)> = HashMap::new();
+    for (&value, &group) in values.iter().zip(groups) {
+        let entry = group_acc.entry(group).or_insert((0.0, 0));
+        entry.0 += value;
+        entry.1 += 1;
+    }
+
+    let group_means: HashMap<usize, f64> = group_acc
+        .iter()
+        .map(|(&group, &(sum, n))| (group, sum / n as f64))
+        .collect();
+
+    let within_ss = values
+        .iter()
+        .zip(groups)
+        .map(|(&value, &group)| {
+            let centered = value - group_means[&group];
+            centered * centered
+        })
+        .sum::<f64>();
+
+    let between_ss = group_acc
+        .iter()
+        .map(|(&group, &(_, n))| {
+            let centered = group_means[&group] - grand_mean;
+            n as f64 * centered * centered
+        })
+        .sum::<f64>();
+
+    let total_ss = within_ss + between_ss;
+    let denom = count as f64;
+    Some(VarianceDecomposition {
+        count,
+        groups: group_acc.len(),
+        grand_mean,
+        total_ss,
+        within_ss,
+        between_ss,
+        total_variance: total_ss / denom,
+        within_variance: within_ss / denom,
+        between_variance: between_ss / denom,
+    })
 }
 
 /// **UMVU certification (Lehmann–Scheffé)** — whether an unbiased estimator is the *unique*
@@ -277,6 +385,50 @@ mod tests {
             1e-12,
         );
         assert!(conditional_variance(&[1.0], &[0, 1]).is_nan());
+    }
+
+    #[test]
+    fn variance_decomposition_splits_within_and_between_spread() {
+        let values = [1.0, 3.0, 10.0, 12.0];
+        let groups = [0usize, 0, 1, 1];
+        let split = variance_decomposition(&values, &groups).unwrap();
+
+        close(split.grand_mean, 6.5, 1e-12);
+        close(split.within_ss, 4.0, 1e-12);
+        close(split.between_ss, 81.0, 1e-12);
+        close(split.total_ss, split.within_ss + split.between_ss, 1e-12);
+        close(
+            split.total_variance,
+            split.within_variance + split.between_variance,
+            1e-12,
+        );
+        close(
+            split.within_variance,
+            conditional_variance(&values, &groups),
+            1e-12,
+        );
+        close(split.explained_fraction(), 81.0 / 85.0, 1e-12);
+        assert_eq!(split.count, 4);
+        assert_eq!(split.groups, 2);
+    }
+
+    #[test]
+    fn variance_decomposition_handles_extreme_groupings() {
+        let values = [1.0, 3.0, 10.0, 12.0];
+
+        let singleton = variance_decomposition(&values, &[0, 1, 2, 3]).unwrap();
+        close(singleton.within_ss, 0.0, 1e-12);
+        close(singleton.between_ss, singleton.total_ss, 1e-12);
+        close(singleton.explained_fraction(), 1.0, 1e-12);
+
+        let one_group = variance_decomposition(&values, &[7, 7, 7, 7]).unwrap();
+        close(one_group.between_ss, 0.0, 1e-12);
+        close(one_group.within_ss, one_group.total_ss, 1e-12);
+        close(one_group.explained_fraction(), 0.0, 1e-12);
+
+        assert!(variance_decomposition(&[], &[]).is_none());
+        assert!(variance_decomposition(&[1.0], &[0, 1]).is_none());
+        assert!(variance_decomposition(&[f64::NAN], &[0]).is_none());
     }
 
     #[test]
