@@ -9,8 +9,9 @@ use bayes::{
     Ecdf, Exponential, ExponentialFamily, Gamma, GammaPoisson, InverseWishart, KentPotential,
     KlDivergence, MarkovChain, MeanVar, Mixture, Moments, MultivariateContinuous,
     MultivariateMoments, MultivariateNormal, MultivariateStudentT, Normal, NormalInverseGamma,
-    NormalInverseWishart, NormalKnownVariance, Poisson, StudentT, SufficientStatistic, Wishart,
-    histogram, is_correlation_matrix_admissible, is_covariance_matrix_admissible,
+    NormalInverseWishart, NormalKnownVariance, NormalWishart, OrderStatistic, Poisson, StudentT,
+    SufficientStatistic, Uniform, Wishart, histogram, is_correlation_matrix_admissible,
+    is_covariance_matrix_admissible,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -348,6 +349,40 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
     close(pred.freedom(), 5.0, 1e-12);
     assert!(pred.ln_pdf(&[1.5, 2.5]).is_finite());
 
+    let precision_prior = NormalWishart::new(
+        vec![0.0, 0.0],
+        1.0,
+        4.0,
+        ramanujan::DenseMatrix::identity(2),
+    )
+    .unwrap();
+    let precision_post = precision_prior.posterior(&data).unwrap();
+    close(
+        precision_post.precision_scale_matrix().get(0, 0),
+        0.6,
+        1e-12,
+    );
+    assert!(precision_prior.precision_marginal().entropy().is_finite());
+    assert!(
+        precision_prior
+            .mean_conditional(&ramanujan::DenseMatrix::identity(2))
+            .unwrap()
+            .ln_pdf(&[0.0, 0.0])
+            .is_finite()
+    );
+    assert!(
+        precision_prior
+            .posterior_predictive(&data)
+            .unwrap()
+            .ln_pdf(&[1.5, 2.5])
+            .is_finite()
+    );
+    close(
+        precision_prior.ln_marginal_likelihood(&data),
+        prior.ln_marginal_likelihood(&data),
+        1e-10,
+    );
+
     let mv_t = MultivariateStudentT::new(
         6.0,
         vec![0.0],
@@ -528,6 +563,14 @@ fn functional_distribution_adapters_are_public_and_composable() {
 
     let shifted = unit.affine(2.0, -1.0).unwrap();
     close(shifted.pdf(0.0), 0.5, 1e-12);
+
+    let max = unit.maximum_of(4).unwrap();
+    close(max.cdf(0.5), 0.5_f64.powi(4), 1e-12);
+    let third = OrderStatistic::new(Uniform::unit_interval(), 5, 3).unwrap();
+    close(third.pdf(0.5), 1.875, 1e-12);
+    let exp = Exponential::new(2.0).unwrap();
+    close(exp.hazard(3.0), 2.0, 1e-12);
+    close(exp.cumulative_hazard(3.0), 6.0, 1e-12);
 
     let coin = DiscreteFn::new(
         0u64,

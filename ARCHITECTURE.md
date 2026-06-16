@@ -84,17 +84,19 @@ The concrete distributions are grouped by kind:
 - `probability.rs`: Probability-vector and row-stochastic kernel/matrix
   validation, probability weight normalization, and closed-form proper scoring
   rules for categorical forecasts.
-- `combinator/`: Mixture and Truncated. Mixtures expose stable component
-  responsibilities via the same log-softmax/log-sum-exp substrate used by
-  log-densities.
+- `combinator/`: Mixture, OrderStatistic, and Truncated. Mixtures expose stable
+  component responsibilities via the same log-softmax/log-sum-exp substrate used
+  by log-densities. Order statistics lift any continuous PDF/CDF/quantile into
+  the finite-sample minimum, maximum, or kth sample statistic through the direct
+  beta-CDF identity.
 - `transformed/`: Bijectors and `Transformed<D, B>`.
 - `functional/`: closure-backed density/mass/CDF adapters plus extension traits
-  for log-likelihoods, interval probabilities, truncation, and bijective
-  composition.
+  for log-likelihoods, interval probabilities, reliability/survival quantities,
+  order statistics, truncation, and bijective composition.
 - `exponential_family/`: mergeable sufficient statistics and closed-form fits.
 - `conjugate/`: closed-form conjugate prior/posterior updates and predictives,
-  including Normal-Inverse-Wishart for multivariate Gaussian mean/covariance
-  conjugacy.
+  including Normal-Inverse-Wishart and Normal-Wishart for multivariate Gaussian
+  mean/covariance or mean/precision conjugacy.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
   only its statistic `T`, prior coordinates `η`, and the map back to a

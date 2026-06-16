@@ -37,7 +37,7 @@ mod normal;
 pub use beta::{BetaBernoulli, BetaBinomialModel};
 pub use dirichlet::{DirichletCategorical, DirichletMultinomial};
 pub use gamma::{GammaExponential, GammaPoisson};
-pub use multivariate_normal::NormalInverseWishart;
+pub use multivariate_normal::{NormalInverseWishart, NormalWishart};
 pub use natural::{Counts, NaturalParams, NigNatural, Pair};
 pub use normal::{NormalInverseGamma, NormalKnownVariance, precision_weighted_mean};
 

@@ -14,7 +14,7 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   Binomial, Poisson, Geometric, DiscreteUniform, NegativeBinomial, Hypergeometric,
   Categorical, BetaBinomial), multivariate (MVN, multivariate Student-t,
   Dirichlet, Multinomial, Wishart, Inverse-Wishart), plus combinators
-  (Mixture, Truncated, Transformed). MVNs include closed-form marginal,
+  (Mixture, OrderStatistic, Truncated, Transformed). MVNs include closed-form marginal,
   conditional, affine-transform, batch-likelihood, and Gaussian-product /
   precision-fusion operations. Wishart families include matrix densities,
   entropy/KL, expected log-determinants, entry covariances, and inverse-family
@@ -22,7 +22,8 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   distributions and unnormalized Kent/Bingham potentials for closed-form energy
   ratios where the generic normalizer is not closed form.
   Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
-  (incl. stable `ln_cdf`/`ln_sf`/`isf`),
+  (incl. stable `ln_cdf`/`ln_sf`/`isf`) plus reliability helpers
+  (`hazard`, `ln_hazard`, `cumulative_hazard`),
   analytic moments (`Option`-typed — Cauchy honestly has no mean), and `rand` sampling.
   Same-family pairs also expose a closed-form `kl_divergence` (and Jeffreys, JS,
   Hellinger, total-variation, χ², Rényi, mutual information). The **f-divergence
@@ -56,8 +57,8 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   walks.
 - **Closed-form Bayesian layer** — exponential-family fitting via mergeable
   sufficient statistics, plus conjugate posteriors, predictives, and exact log
-  marginal likelihoods, including Normal-Inverse-Wishart multivariate Gaussian
-  conjugacy.
+  marginal likelihoods, including Normal-Inverse-Wishart and Normal-Wishart
+  multivariate Gaussian conjugacy.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};

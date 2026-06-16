@@ -4,7 +4,8 @@
 //! every distribution without per-type boilerplate.
 
 use crate::distribution::{
-    Affine, Bijector, Continuous, ContinuousCdf, Discrete, Exp, Sigmoid, Transformed, Truncated,
+    Affine, Bijector, Continuous, ContinuousCdf, Discrete, Exp, OrderStatistic, Sigmoid,
+    Transformed, Truncated,
 };
 use crate::error::BayesError;
 use crate::function::stable::ln_sub_exp;
@@ -75,6 +76,56 @@ pub trait ContinuousCdfExt: ContinuousCdf + Sized {
     /// Truncate and renormalize to `[lo, hi]`.
     fn truncated(self, lo: f64, hi: f64) -> Result<Truncated<Self>, BayesError> {
         Truncated::new(self, lo, hi)
+    }
+
+    /// Distribution of the `rank`-th order statistic from `sample_size`
+    /// independent draws.
+    fn order_statistic(
+        self,
+        sample_size: u64,
+        rank: u64,
+    ) -> Result<OrderStatistic<Self>, BayesError>
+    where
+        Self: Continuous,
+    {
+        OrderStatistic::new(self, sample_size, rank)
+    }
+
+    /// Distribution of the sample minimum from `sample_size` independent draws.
+    fn minimum_of(self, sample_size: u64) -> Result<OrderStatistic<Self>, BayesError>
+    where
+        Self: Continuous,
+    {
+        OrderStatistic::minimum(self, sample_size)
+    }
+
+    /// Distribution of the sample maximum from `sample_size` independent draws.
+    fn maximum_of(self, sample_size: u64) -> Result<OrderStatistic<Self>, BayesError>
+    where
+        Self: Continuous,
+    {
+        OrderStatistic::maximum(self, sample_size)
+    }
+
+    /// Reliability cumulative hazard `H(x) = -ln S(x)`.
+    fn cumulative_hazard(&self, x: f64) -> f64 {
+        -self.ln_sf(x)
+    }
+
+    /// Log hazard `ln h(x) = ln f(x) - ln S(x)`.
+    fn ln_hazard(&self, x: f64) -> f64
+    where
+        Self: Continuous,
+    {
+        self.ln_pdf(x) - self.ln_sf(x)
+    }
+
+    /// Hazard rate `h(x) = f(x) / S(x)`.
+    fn hazard(&self, x: f64) -> f64
+    where
+        Self: Continuous,
+    {
+        self.ln_hazard(x).exp()
     }
 }
 
