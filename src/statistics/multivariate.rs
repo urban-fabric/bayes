@@ -3,6 +3,9 @@
 
 use ramanujan::DenseMatrix;
 
+/// Default tolerance for covariance/correlation matrix admissibility checks.
+pub const MATRIX_ADMISSIBILITY_TOLERANCE: f64 = 1e-9;
+
 fn shape(samples: &[Vec<f64>], min_rows: usize) -> Option<(usize, usize)> {
     let n = samples.len();
     let p = samples.first().map_or(0, Vec::len);
@@ -15,6 +18,57 @@ fn shape(samples: &[Vec<f64>], min_rows: usize) -> Option<(usize, usize)> {
         return None;
     }
     Some((n, p))
+}
+
+/// Whether `cov` is an admissible covariance matrix: non-empty, square, finite,
+/// symmetric, and positive semidefinite up to [`MATRIX_ADMISSIBILITY_TOLERANCE`].
+pub fn is_covariance_matrix_admissible(cov: &DenseMatrix) -> bool {
+    is_covariance_matrix_admissible_with_tolerance(cov, MATRIX_ADMISSIBILITY_TOLERANCE)
+}
+
+/// Whether `cov` is an admissible covariance matrix with a caller-specified
+/// symmetry/eigenvalue tolerance.
+pub fn is_covariance_matrix_admissible_with_tolerance(cov: &DenseMatrix, tolerance: f64) -> bool {
+    if cov.rows() == 0
+        || cov.rows() != cov.cols()
+        || !tolerance.is_finite()
+        || tolerance < 0.0
+        || !cov.is_finite()
+        || !cov.is_symmetric(tolerance)
+    {
+        return false;
+    }
+    let n = cov.rows();
+    let symmetric = DenseMatrix::from_fn(n, n, |i, j| 0.5 * (cov.get(i, j) + cov.get(j, i)));
+    let Ok(eigen) = symmetric.symmetric_eigen() else {
+        return false;
+    };
+    eigen.values.iter().all(|&lambda| lambda >= -tolerance)
+}
+
+/// Whether `corr` is an admissible correlation matrix: a covariance-admissible
+/// matrix with unit diagonal and entries in `[-1, 1]` up to tolerance.
+pub fn is_correlation_matrix_admissible(corr: &DenseMatrix) -> bool {
+    is_correlation_matrix_admissible_with_tolerance(corr, MATRIX_ADMISSIBILITY_TOLERANCE)
+}
+
+/// Whether `corr` is an admissible correlation matrix with a caller-specified
+/// symmetry/eigenvalue/entry tolerance.
+pub fn is_correlation_matrix_admissible_with_tolerance(corr: &DenseMatrix, tolerance: f64) -> bool {
+    if !is_covariance_matrix_admissible_with_tolerance(corr, tolerance) {
+        return false;
+    }
+    for i in 0..corr.rows() {
+        if (corr.get(i, i) - 1.0).abs() > tolerance {
+            return false;
+        }
+        for j in 0..corr.cols() {
+            if corr.get(i, j).abs() > 1.0 + tolerance {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 /// Column means for row-major observations.
@@ -205,6 +259,38 @@ mod tests {
         close(cov.get(0, 1), 2.0, 1e-12);
         close(cov.get(1, 1), 4.0, 1e-12);
         close(correlation_matrix(&samples).get(0, 1), 1.0, 1e-12);
+    }
+
+    #[test]
+    fn covariance_matrix_admissibility_accepts_singular_psd_and_rejects_indefinite() {
+        let singular_psd = DenseMatrix::from_rows(&[vec![1.0, 2.0], vec![2.0, 4.0]]);
+        assert!(is_covariance_matrix_admissible(&singular_psd));
+        assert!(is_covariance_matrix_admissible_with_tolerance(
+            &DenseMatrix::from_rows(&[vec![1.0, 1.0 + 5e-10], vec![1.0, 1.0]]),
+            1e-9
+        ));
+        assert!(!is_covariance_matrix_admissible(&DenseMatrix::from_rows(
+            &[vec![1.0, 2.0], vec![2.0, 1.0]]
+        )));
+        assert!(!is_covariance_matrix_admissible(&DenseMatrix::from_rows(
+            &[vec![1.0, f64::NAN], vec![f64::NAN, 1.0]]
+        )));
+    }
+
+    #[test]
+    fn correlation_matrix_admissibility_checks_unit_diagonal_and_bounds() {
+        let corr = DenseMatrix::from_rows(&[vec![1.0, -0.5], vec![-0.5, 1.0]]);
+        assert!(is_correlation_matrix_admissible(&corr));
+        assert!(is_correlation_matrix_admissible_with_tolerance(
+            &DenseMatrix::from_rows(&[vec![1.0 + 5e-10, 0.0], vec![0.0, 1.0]]),
+            1e-9
+        ));
+        assert!(!is_correlation_matrix_admissible(&DenseMatrix::from_rows(
+            &[vec![2.0, 0.0], vec![0.0, 1.0]]
+        )));
+        assert!(!is_correlation_matrix_admissible(&DenseMatrix::from_rows(
+            &[vec![1.0, 1.2], vec![1.2, 1.0]]
+        )));
     }
 
     #[test]

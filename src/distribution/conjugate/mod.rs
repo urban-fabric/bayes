@@ -9,6 +9,8 @@
 //! *future* observation with the parameter integrated out (often a compound
 //! distribution such as the [`BetaBinomial`](crate::BetaBinomial),
 //! [`NegativeBinomial`](crate::NegativeBinomial), or [`Lomax`](crate::Lomax)).
+//! Family wrappers also expose exact log marginal likelihoods (`ln p(data)`)
+//! where the likelihood parameter is analytically integrated out.
 //!
 //! This is the one genuinely *Bayesian* capability the library exposes, and it sits
 //! squarely on the closed-form side of the boundary: a posterior is just another
@@ -28,14 +30,16 @@
 mod beta;
 mod dirichlet;
 mod gamma;
+mod multivariate_normal;
 mod natural;
 mod normal;
 
 pub use beta::{BetaBernoulli, BetaBinomialModel};
 pub use dirichlet::{DirichletCategorical, DirichletMultinomial};
 pub use gamma::{GammaExponential, GammaPoisson};
+pub use multivariate_normal::{NormalInverseWishart, NormalWishart};
 pub use natural::{Counts, NaturalParams, NigNatural, Pair};
-pub use normal::{NormalInverseGamma, NormalKnownVariance, precision_weighted_mean};
+pub use normal::{NormalGamma, NormalInverseGamma, NormalKnownVariance, precision_weighted_mean};
 
 /// A conjugate prior/likelihood pair whose posterior is computable in closed
 /// form by the **one** algebraic move every conjugate family shares: add the

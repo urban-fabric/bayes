@@ -133,6 +133,183 @@ impl MultivariateNormal {
     pub fn dimension(&self) -> usize {
         self.mean.len()
     }
+
+    /// Borrow the covariance matrix.
+    pub fn covariance_matrix(&self) -> &DenseMatrix {
+        &self.cov
+    }
+
+    /// Closed-form marginal distribution over a coordinate subset.
+    ///
+    /// Coordinates are returned in the order supplied by `indices`. Duplicate or
+    /// out-of-range indices are rejected because they would create a singular
+    /// coordinate map rather than a true marginal.
+    pub fn marginal(&self, indices: &[usize]) -> Result<Self, BayesError> {
+        validate_indices(indices, self.dimension(), false)?;
+        Self::new(
+            select_vector(&self.mean, indices),
+            select_matrix(&self.cov, indices, indices),
+        )
+    }
+
+    /// Closed-form conditional distribution of the unobserved coordinates given
+    /// observed coordinates.
+    ///
+    /// If `observed_indices` is empty this returns `self`. If every coordinate is
+    /// observed, there is no non-empty Gaussian left to return and an error is
+    /// reported.
+    pub fn condition(
+        &self,
+        observed_indices: &[usize],
+        observed_values: &[f64],
+    ) -> Result<Self, BayesError> {
+        let d = self.dimension();
+        if observed_indices.is_empty() {
+            if observed_values.is_empty() {
+                return Ok(self.clone());
+            }
+            return Err(BayesError::Malformed {
+                what: "observed values must match observed indices",
+            });
+        }
+        validate_indices(observed_indices, d, false)?;
+        if observed_values.len() != observed_indices.len()
+            || observed_values.iter().any(|x| !x.is_finite())
+        {
+            return Err(BayesError::Malformed {
+                what: "observed values must be finite and match observed indices",
+            });
+        }
+        let unobserved = complement_indices(d, observed_indices);
+        if unobserved.is_empty() {
+            return Err(BayesError::Malformed {
+                what: "conditioning on all coordinates leaves no distribution",
+            });
+        }
+
+        let sigma_oo = select_matrix(&self.cov, observed_indices, observed_indices);
+        let chol_oo = jittered_cholesky(&sigma_oo)?;
+        let delta: Vec<f64> = observed_values
+            .iter()
+            .zip(select_vector(&self.mean, observed_indices))
+            .map(|(&x, mu)| x - mu)
+            .collect();
+        let solved_delta = chol_oo.solve(&delta);
+
+        let sigma_uo = select_matrix(&self.cov, &unobserved, observed_indices);
+        let sigma_ou = select_matrix(&self.cov, observed_indices, &unobserved);
+        let sigma_uu = select_matrix(&self.cov, &unobserved, &unobserved);
+
+        let mean_u = select_vector(&self.mean, &unobserved);
+        let cond_mean: Vec<f64> = mean_u
+            .iter()
+            .enumerate()
+            .map(|(i, &mu)| {
+                mu + (0..observed_indices.len())
+                    .map(|j| sigma_uo.get(i, j) * solved_delta[j])
+                    .sum::<f64>()
+            })
+            .collect();
+
+        let cond_cov = DenseMatrix::from_fn(unobserved.len(), unobserved.len(), |i, j| {
+            let col = sigma_ou.column(j);
+            let solved_col = chol_oo.solve(&col);
+            sigma_uu.get(i, j)
+                - (0..observed_indices.len())
+                    .map(|k| sigma_uo.get(i, k) * solved_col[k])
+                    .sum::<f64>()
+        });
+        Self::new(cond_mean, symmetrize(&cond_cov))
+    }
+
+    /// Closed-form affine image `Y = A X + b`.
+    ///
+    /// `A` must have `dimension()` columns and `b` one entry per output row.
+    pub fn affine_transform(&self, a: &DenseMatrix, b: &[f64]) -> Result<Self, BayesError> {
+        let d = self.dimension();
+        if a.rows() == 0 || a.cols() != d || b.len() != a.rows() {
+            return Err(BayesError::Malformed {
+                what: "affine transform shape mismatch",
+            });
+        }
+        if !a.is_finite() || b.iter().any(|x| !x.is_finite()) {
+            return Err(BayesError::Malformed {
+                what: "affine transform entries must be finite",
+            });
+        }
+        let m = a.rows();
+        let mean = (0..m)
+            .map(|i| b[i] + (0..d).map(|j| a.get(i, j) * self.mean[j]).sum::<f64>())
+            .collect();
+        let cov = DenseMatrix::from_fn(m, m, |r, c| {
+            let mut acc = 0.0;
+            for i in 0..d {
+                for j in 0..d {
+                    acc += a.get(r, i) * self.cov.get(i, j) * a.get(c, j);
+                }
+            }
+            acc
+        });
+        Self::new(mean, symmetrize(&cov))
+    }
+
+    /// Batch log likelihood `Σ ln f(xᵢ)`. Empty samples have log likelihood `0`.
+    pub fn ln_likelihood(&self, samples: &[Vec<f64>]) -> f64 {
+        if samples
+            .iter()
+            .any(|x| x.len() != self.dimension() || x.iter().any(|v| !v.is_finite()))
+        {
+            return f64::NEG_INFINITY;
+        }
+        samples.iter().map(|x| self.ln_pdf(x)).sum()
+    }
+
+    /// The integral of the pointwise product of two Gaussian densities:
+    ///
+    /// `∫ N(x|μ₀,Σ₀) N(x|μ₁,Σ₁) dx = N(μ₀ | μ₁, Σ₀ + Σ₁)`.
+    pub fn ln_product_integral(&self, other: &Self) -> f64 {
+        let d = self.dimension();
+        if other.dimension() != d {
+            return f64::NEG_INFINITY;
+        }
+        let cov_sum = DenseMatrix::from_fn(d, d, |i, j| self.cov.get(i, j) + other.cov.get(i, j));
+        let Ok(chol) = jittered_cholesky(&cov_sum) else {
+            return f64::NAN;
+        };
+        let diff: Vec<f64> = (0..d).map(|i| self.mean[i] - other.mean[i]).collect();
+        let solved = chol.solve(&diff);
+        let quad = diff.iter().zip(solved).map(|(&a, b)| a * b).sum::<f64>();
+        let ln_det = 2.0 * (0..d).map(|i| chol.lower().get(i, i).ln()).sum::<f64>();
+        -0.5 * (d as f64 * TAU.ln() + ln_det + quad)
+    }
+
+    /// Closed-form precision fusion of two Gaussian factors.
+    ///
+    /// The result is proportional to the product of the two densities; the log
+    /// normalizing integral is available from [`ln_product_integral`](Self::ln_product_integral).
+    pub fn precision_fusion(&self, other: &Self) -> Result<Self, BayesError> {
+        let d = self.dimension();
+        if other.dimension() != d {
+            return Err(BayesError::Malformed {
+                what: "Gaussian dimensions must match",
+            });
+        }
+        let p0 = inverse_spd(&self.cov)?;
+        let p1 = inverse_spd(&other.cov)?;
+        let precision = DenseMatrix::from_fn(d, d, |i, j| p0.get(i, j) + p1.get(i, j));
+        let cov = inverse_spd(&precision)?;
+        let h: Vec<f64> = (0..d)
+            .map(|i| {
+                (0..d)
+                    .map(|j| p0.get(i, j) * self.mean[j] + p1.get(i, j) * other.mean[j])
+                    .sum()
+            })
+            .collect();
+        let mean: Vec<f64> = (0..d)
+            .map(|i| (0..d).map(|j| cov.get(i, j) * h[j]).sum())
+            .collect();
+        Self::new(mean, symmetrize(&cov))
+    }
 }
 
 impl Distribution<Vec<f64>> for MultivariateNormal {
@@ -199,6 +376,70 @@ impl crate::distribution::KlDivergence for MultivariateNormal {
         let quad: f64 = diff.iter().zip(&solved).map(|(a, b)| a * b).sum();
         0.5 * (ln_det_ratio - d as f64 + trace + quad)
     }
+}
+
+fn validate_indices(
+    indices: &[usize],
+    dimension: usize,
+    allow_empty: bool,
+) -> Result<(), BayesError> {
+    if indices.is_empty() && !allow_empty {
+        return Err(BayesError::Malformed {
+            what: "coordinate index set must be non-empty",
+        });
+    }
+    let mut seen = vec![false; dimension];
+    for &idx in indices {
+        if idx >= dimension || seen[idx] {
+            return Err(BayesError::Malformed {
+                what: "coordinate indices must be in range and unique",
+            });
+        }
+        seen[idx] = true;
+    }
+    Ok(())
+}
+
+fn complement_indices(dimension: usize, indices: &[usize]) -> Vec<usize> {
+    let mut observed = vec![false; dimension];
+    for &idx in indices {
+        observed[idx] = true;
+    }
+    (0..dimension).filter(|&idx| !observed[idx]).collect()
+}
+
+fn select_vector(values: &[f64], indices: &[usize]) -> Vec<f64> {
+    indices.iter().map(|&idx| values[idx]).collect()
+}
+
+fn select_matrix(matrix: &DenseMatrix, rows: &[usize], cols: &[usize]) -> DenseMatrix {
+    DenseMatrix::from_fn(rows.len(), cols.len(), |i, j| matrix.get(rows[i], cols[j]))
+}
+
+fn symmetrize(matrix: &DenseMatrix) -> DenseMatrix {
+    DenseMatrix::from_fn(matrix.rows(), matrix.cols(), |i, j| {
+        0.5 * (matrix.get(i, j) + matrix.get(j, i))
+    })
+}
+
+fn jittered_cholesky(matrix: &DenseMatrix) -> Result<Cholesky<f64>, BayesError> {
+    DenseMatrix::from_fn(matrix.rows(), matrix.cols(), |i, j| {
+        matrix.get(i, j) + if i == j { JITTER } else { 0.0 }
+    })
+    .cholesky()
+    .map_err(|_| BayesError::Malformed {
+        what: "matrix is not positive-definite",
+    })
+}
+
+fn inverse_spd(matrix: &DenseMatrix) -> Result<DenseMatrix, BayesError> {
+    let n = matrix.rows();
+    let chol = jittered_cholesky(matrix)?;
+    Ok(DenseMatrix::from_fn(n, n, |i, j| {
+        let mut unit = vec![0.0; n];
+        unit[j] = 1.0;
+        chol.solve(&unit)[i]
+    }))
 }
 
 #[cfg(test)]
@@ -302,6 +543,69 @@ mod tests {
         // Dimension mismatch → +∞.
         let s = MultivariateNormal::new(vec![0.0], DenseMatrix::from_rows(&[vec![1.0]])).unwrap();
         assert!(p.kl_divergence(&s).is_infinite());
+    }
+
+    #[test]
+    fn marginal_condition_and_affine_transform_match_closed_forms() {
+        let mvn = MultivariateNormal::new(
+            vec![1.0, 2.0, 3.0],
+            DenseMatrix::from_rows(&[
+                vec![4.0, 1.0, 0.5],
+                vec![1.0, 9.0, 2.0],
+                vec![0.5, 2.0, 16.0],
+            ]),
+        )
+        .unwrap();
+
+        let marginal = mvn.marginal(&[2, 0]).unwrap();
+        assert_eq!(marginal.mean(), &[3.0, 1.0]);
+        close(marginal.covariance_matrix().get(0, 0), 16.0, 1e-12);
+        close(marginal.covariance_matrix().get(0, 1), 0.5, 1e-12);
+        close(marginal.covariance_matrix().get(1, 1), 4.0, 1e-12);
+        assert!(mvn.marginal(&[0, 0]).is_err());
+
+        let bivar = MultivariateNormal::new(
+            vec![0.0, 0.0],
+            DenseMatrix::from_rows(&[vec![4.0, 2.0], vec![2.0, 9.0]]),
+        )
+        .unwrap();
+        let conditional = bivar.condition(&[0], &[2.0]).unwrap();
+        assert_eq!(conditional.mean().len(), 1);
+        close(conditional.mean()[0], 1.0, 1e-10);
+        close(conditional.covariance_matrix().get(0, 0), 8.0, 1e-10);
+        assert!(bivar.condition(&[0, 1], &[0.0, 0.0]).is_err());
+
+        let affine = bivar
+            .affine_transform(
+                &DenseMatrix::from_rows(&[vec![1.0, 1.0], vec![2.0, 0.0]]),
+                &[1.0, -1.0],
+            )
+            .unwrap();
+        assert_eq!(affine.mean(), &[1.0, -1.0]);
+        close(affine.covariance_matrix().get(0, 0), 17.0, 1e-12);
+        close(affine.covariance_matrix().get(0, 1), 12.0, 1e-12);
+        close(affine.covariance_matrix().get(1, 1), 16.0, 1e-12);
+    }
+
+    #[test]
+    fn batch_likelihood_product_integral_and_precision_fusion_are_closed_form() {
+        let p = MultivariateNormal::new(vec![0.0], DenseMatrix::from_rows(&[vec![4.0]])).unwrap();
+        let q = MultivariateNormal::new(vec![2.0], DenseMatrix::from_rows(&[vec![6.0]])).unwrap();
+
+        let data = vec![vec![0.0], vec![1.0]];
+        close(
+            p.ln_likelihood(&data),
+            p.ln_pdf(&[0.0]) + p.ln_pdf(&[1.0]),
+            1e-12,
+        );
+        assert_eq!(p.ln_likelihood(&[vec![0.0, 1.0]]), f64::NEG_INFINITY);
+
+        let expected_integral = -0.5 * ((TAU * 10.0).ln() + 4.0 / 10.0);
+        close(p.ln_product_integral(&q), expected_integral, 1e-10);
+
+        let fused = p.precision_fusion(&q).unwrap();
+        close(fused.mean()[0], 0.8, 1e-9);
+        close(fused.covariance_matrix().get(0, 0), 12.0 / 5.0, 1e-9);
     }
 
     #[test]

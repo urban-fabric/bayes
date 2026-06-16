@@ -7,15 +7,28 @@
 //! as a `ramanujan::DenseMatrix`.
 
 mod dirichlet;
+mod dirichlet_multinomial;
+pub(crate) mod matrix;
 mod multinomial;
 mod normal;
+mod orientation;
+mod spherical_uniform;
+mod student_t;
 mod von_mises_fisher;
+mod watson;
+mod wishart;
 
 pub use dirichlet::Dirichlet;
+pub use dirichlet_multinomial::DirichletMultinomialDistribution;
 pub use multinomial::Multinomial;
 pub use normal::MultivariateNormal;
+pub use orientation::{BinghamPotential, BinghamRankOne, BinghamSpectrum, KentPotential};
 use ramanujan::DenseMatrix;
+pub use spherical_uniform::SphericalUniform;
+pub use student_t::MultivariateStudentT;
 pub use von_mises_fisher::VonMisesFisher;
+pub use watson::WatsonS2;
+pub use wishart::{InverseWishart, Wishart};
 
 /// A continuous distribution over vectors: the joint density `f(x)` for `x ∈ ℝ^d`.
 pub trait MultivariateContinuous {

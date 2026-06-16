@@ -4,6 +4,8 @@
 //!
 //! * [`ln_sum_exp`] / [`ln_add_exp`] — `ln Σ eˣⁱ` via the max-shift, for mixture and
 //!   categorical log-densities.
+//! * [`softmax`] / [`log_softmax`] / [`ln_mean_exp`] — normalized log-weights,
+//!   log-probabilities, and log averages using the same shift-invariant reduction.
 //! * [`ln_1p_exp`] (softplus) / [`ln_1m_exp`] — `ln(1 ± eˣ)` without losing digits.
 //! * [`xlogy`] — `x·ln y` with the `0·ln 0 = 0` convention (entropy / KL terms).
 //! * [`erfcx`] — the scaled complementary error function `eˣ² erfc(x)`, which stays
@@ -43,6 +45,61 @@ pub fn ln_sum_exp(xs: &[f64]) -> f64 {
     }
     let sum: f64 = xs.iter().map(|&x| (x - max).exp()).sum();
     max + sum.ln()
+}
+
+/// The **log-mean-exp** `ln((1/n) Σᵢ eˣⁱ)`, computed as
+/// [`ln_sum_exp`] minus `ln n`.
+///
+/// Empty input returns `-∞`, matching [`ln_sum_exp`]'s "log zero" convention.
+pub fn ln_mean_exp(xs: &[f64]) -> f64 {
+    if xs.is_empty() {
+        return f64::NEG_INFINITY;
+    }
+    ln_sum_exp(xs) - (xs.len() as f64).ln()
+}
+
+/// The stable **log-softmax** `xᵢ - ln Σⱼ eˣʲ`.
+///
+/// This is the log-domain form of normalized weights. It is shift-invariant by
+/// construction (`log_softmax(x + c) = log_softmax(x)`), the exact fact proved in
+/// riemann `RiemannLean/Markov/LogSumExp.lean` as `logSumExp_add_const`.
+/// Returns an empty vector for empty input, `NaN` input, or all-`-∞` input. If
+/// one or more coordinates are `+∞`, the limiting distribution is uniform over
+/// those coordinates and zero elsewhere.
+pub fn log_softmax(xs: &[f64]) -> Vec<f64> {
+    if xs.is_empty() || xs.iter().any(|x| x.is_nan()) {
+        return Vec::new();
+    }
+
+    let pos_inf = xs.iter().filter(|&&x| x == f64::INFINITY).count();
+    if pos_inf > 0 {
+        let log_mass = -(pos_inf as f64).ln();
+        return xs
+            .iter()
+            .map(|&x| {
+                if x == f64::INFINITY {
+                    log_mass
+                } else {
+                    f64::NEG_INFINITY
+                }
+            })
+            .collect();
+    }
+
+    let log_z = ln_sum_exp(xs);
+    if log_z == f64::NEG_INFINITY || log_z.is_nan() {
+        return Vec::new();
+    }
+    xs.iter().map(|&x| x - log_z).collect()
+}
+
+/// The stable **softmax** `exp(xᵢ) / Σⱼ exp(xⱼ)`.
+///
+/// The returned vector is a probability vector whenever it is non-empty: entries
+/// are nonnegative and sum to one up to floating-point roundoff. This is the
+/// Rust counterpart of riemann `softmax_isDistribution`.
+pub fn softmax(xs: &[f64]) -> Vec<f64> {
+    log_softmax(xs).into_iter().map(f64::exp).collect()
 }
 
 /// `ln(eᵃ − eᵇ)`, stable when `a ≥ b`.
@@ -143,6 +200,38 @@ mod tests {
         close(ln_sum_exp(&xs), 1000.0 + 2.0_f64.ln(), 1e-9);
         let xs = [-1000.0, -1001.0];
         close(ln_sum_exp(&xs), ln_add_exp(-1000.0, -1001.0), 1e-12);
+    }
+
+    #[test]
+    fn ln_mean_exp_and_softmax_are_stable_under_large_shifts() {
+        let xs = [1000.0, 1000.0];
+        close(ln_mean_exp(&xs), 1000.0, 1e-12);
+
+        let p = softmax(&xs);
+        assert_eq!(p.len(), 2);
+        close(p[0], 0.5, 1e-12);
+        close(p[1], 0.5, 1e-12);
+
+        let shifted = [1200.0, 1200.0];
+        assert_eq!(softmax(&xs), softmax(&shifted));
+    }
+
+    #[test]
+    fn log_softmax_returns_log_probabilities() {
+        let lp = log_softmax(&[0.0, 0.0, f64::NEG_INFINITY]);
+        assert_eq!(lp.len(), 3);
+        close(lp[0], -2.0_f64.ln(), 1e-12);
+        close(lp[1], -2.0_f64.ln(), 1e-12);
+        assert_eq!(lp[2], f64::NEG_INFINITY);
+
+        let p = softmax(&[f64::INFINITY, 1.0, f64::INFINITY]);
+        close(p[0], 0.5, 1e-12);
+        close(p[1], 0.0, 1e-12);
+        close(p[2], 0.5, 1e-12);
+
+        assert!(softmax(&[]).is_empty());
+        assert!(softmax(&[f64::NEG_INFINITY, f64::NEG_INFINITY]).is_empty());
+        assert!(softmax(&[0.0, f64::NAN]).is_empty());
     }
 
     #[test]

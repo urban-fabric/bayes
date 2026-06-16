@@ -4,9 +4,10 @@
 //!   correlation; robust summaries, z-scores, quantiles, median, IQR, MAD, Tukey fences.
 //! * `correlation` — rank correlation (Spearman ρ, Kendall τ-b) and Cramér's V.
 //! * `effect` — standardized mean effects, ANOVA effect sizes, odds/risk effects.
-//! * `weighted` — weighted mean/variance/covariance/correlation and quantiles.
-//! * `multivariate` — sample mean/covariance/correlation matrices and Mahalanobis
-//!   / Hotelling statistics.
+//! * `weighted` — weight normalization (raw or log-domain), ESS diagnostics, weighted
+//!   mean/variance/covariance/correlation, and quantiles.
+//! * `multivariate` — sample mean/covariance/correlation matrices, matrix
+//!   admissibility predicates, and Mahalanobis / Hotelling statistics.
 //! * `regression` — ordinary least squares (simple and multiple) with diagnostics.
 //! * `resampling` — bootstrap and jackknife with percentile intervals.
 //! * [`hypothesis`] — z / t / Welch / F / χ² / Mann–Whitney / KS / Jarque–Bera /
@@ -16,7 +17,7 @@
 //!   standard deviations, and two-sample differences, plus a distribution-free
 //!   (Chebyshev/Hoeffding/Chernoff/Bernstein/Paley–Zygmund/Popoviciu) concentration tier.
 //! * `estimation` — Cramér–Rao (and Bhattacharyya higher-order) efficiency diagnostics,
-//!   observed Fisher information, Rao–Blackwellization / the law-of-total-variance split, and
+//!   observed Fisher information, Rao–Blackwellization / grouped variance decomposition, and
 //!   the Lehmann–Scheffé UMVU certifier.
 //! * `inequalities` — proof-backed moment certifiers: Cauchy–Schwarz consistency and
 //!   the Jensen gap.
@@ -61,16 +62,19 @@ pub use effect::{
 };
 pub use empirical::{Ecdf, Histogram, histogram};
 pub use estimation::{
-    bhattacharyya_lower_bound, conditional_variance, cramer_rao_lower_bound,
+    VarianceDecomposition, bhattacharyya_lower_bound, conditional_variance, cramer_rao_lower_bound,
     fisher_information_from_scores, is_bhattacharyya_admissible, is_cr_admissible, is_umvu,
-    rao_blackwell, relative_efficiency,
+    rao_blackwell, relative_efficiency, variance_decomposition,
 };
 pub use hypothesis::TestResult;
 pub use inequalities::{cauchy_schwarz_moment_holds, jensen_gap_lower_bound};
 pub use kde::KernelDensity;
 pub use multivariate::{
-    correlation_matrix, covariance_matrix, covariance_of_linear_combinations, hotelling_t_squared,
-    mahalanobis_squared, mean_vector, pooled_covariance_matrix, variance_of_linear_combination,
+    MATRIX_ADMISSIBILITY_TOLERANCE, correlation_matrix, covariance_matrix,
+    covariance_of_linear_combinations, hotelling_t_squared, is_correlation_matrix_admissible,
+    is_correlation_matrix_admissible_with_tolerance, is_covariance_matrix_admissible,
+    is_covariance_matrix_admissible_with_tolerance, mahalanobis_squared, mean_vector,
+    pooled_covariance_matrix, variance_of_linear_combination,
 };
 pub use online::{RunningCovariance, RunningStats};
 pub use order::{
@@ -86,7 +90,8 @@ pub use summary::{
 };
 pub use tdigest::TDigest;
 pub use weighted::{
-    effective_sample_size, weight_sum, weighted_correlation, weighted_covariance, weighted_mean,
+    effective_sample_size, is_effective_sample_size_admissible, normalized_log_weights,
+    normalized_weights, weight_sum, weighted_correlation, weighted_covariance, weighted_mean,
     weighted_population_variance, weighted_quantile, weighted_std_dev, weighted_variance,
 };
 

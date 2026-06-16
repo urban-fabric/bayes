@@ -1,7 +1,8 @@
 use super::*;
 use crate::distribution::{
     Bernoulli, Beta, Categorical, Cauchy, Continuous, Dirichlet, Discrete, Exponential, Gamma,
-    Geometric, Laplace, LogNormal, Moments, Multinomial, Normal, Pareto, Poisson, Rayleigh, Weibull,
+    Geometric, Laplace, LogNormal, Moments, Multinomial, Normal, Pareto, Poisson, Rayleigh,
+    Weibull,
 };
 
 fn close(a: f64, b: f64, tol: f64) {

@@ -12,30 +12,74 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   Pareto, F, Triangular, Rayleigh, Gumbel, Half-Normal, Inverse-Gamma, Logistic,
   Lomax, Frechet, Wald, VonMises, Uniform, Uniform2D), discrete (Bernoulli,
   Binomial, Poisson, Geometric, DiscreteUniform, NegativeBinomial, Hypergeometric,
-  Categorical, BetaBinomial), multivariate (MVN, Dirichlet, Multinomial), plus combinators
-  (Mixture, Truncated, Transformed).
-  Each provides PDF/PMF, CDF/quantile/survival (incl. stable `ln_cdf`/`ln_sf`/`isf`),
+  Categorical, BetaBinomial), multivariate (MVN, multivariate Student-t,
+  Dirichlet, Multinomial, Dirichlet-multinomial counts, Wishart,
+  Inverse-Wishart), plus combinators (Mixture, OrderStatistic, Truncated,
+  Transformed). MVNs include closed-form marginal, conditional,
+  affine-transform, batch-likelihood, and Gaussian-product / precision-fusion
+  operations. Multivariate Student-t distributions include closed-form
+  marginals, conditionals, affine transforms, Mahalanobis geometry, entropy,
+  and batch likelihoods. Wishart families include matrix densities, entropy/KL,
+  expected log-determinants, entry variances/covariances where their moments
+  exist, congruence transforms, and inverse-family transforms.
+  Dirichlet distributions include component/sum Beta marginals,
+  category lumping, conditional sub-simplex laws, count updates, expected
+  categorical/count log likelihoods, cross-entropy, and full
+  Dirichlet-multinomial predictive count distributions with predictive log
+  probabilities. Directional models include normalized von Mises/von
+  Mises-Fisher, spherical-uniform, and Watson-on-S² distributions with
+  closed-form moments, entropy/KL, sampling, and same-family product algebra
+  where it stays normalized. Kent/Bingham expose closed-form potential algebra
+  (ratios, gradients, spectral/canonical forms, identity-shift invariance,
+  rank-one Watson conversion) plus normalized special cases where the partition function,
+  moments, and entropy are analytic; the generic Kent/Bingham normalizers remain
+  outside the closed-form surface.
+  Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
+  (incl. stable `ln_cdf`/`ln_sf`/`isf`) plus reliability helpers
+  (`hazard`, `ln_hazard`, `cumulative_hazard`),
   analytic moments (`Option`-typed — Cauchy honestly has no mean), and `rand` sampling.
   Same-family pairs also expose a closed-form `kl_divergence` (and Jeffreys, JS,
   Hellinger, total-variation, χ², Rényi, mutual information). The **f-divergence
   umbrella** (`f_divergence`) unifies these into one generic `D_f(p ‖ q)` over
   probability vectors with pluggable convex generators, plus a stochastic
-  `Channel` carrying the data-processing inequality.
+  `Channel` carrying the data-processing inequality. Probability helpers validate
+  simplex vectors, row-stochastic kernels/matrices, and expose proper scoring
+  rules (`log_score`, `brier_score`, `spherical_score`, ranked probability score)
+  for categorical forecasts.
   Functional adapters (`ContinuousFn`, `DiscreteFn`, `ContinuousDensity`,
   `DiscreteMass`) lift closures into the same trait spine for custom likelihoods.
+  Mixtures also expose stable component responsibilities in log or probability
+  form.
 - **Special functions** (`function`) — gamma/beta/erf/Bessel families,
   multivariate gamma/beta, combinatorics, and stable log-domain helpers
-  (`ln_sum_exp`, `ln_1p_exp`, `ln_1m_exp`, `xlogy`, `erfcx`).
+  (`ln_sum_exp`, `ln_mean_exp`, `softmax`, `log_softmax`, `ln_1p_exp`,
+  `ln_1m_exp`, `xlogy`, `erfcx`).
 - **Sample statistics** (`statistics`) — summary/order/robust/weighted statistics,
-  rank correlation & Cramér's V, effect sizes, multivariate sample covariance and
-  Mahalanobis/Hotelling statistics, OLS regression diagnostics, resampling,
-  hypothesis tests (z/t/F/χ²/KS/ANOVA/Wilcoxon/Fisher/binomial/McNemar),
-  confidence intervals, KDE, ECDF/histogram, and mergeable streaming accumulators
-  (`RunningStats`, `RunningCovariance`, `TDigest`).
+  raw/log-domain weight normalization, ESS diagnostics, rank correlation & Cramér's V,
+  effect sizes, multivariate sample covariance/correlation with matrix
+  admissibility checks, Mahalanobis/Hotelling statistics, OLS regression
+  diagnostics, resampling, hypothesis tests
+  (z/t/F/χ²/KS/ANOVA/Wilcoxon/Fisher/binomial/McNemar), grouped variance
+  decomposition, confidence intervals, KDE, ECDF/histogram, and mergeable
+  streaming accumulators (`RunningStats`, `RunningCovariance`, `TDigest`).
 - **Stochastic processes** (`process`) — Gaussian processes (with closed-form
-  posterior), Markov chains, Poisson processes, random walks.
+  posterior), finite Markov chains with direct stationary distributions,
+  communicating/recurrent/transient classes, hitting/absorption quantities, and
+  finite-step distributions, fundamental matrices/visit counts, recurrence
+  times, reversibility, and time reversal, plus Poisson processes and random
+  walks.
 - **Closed-form Bayesian layer** — exponential-family fitting via mergeable
-  sufficient statistics, plus conjugate posteriors and their predictives.
+  sufficient statistics, plus conjugate posteriors, predictives, and exact log
+  marginal likelihoods, including Normal-Inverse-Gamma / Normal-Gamma scalar
+  Gaussian conjugacy and Normal-Inverse-Wishart / Normal-Wishart multivariate
+  Gaussian conjugacy. Scalar Gaussian conjugate models expose finite-batch
+  posterior predictives for future observations, sums, and means. Multivariate
+  Gaussian conjugate models expose closed-form predictive log densities,
+  future-batch predictive likelihoods, and sequential predictive factorizations
+  of the marginal likelihood. Beta, Dirichlet, Gamma, and multivariate Gaussian
+  conjugate wrappers expose the same predictive likelihood and
+  sequential-evidence surface; Gamma-Poisson and Gamma-Exponential also carry
+  that surface through exposure/right-censoring sufficient statistics.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};

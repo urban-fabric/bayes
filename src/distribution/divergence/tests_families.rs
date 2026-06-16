@@ -6,7 +6,8 @@
 use super::*;
 use crate::distribution::{
     Bernoulli, Binomial, ChiSquared, Continuous, Discrete, DiscreteUniform, Frechet, Gamma, Gumbel,
-    HalfNormal, InverseGamma, LogNormal, NegativeBinomial, Normal, Uniform, VonMises, Wald, Weibull,
+    HalfNormal, InverseGamma, LogNormal, NegativeBinomial, Normal, Uniform, VonMises, Wald,
+    Weibull,
 };
 use std::f64::consts::PI;
 
@@ -30,7 +31,11 @@ fn integ(lo: f64, hi: f64, n: usize, f: impl Fn(f64) -> f64) -> f64 {
 fn kl_num(p: &impl Continuous, q: &impl Continuous, lo: f64, hi: f64, n: usize) -> f64 {
     integ(lo, hi, n, |x| {
         let pv = p.pdf(x);
-        if pv > 0.0 { pv * (pv / q.pdf(x)).ln() } else { 0.0 }
+        if pv > 0.0 {
+            pv * (pv / q.pdf(x)).ln()
+        } else {
+            0.0
+        }
     })
 }
 
@@ -88,7 +93,11 @@ where
 fn gamma_renyi_and_chi_squared_match_numeric() {
     let a = Gamma::new(2.0, 1.5).unwrap();
     let b = Gamma::new(3.0, 0.7).unwrap();
-    close(a.chi_squared_divergence(&b), chi2_num(&a, &b, 0.0, 80.0, 400_000), 2e-3);
+    close(
+        a.chi_squared_divergence(&b),
+        chi2_num(&a, &b, 0.0, 80.0, 400_000),
+        2e-3,
+    );
     for al in [0.3, 0.7, 2.0] {
         close(
             a.renyi_divergence(&b, al),
@@ -115,10 +124,22 @@ fn chi_squared_dist_reuses_gamma_and_matches_numeric() {
     let (ga, gb) = (Gamma::new(2.0, 0.5).unwrap(), Gamma::new(3.5, 0.5).unwrap());
     close(a.kl_divergence(&b), ga.kl_divergence(&gb), 1e-12);
     close(a.hellinger_sq(&b), ga.hellinger_sq(&gb), 1e-12);
-    close(a.chi_squared_divergence(&b), ga.chi_squared_divergence(&gb), 1e-12);
-    close(a.renyi_divergence(&b, 1.7), ga.renyi_divergence(&gb, 1.7), 1e-12);
+    close(
+        a.chi_squared_divergence(&b),
+        ga.chi_squared_divergence(&gb),
+        1e-12,
+    );
+    close(
+        a.renyi_divergence(&b, 1.7),
+        ga.renyi_divergence(&gb, 1.7),
+        1e-12,
+    );
     // direct numeric KL
-    close(a.kl_divergence(&b), kl_num(&a, &b, 0.0, 90.0, 400_000), 2e-3);
+    close(
+        a.kl_divergence(&b),
+        kl_num(&a, &b, 0.0, 90.0, 400_000),
+        2e-3,
+    );
     check_renyi_limits(&a, &b);
     close(a.kl_divergence(&a), 0.0, 1e-10);
 }
@@ -131,11 +152,27 @@ fn inverse_gamma_reuses_gamma_and_matches_numeric() {
     let (ga, gb) = (Gamma::new(5.0, 3.0).unwrap(), Gamma::new(6.0, 4.0).unwrap());
     close(a.kl_divergence(&b), ga.kl_divergence(&gb), 1e-12);
     close(a.hellinger_sq(&b), ga.hellinger_sq(&gb), 1e-12);
-    close(a.chi_squared_divergence(&b), ga.chi_squared_divergence(&gb), 1e-12);
-    close(a.renyi_divergence(&b, 1.7), ga.renyi_divergence(&gb, 1.7), 1e-12);
+    close(
+        a.chi_squared_divergence(&b),
+        ga.chi_squared_divergence(&gb),
+        1e-12,
+    );
+    close(
+        a.renyi_divergence(&b, 1.7),
+        ga.renyi_divergence(&gb, 1.7),
+        1e-12,
+    );
     // direct numeric KL and Hellinger over the inverse-gamma densities
-    close(a.kl_divergence(&b), kl_num(&a, &b, 1e-3, 20.0, 400_000), 3e-3);
-    close(a.hellinger_sq(&b), hellinger_num(&a, &b, 1e-3, 20.0, 400_000), 3e-3);
+    close(
+        a.kl_divergence(&b),
+        kl_num(&a, &b, 1e-3, 20.0, 400_000),
+        3e-3,
+    );
+    close(
+        a.hellinger_sq(&b),
+        hellinger_num(&a, &b, 1e-3, 20.0, 400_000),
+        3e-3,
+    );
     check_renyi_limits(&a, &b);
 }
 
@@ -147,7 +184,11 @@ fn inverse_gamma_reuses_gamma_and_matches_numeric() {
 fn normal_chi_squared_matches_numeric_and_diverges() {
     let a = Normal::new(0.0, 1.0).unwrap();
     let b = Normal::new(0.5, 1.5).unwrap();
-    close(a.chi_squared_divergence(&b), chi2_num(&a, &b, -40.0, 40.0, 400_000), 2e-3);
+    close(
+        a.chi_squared_divergence(&b),
+        chi2_num(&a, &b, -40.0, 40.0, 400_000),
+        2e-3,
+    );
     close(
         a.renyi_divergence(&b, 2.0),
         (1.0 + a.chi_squared_divergence(&b)).ln(),
@@ -166,9 +207,21 @@ fn normal_chi_squared_matches_numeric_and_diverges() {
 fn half_normal_divergences_match_numeric_and_zero_mean_normal() {
     let a = HalfNormal::new(1.0).unwrap();
     let b = HalfNormal::new(1.5).unwrap();
-    close(a.kl_divergence(&b), kl_num(&a, &b, 0.0, 30.0, 400_000), 2e-3);
-    close(a.hellinger_sq(&b), hellinger_num(&a, &b, 0.0, 30.0, 400_000), 2e-3);
-    close(a.chi_squared_divergence(&b), chi2_num(&a, &b, 0.0, 30.0, 400_000), 2e-3);
+    close(
+        a.kl_divergence(&b),
+        kl_num(&a, &b, 0.0, 30.0, 400_000),
+        2e-3,
+    );
+    close(
+        a.hellinger_sq(&b),
+        hellinger_num(&a, &b, 0.0, 30.0, 400_000),
+        2e-3,
+    );
+    close(
+        a.chi_squared_divergence(&b),
+        chi2_num(&a, &b, 0.0, 30.0, 400_000),
+        2e-3,
+    );
     for al in [0.3, 0.7, 2.0] {
         close(
             a.renyi_divergence(&b, al),
@@ -192,12 +245,23 @@ fn half_normal_divergences_match_numeric_and_zero_mean_normal() {
 fn lognormal_hellinger_and_chi_squared_match_underlying_normal() {
     let a = LogNormal::new(0.0, 1.0).unwrap();
     let b = LogNormal::new(0.5, 1.2).unwrap();
-    let (na, nb) = (Normal::new(0.0, 1.0).unwrap(), Normal::new(0.5, 1.2).unwrap());
+    let (na, nb) = (
+        Normal::new(0.0, 1.0).unwrap(),
+        Normal::new(0.5, 1.2).unwrap(),
+    );
     // H² and χ² are invariant under the monotone exp map.
     close(a.hellinger_sq(&b), na.hellinger_sq(&nb), 1e-12);
-    close(a.chi_squared_divergence(&b), na.chi_squared_divergence(&nb), 1e-12);
+    close(
+        a.chi_squared_divergence(&b),
+        na.chi_squared_divergence(&nb),
+        1e-12,
+    );
     // direct numeric Hellinger over the log-normal densities
-    close(a.hellinger_sq(&b), hellinger_num(&a, &b, 1e-4, 80.0, 800_000), 3e-3);
+    close(
+        a.hellinger_sq(&b),
+        hellinger_num(&a, &b, 1e-4, 80.0, 800_000),
+        3e-3,
+    );
 }
 
 // ----------------------------------------------------------------------------
@@ -211,9 +275,17 @@ fn von_mises_divergences_match_numeric() {
     let (lo, hi, n) = (-PI, PI, 300_000);
     close(a.kl_divergence(&b), kl_num(&a, &b, lo, hi, n), 2e-3);
     close(a.hellinger_sq(&b), hellinger_num(&a, &b, lo, hi, n), 2e-3);
-    close(a.chi_squared_divergence(&b), chi2_num(&a, &b, lo, hi, n), 2e-3);
+    close(
+        a.chi_squared_divergence(&b),
+        chi2_num(&a, &b, lo, hi, n),
+        2e-3,
+    );
     for al in [0.3, 0.7, 2.0, 3.0] {
-        close(a.renyi_divergence(&b, al), renyi_num(&a, &b, lo, hi, n, al), 2e-3);
+        close(
+            a.renyi_divergence(&b, al),
+            renyi_num(&a, &b, lo, hi, n, al),
+            2e-3,
+        );
     }
     check_renyi_limits(&a, &b);
     close(a.kl_divergence(&a), 0.0, 1e-10);
@@ -231,9 +303,17 @@ fn wald_divergences_match_numeric() {
     let (lo, hi, n) = (1e-3, 30.0, 700_000);
     close(a.kl_divergence(&b), kl_num(&a, &b, lo, hi, n), 2e-3);
     close(a.hellinger_sq(&b), hellinger_num(&a, &b, lo, hi, n), 2e-3);
-    close(a.chi_squared_divergence(&b), chi2_num(&a, &b, lo, hi, n), 3e-3);
+    close(
+        a.chi_squared_divergence(&b),
+        chi2_num(&a, &b, lo, hi, n),
+        3e-3,
+    );
     for al in [0.3, 0.7, 2.0] {
-        close(a.renyi_divergence(&b, al), renyi_num(&a, &b, lo, hi, n, al), 3e-3);
+        close(
+            a.renyi_divergence(&b, al),
+            renyi_num(&a, &b, lo, hi, n, al),
+            3e-3,
+        );
     }
     check_renyi_limits(&a, &b);
     close(a.kl_divergence(&a), 0.0, 1e-10);
@@ -247,7 +327,11 @@ fn wald_divergences_match_numeric() {
 fn gumbel_kl_matches_numeric() {
     let a = Gumbel::new(0.0, 1.0).unwrap();
     let b = Gumbel::new(0.5, 1.5).unwrap();
-    close(a.kl_divergence(&b), kl_num(&a, &b, -20.0, 60.0, 600_000), 2e-3);
+    close(
+        a.kl_divergence(&b),
+        kl_num(&a, &b, -20.0, 60.0, 600_000),
+        2e-3,
+    );
     close(a.kl_divergence(&a), 0.0, 1e-10);
     assert!(a.kl_divergence(&b) > 0.0);
 }
@@ -261,7 +345,11 @@ fn frechet_kl_matches_weibull_reparam_and_numeric() {
     let wa = Weibull::new(1.0, 3.0).unwrap();
     let wb = Weibull::new(1.0 / 1.5, 2.0).unwrap();
     close(a.kl_divergence(&b), wa.kl_divergence(&wb), 1e-12);
-    close(a.kl_divergence(&b), kl_num(&a, &b, 1e-3, 500.0, 800_000), 2e-2);
+    close(
+        a.kl_divergence(&b),
+        kl_num(&a, &b, 1e-3, 500.0, 800_000),
+        2e-2,
+    );
     close(a.kl_divergence(&a), 0.0, 1e-10);
 }
 
@@ -325,7 +413,11 @@ fn binomial_divergences_scale_with_n_and_match_sums() {
     let kl: f64 = (0..=n)
         .map(|k| {
             let p = a.pmf(k);
-            if p > 0.0 { p * (p / b.pmf(k)).ln() } else { 0.0 }
+            if p > 0.0 {
+                p * (p / b.pmf(k)).ln()
+            } else {
+                0.0
+            }
         })
         .sum();
     close(a.kl_divergence(&b), kl, 1e-9);
@@ -334,19 +426,28 @@ fn binomial_divergences_scale_with_n_and_match_sums() {
     let chi: f64 = (0..=n)
         .map(|k| {
             let p = a.pmf(k);
-            if b.pmf(k) > 0.0 { p * p / b.pmf(k) } else { 0.0 }
+            if b.pmf(k) > 0.0 {
+                p * p / b.pmf(k)
+            } else {
+                0.0
+            }
         })
         .sum::<f64>()
         - 1.0;
     close(a.chi_squared_divergence(&b), chi, 1e-9);
     for al in [0.4, 2.0, 3.0] {
-        let s: f64 = (0..=n).map(|k| a.pmf(k).powf(al) * b.pmf(k).powf(1.0 - al)).sum();
+        let s: f64 = (0..=n)
+            .map(|k| a.pmf(k).powf(al) * b.pmf(k).powf(1.0 - al))
+            .sum();
         close(a.renyi_divergence(&b, al), s.ln() / (al - 1.0), 1e-9);
     }
     check_renyi_limits(&a, &b);
     close(a.kl_divergence(&a), 0.0, 1e-12);
     // Differing trial counts are out-of-family.
-    assert!(a.kl_divergence(&Binomial::new(11, 0.3).unwrap()).is_infinite());
+    assert!(
+        a.kl_divergence(&Binomial::new(11, 0.3).unwrap())
+            .is_infinite()
+    );
     assert_eq!(a.hellinger_sq(&Binomial::new(11, 0.3).unwrap()), 1.0);
 }
 
@@ -361,7 +462,11 @@ fn negative_binomial_divergences_match_sums() {
     let kl: f64 = (0..=kmax)
         .map(|k| {
             let p = a.pmf(k);
-            if p > 0.0 { p * (p / b.pmf(k)).ln() } else { 0.0 }
+            if p > 0.0 {
+                p * (p / b.pmf(k)).ln()
+            } else {
+                0.0
+            }
         })
         .sum();
     close(a.kl_divergence(&b), kl, 1e-7);
@@ -371,7 +476,11 @@ fn negative_binomial_divergences_match_sums() {
     let chi: f64 = (0..=kmax)
         .map(|k| {
             let p = a.pmf(k);
-            if b.pmf(k) > 0.0 { p * p / b.pmf(k) } else { 0.0 }
+            if b.pmf(k) > 0.0 {
+                p * p / b.pmf(k)
+            } else {
+                0.0
+            }
         })
         .sum::<f64>()
         - 1.0;

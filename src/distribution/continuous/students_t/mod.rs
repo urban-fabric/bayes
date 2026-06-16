@@ -9,7 +9,7 @@ use crate::distribution::numeric::inverse_cdf_bisect;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::beta_reg;
-use crate::function::gamma::ln_gamma;
+use crate::function::gamma::{digamma, ln_gamma};
 
 /// Student's t-distribution with `ν > 0` degrees of freedom and an optional
 /// **location** `μ` and **scale** `σ > 0`: `X = μ + σ·T`, where `T` is the standard
@@ -78,6 +78,35 @@ impl StudentT {
     pub fn scale(&self) -> f64 {
         self.scale
     }
+
+    /// Affine image `aX + b`.
+    ///
+    /// A zero scale coefficient would collapse the law to a point mass, which is
+    /// outside this non-degenerate Student-t type.
+    pub fn affine(self, scale: f64, shift: f64) -> Result<Self, BayesError> {
+        if !scale.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "scale",
+                value: scale,
+            });
+        }
+        if !shift.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "shift",
+                value: shift,
+            });
+        }
+        if scale == 0.0 {
+            return Err(BayesError::Malformed {
+                what: "student-t affine scale must be non-zero",
+            });
+        }
+        Self::new_location_scale(
+            self.freedom,
+            scale * self.location + shift,
+            scale.abs() * self.scale,
+        )
+    }
 }
 
 impl Distribution<f64> for StudentT {
@@ -141,6 +170,15 @@ impl Moments for StudentT {
     fn skewness(&self) -> Option<f64> {
         (self.freedom > 3.0).then_some(0.0)
     }
+    fn entropy(&self) -> Option<f64> {
+        let nu = self.freedom;
+        let half_nu = 0.5 * nu;
+        let half_nu_plus_one = 0.5 * (nu + 1.0);
+        Some(
+            self.scale.ln() + 0.5 * (nu * PI).ln() + ln_gamma(half_nu) - ln_gamma(half_nu_plus_one)
+                + half_nu_plus_one * (digamma(half_nu_plus_one) - digamma(half_nu)),
+        )
+    }
     fn median(&self) -> Option<f64> {
         Some(self.location)
     }
@@ -181,6 +219,12 @@ mod tests {
     }
 
     #[test]
+    fn entropy_matches_cauchy_special_case() {
+        let cauchy = StudentT::new_location_scale(1.0, 3.0, 2.0).unwrap();
+        close(cauchy.entropy().unwrap(), (8.0 * PI).ln(), 1e-10);
+    }
+
+    #[test]
     fn location_scale_shifts_and_scales() {
         let std = StudentT::new(8.0).unwrap();
         let ls = StudentT::new_location_scale(8.0, 3.0, 2.0).unwrap();
@@ -193,5 +237,11 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(ls.cdf(ls.inverse_cdf(p)), p, 1e-6);
         }
+
+        let affine = ls.affine(-1.5, 4.0).unwrap();
+        close(affine.freedom(), 8.0, 1e-12);
+        close(affine.location(), -0.5, 1e-12);
+        close(affine.scale(), 3.0, 1e-12);
+        assert!(ls.affine(0.0, 1.0).is_err());
     }
 }

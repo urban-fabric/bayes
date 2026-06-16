@@ -16,7 +16,8 @@
 //!
 //! [`NaturalParams`] is that monoid `H`; the carriers below are the `H` for the
 //! concrete families: [`Pair`] (`ℝ²`, the Beta/Gamma/Gaussian pairs),
-//! [`NigNatural`] (`ℝ⁴`, Normal–Inverse-Gamma), and [`Counts`] (`ℝᴷ`, Dirichlet).
+//! [`NigNatural`] (`ℝ⁴`, Normal–Inverse-Gamma / Normal-Gamma), and [`Counts`]
+//! (`ℝᴷ`, Dirichlet).
 
 /// A commutative additive monoid of natural hyperparameters — the `H` of the
 /// riemann umbrella law `Bayes/ExponentialFamily` (`posterior η T data = η + Σ
@@ -71,7 +72,7 @@ impl NaturalParams for Pair {
     }
 }
 
-/// The four natural hyperparameters of the Normal–Inverse-Gamma family,
+/// The four natural hyperparameters of the Normal–Inverse-Gamma / Normal-Gamma family,
 /// `(λ, λμ, 2α, 2β + λμ²)`, under componentwise addition — the coordinate system
 /// in which the NIG update is the additive `η + Σ (1, x, 1, x²)` of riemann's
 /// `normalInverseGamma_online_eq_batch` (`nigStat x = (1, x, x²)`, the two count

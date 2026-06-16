@@ -22,12 +22,14 @@
 use std::f64::consts::{PI, TAU};
 
 use hausdorff::space::sphere::Sphere;
+use ramanujan::DenseMatrix;
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::Beta;
+use crate::distribution::KlDivergence;
 use crate::distribution::continuous::normal::standard_normal_polar;
-use crate::distribution::multivariate::MultivariateContinuous;
+use crate::distribution::multivariate::{MultivariateContinuous, MultivariateMoments};
 use crate::error::BayesError;
 use crate::function::bessel::ln_iv;
 use crate::function::gamma::ln_gamma;
@@ -109,6 +111,71 @@ impl<S: Sphere> VonMisesFisher<S> {
         }
         let df = self.mu.ambient_dim() as f64;
         (ln_iv(df / 2.0, self.kappa) - ln_iv(df / 2.0 - 1.0, self.kappa)).exp()
+    }
+
+    /// Natural concentration vector `κ μ`.
+    #[must_use]
+    pub fn natural_vector(&self) -> Vec<f64> {
+        let mut mu = vec![0.0; self.ambient_dim()];
+        self.mu.write_ambient(&mut mu);
+        mu.iter().map(|&v| self.kappa * v).collect()
+    }
+
+    /// Differential entropy in nats:
+    /// `H = -ln C_d(κ) - κ A_d(κ)`.
+    #[must_use]
+    pub fn entropy_closed_form(&self) -> f64 {
+        -ln_norm_const(self.ambient_dim(), self.kappa) - self.kappa * self.mean_resultant_length()
+    }
+
+    /// Cross-entropy `H(self, other) = -E_self[ln other(X)]`.
+    #[must_use]
+    pub fn cross_entropy(&self, other: &Self) -> f64 {
+        if self.ambient_dim() != other.ambient_dim() {
+            return f64::INFINITY;
+        }
+        -ln_norm_const(other.ambient_dim(), other.kappa)
+            - other.kappa * self.mean_resultant_length() * self.mu.dot(&other.mu)
+    }
+
+    /// The normalized vMF factor proportional to the product of two vMF
+    /// densities. In natural coordinates this is just vector addition:
+    /// `κ μ = κ₁ μ₁ + κ₂ μ₂`.
+    pub fn product_fusion(&self, other: &Self) -> Result<Self, BayesError> {
+        if self.ambient_dim() != other.ambient_dim() {
+            return Err(BayesError::Malformed {
+                what: "von Mises-Fisher dimensions must match",
+            });
+        }
+        let mut eta = self.natural_vector();
+        for (a, b) in eta.iter_mut().zip(other.natural_vector()) {
+            *a += b;
+        }
+        let kappa = eta.iter().map(|v| v * v).sum::<f64>().sqrt();
+        let mu = if kappa > 0.0 {
+            S::from_ambient(&eta)
+        } else {
+            self.mu.clone()
+        };
+        Self::new(mu, kappa)
+    }
+
+    /// Integral of the product of two normalized vMF densities.
+    ///
+    /// If `η = κ₁μ₁ + κ₂μ₂`, then
+    /// `∫ p₁(x)p₂(x)dx = C(κ₁)C(κ₂)/C(||η||)`.
+    #[must_use]
+    pub fn ln_product_integral(&self, other: &Self) -> f64 {
+        if self.ambient_dim() != other.ambient_dim() {
+            return f64::NEG_INFINITY;
+        }
+        let fused = match self.product_fusion(other) {
+            Ok(fused) => fused,
+            Err(_) => return f64::NAN,
+        };
+        ln_norm_const(self.ambient_dim(), self.kappa)
+            + ln_norm_const(other.ambient_dim(), other.kappa)
+            - ln_norm_const(fused.ambient_dim(), fused.kappa)
     }
 
     /// The log density at a sphere point `x`: `ln C_d(κ) + κ·μ·x`.
@@ -244,6 +311,40 @@ impl<S: Sphere> MultivariateContinuous for VonMisesFisher<S> {
     }
 }
 
+impl<S: Sphere> MultivariateMoments for VonMisesFisher<S> {
+    fn mean_vector(&self) -> Vec<f64> {
+        let a = self.mean_resultant_length();
+        let mut mu = vec![0.0; self.ambient_dim()];
+        self.mu.write_ambient(&mut mu);
+        mu.iter().map(|&v| a * v).collect()
+    }
+
+    fn covariance(&self) -> DenseMatrix {
+        let d = self.ambient_dim();
+        let mut mu = vec![0.0; d];
+        self.mu.write_ambient(&mut mu);
+        if self.kappa == 0.0 {
+            return DenseMatrix::from_fn(d, d, |i, j| if i == j { 1.0 / d as f64 } else { 0.0 });
+        }
+        let a = self.mean_resultant_length();
+        let a_over_k = a / self.kappa;
+        DenseMatrix::from_fn(d, d, |i, j| {
+            let eye = if i == j { 1.0 } else { 0.0 };
+            a_over_k * eye + (1.0 - d as f64 * a_over_k - a * a) * mu[i] * mu[j]
+        })
+    }
+
+    fn entropy(&self) -> Option<f64> {
+        Some(self.entropy_closed_form())
+    }
+}
+
+impl<S: Sphere> KlDivergence for VonMisesFisher<S> {
+    fn kl_divergence(&self, other: &Self) -> f64 {
+        self.cross_entropy(other) - self.entropy_closed_form()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -329,5 +430,49 @@ mod tests {
         assert!(VonMisesFisher::new(pt(0.0, 0.0), -1.0).is_err());
         assert!(VonMisesFisher::new(pt(0.0, 0.0), f64::NAN).is_err());
         assert!(VonMisesFisher::<S2Point>::fit(&[]).is_err());
+    }
+
+    #[test]
+    fn closed_form_entropy_kl_moments_and_product_fusion() {
+        use crate::distribution::{KlDivergence, MultivariateMoments};
+
+        let e0 = UnitVector::from_coords(&[1.0, 0.0, 0.0]);
+        let e1 = UnitVector::from_coords(&[0.0, 1.0, 0.0]);
+        let p = VonMisesFisher::new(e0.clone(), 3.0).unwrap();
+        let q = VonMisesFisher::new(e1, 4.0).unwrap();
+
+        close(p.kl_divergence(&p), 0.0, 1e-12);
+        assert!(p.kl_divergence(&q) > 0.0);
+        close(
+            p.cross_entropy(&q) - p.entropy_closed_form(),
+            p.kl_divergence(&q),
+            1e-12,
+        );
+        close(p.entropy().unwrap(), p.entropy_closed_form(), 1e-12);
+
+        let mean = p.mean_vector();
+        close(mean[0], p.mean_resultant_length(), 1e-12);
+        close(mean[1], 0.0, 1e-12);
+        assert!(p.covariance().get(1, 1) > 0.0);
+
+        let fused = p.product_fusion(&q).unwrap();
+        close(fused.concentration(), 5.0, 1e-12);
+        let natural = fused.natural_vector();
+        close(natural[0], 3.0, 1e-12);
+        close(natural[1], 4.0, 1e-12);
+        let expected_integral =
+            ln_norm_const(3, 3.0) + ln_norm_const(3, 4.0) - ln_norm_const(3, 5.0);
+        close(p.ln_product_integral(&q), expected_integral, 1e-12);
+
+        let opposite =
+            VonMisesFisher::new(UnitVector::from_coords(&[-1.0, 0.0, 0.0]), 3.0).unwrap();
+        close(
+            p.product_fusion(&opposite).unwrap().concentration(),
+            0.0,
+            1e-12,
+        );
+
+        let uniform = VonMisesFisher::new(e0, 0.0).unwrap();
+        close(uniform.covariance().get(0, 0), 1.0 / 3.0, 1e-12);
     }
 }

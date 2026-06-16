@@ -101,7 +101,13 @@ impl RenyiDivergence for Gamma {
         if (alpha - 1.0).abs() < ALPHA_KL {
             return self.kl_divergence(other);
         }
-        gamma_renyi(self.shape(), self.rate(), other.shape(), other.rate(), alpha)
+        gamma_renyi(
+            self.shape(),
+            self.rate(),
+            other.shape(),
+            other.rate(),
+            alpha,
+        )
     }
 }
 
@@ -119,7 +125,13 @@ impl RenyiDivergence for InverseGamma {
         if (alpha - 1.0).abs() < ALPHA_KL {
             return self.kl_divergence(other);
         }
-        gamma_renyi(self.shape(), self.scale(), other.shape(), other.scale(), alpha)
+        gamma_renyi(
+            self.shape(),
+            self.scale(),
+            other.shape(),
+            other.scale(),
+            alpha,
+        )
     }
 }
 

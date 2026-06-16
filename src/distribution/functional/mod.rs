@@ -74,6 +74,14 @@ mod tests {
         let truncated = unit.truncated(0.25, 0.75).unwrap();
         close(truncated.pdf(0.5), 2.0, 1e-12);
         close(truncated.cdf(0.5), 0.5, 1e-12);
+
+        let max = unit.maximum_of(4).unwrap();
+        close(max.cdf(0.5), 0.5_f64.powi(4), 1e-12);
+        let median = unit.order_statistic(5, 3).unwrap();
+        close(median.pdf(0.5), 1.875, 1e-12);
+        close(unit.cumulative_hazard(0.5), -0.5_f64.ln(), 1e-12);
+        close(unit.hazard(0.5), 2.0, 1e-12);
+        close(unit.ln_hazard(0.5), 2.0_f64.ln(), 1e-12);
     }
 
     #[test]

@@ -67,22 +67,72 @@ The concrete distributions are grouped by kind:
   Pareto, Logistic, VonMises, and related scalar continuous families.
 - `discrete/`: Bernoulli, Binomial, Poisson, Geometric, Categorical,
   Hypergeometric, NegativeBinomial, BetaBinomial, and related count families.
-- `multivariate/`: MultivariateNormal, Dirichlet, Multinomial, with a small
+- `multivariate/`: MultivariateNormal, MultivariateStudentT, Dirichlet,
+  Multinomial, Wishart, InverseWishart, normalized spherical-uniform,
+  von Mises-Fisher, and Watson-on-S² laws, Dirichlet-multinomial count
+  distributions, Kent/Bingham unnormalized potentials, with a small
   multivariate trait spine.
+  MultivariateNormal owns direct Gaussian algebra: coordinate marginals,
+  conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
+  and precision fusion. MultivariateStudentT owns the matching elliptical
+  algebra that remains closed form: coordinate marginals, affine images,
+  conditional Student-t laws, Mahalanobis geometry, entropy, and batch
+  likelihoods. Wishart families own matrix densities, entropy/KL, expected
+  log-determinants, entry variances/covariances where their moments exist,
+  congruence transforms, and inverse-family transforms. Dirichlet owns the
+  simplex algebra that stays
+  closed under projection: component and subset-sum Beta marginals, category
+  lumping into a smaller Dirichlet, conditional sub-simplex laws, count updates,
+  expected categorical/count log likelihoods, cross-entropy, and full
+  Dirichlet-multinomial predictive count distributions with predictive log
+  probabilities. Directional models keep the same closed-form boundary:
+  spherical-uniform owns the sphere base
+  measure, von Mises-Fisher owns normalized entropy, KL, moments, and product
+  fusion, and WatsonS2 owns the antipodally symmetric S² law with closed-form
+  normalizer, moments, entropy/KL, gradients, sampling, Bingham-potential
+  embedding, and coaxial product fusion. Kent/Bingham own potential algebra,
+  gradients, spectral/canonical forms, identity-shift invariance, rank-one
+  Watson conversion, and normalized special cases (Kent beta=0, isotropic
+  Bingham, two-dimensional Bingham, and rank-one S² Bingham via Watson).
+  Generic Kent/Bingham normalizers remain outside the current closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
-- `combinator/`: Mixture and Truncated.
+  Constraint transforms expose both forward and inverse log-Jacobian corrections,
+  using stable log-domain sigmoid identities in the logistic tails so downstream
+  inference layers do not rederive transform math.
+- `probability.rs`: Probability-vector and row-stochastic kernel/matrix
+  validation, probability weight normalization, and closed-form proper scoring
+  rules for categorical forecasts.
+- `combinator/`: Mixture, OrderStatistic, and Truncated. Mixtures expose stable
+  component responsibilities via the same log-softmax/log-sum-exp substrate used
+  by log-densities. Order statistics lift any continuous PDF/CDF/quantile into
+  the finite-sample minimum, maximum, or kth sample statistic through the direct
+  beta-CDF identity.
 - `transformed/`: Bijectors and `Transformed<D, B>`.
 - `functional/`: closure-backed density/mass/CDF adapters plus extension traits
-  for log-likelihoods, interval probabilities, truncation, and bijective
-  composition.
+  for log-likelihoods, interval probabilities, reliability/survival quantities,
+  order statistics, truncation, and bijective composition.
 - `exponential_family/`: mergeable sufficient statistics and closed-form fits.
-- `conjugate/`: closed-form conjugate prior/posterior updates and predictives.
+- `conjugate/`: closed-form conjugate prior/posterior updates and predictives,
+  including Normal-Inverse-Gamma and Normal-Gamma for scalar Gaussian
+  mean/variance or mean/precision conjugacy, plus Normal-Inverse-Wishart and
+  Normal-Wishart for multivariate Gaussian mean/covariance or mean/precision
+  conjugacy. Scalar Gaussian conjugate wrappers also expose finite-batch
+  posterior predictives for future observations, sums, and means. Multivariate
+  Gaussian conjugate wrappers expose predictive log densities, future-batch
+  predictive likelihoods, and sequential predictive factorizations of the
+  marginal likelihood. Beta, Dirichlet, Gamma, and multivariate Gaussian
+  conjugate wrappers expose the same predictive likelihood and
+  sequential-evidence surface. Gamma-Poisson and Gamma-Exponential carry that
+  surface through exposure/right-censoring updates where the sufficient
+  statistic is `(events, exposure)` rather than raw observations.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
   only its statistic `T`, prior coordinates `η`, and the map back to a
   distribution; the streaming `posterior_natural` accumulator and the
   online-equals-batch / order-independence guarantees are proved generically in
   `riemann` (`Bayes/ExponentialFamily`, `Bayes/ConjugateFamilies`).
+  Family wrappers also expose exact log marginal likelihoods where the likelihood
+  parameters are integrated out analytically.
 - `divergence/`: the closed-form divergence toolkit. `mod.rs` holds the
   per-family closed forms — KL (17 families), Jeffreys/reverse-KL, Jensen–Shannon,
   squared Hellinger, total variation, Pearson χ², Rényi, and mutual information.
@@ -115,7 +165,8 @@ same traits.
 - factorial/binomial helpers;
 - Bessel helpers for circular distributions;
 - multivariate gamma and beta functions;
-- stable log-domain helpers such as log-sum-exp and `xlogy`.
+- stable log-domain helpers such as log-sum-exp, log-mean-exp, softmax/log-softmax,
+  and `xlogy`.
 
 These functions are dependency-light and `f64`-first. More general numeric
 abstractions should wait for a concrete consumer.
@@ -132,12 +183,22 @@ implementation groups with their public functions re-exported from
 - `correlation`: Spearman, Kendall, Cramer's V;
 - `effect`: standardized mean effects, ANOVA effect sizes, and 2x2 risk/odds
   effects;
-- `weighted`: weighted means, variance, covariance, correlation, quantiles, and
-  effective sample size;
-- `multivariate`: mean/covariance/correlation matrices, pooled covariance,
-  Mahalanobis distance, and Hotelling's T-squared;
+- `weighted`: raw/log-domain weight normalization, weighted means, variance,
+  covariance, correlation, quantiles, and effective sample size/admissibility. The
+  log-weight helpers are the closed-form numeric part of the riemann
+  `Markov/LogSumExp` and `Markov/ImportanceSampling` proofs: softmax/normalized
+  weights form a probability vector, and normalized nonnegative weights have
+  `1 <= ESS <= n`;
+- `multivariate`: mean/covariance/correlation matrices, covariance/correlation
+  admissibility predicates, pooled covariance, Mahalanobis distance, and
+  Hotelling's T-squared;
 - `regression`: simple OLS diagnostics and explicit-design least squares;
 - `resampling`: bootstrap, jackknife, percentile intervals;
+- `estimation`: Fisher-information diagnostics, Cramér–Rao/Bhattacharyya variance
+  floors, Rao–Blackwellization, grouped variance decomposition, and UMVU
+  certification. The grouped decomposition is the direct finite-sample form of
+  riemann `Markov/Diagnostics`: within-group plus between-group sums of squares
+  recover total spread about the grand mean;
 - `hypothesis`: z/t/Welch/F, Pearson correlation, chi-squared, Fisher exact, exact
   binomial, McNemar, KS, Jarque-Bera, ANOVA, Mann-Whitney, Wilcoxon, sign test;
 - `confidence`: closed-form confidence intervals for means, proportions, rates,
@@ -159,7 +220,11 @@ module convention. It should not panic for user-provided sample shape issues.
 - covariance kernels (`Rbf`, `Matern`, `Linear`, `Periodic`);
 - Poisson processes;
 - Gaussian random walks and Wiener paths;
-- finite-state Markov chains.
+- finite-state Markov chains, including direct stationary distributions,
+  communicating/recurrent/transient classes, hitting and absorption quantities,
+  first-return probabilities, exact finite-step transition/distribution
+  evolution, fundamental matrices/visit counts, recurrence times, reversibility,
+  and time reversal.
 
 These are direct/generative APIs. Markov chains here are random processes, not
 MCMC inference machinery.
@@ -182,8 +247,8 @@ MCMC inference machinery.
 
 Near-term improvements that fit the current structure:
 
-- Consider a small public matrix/input validation helper if matrix-shaped APIs
-  keep expanding.
+- Extend the existing validation helpers only when a second caller needs the same
+  matrix-shaped invariant.
 - Decide whether kernel constructors should gain fallible `try_new` variants.
 - Expand root-level examples for process and conjugate-update surfaces.
 - Add package/readme examples as doctests where practical.
