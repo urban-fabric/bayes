@@ -54,7 +54,7 @@ pub use functional::{
 pub use multivariate::{
     BinghamPotential, Dirichlet, DirichletMultinomialDistribution, InverseWishart, KentPotential,
     Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
-    MultivariateStudentT, VonMisesFisher, Wishart,
+    MultivariateStudentT, SphericalUniform, VonMisesFisher, WatsonS2, Wishart,
 };
 pub use probability::{
     PROBABILITY_TOLERANCE, brier_score, is_probability_vector,

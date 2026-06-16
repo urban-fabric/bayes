@@ -649,6 +649,29 @@ fn von_mises_directional_public_surface() {
     let fused = p.product_fusion(&q).unwrap();
     close(fused.concentration(), 5.0, 1e-12);
     assert!(p.ln_product_integral(&q).is_finite());
+
+    let uniform = bayes::SphericalUniform::new(UnitVector::from_coords(&[1.0, 0.0, 0.0])).unwrap();
+    close(
+        uniform.pdf(&[0.0, 1.0, 0.0]),
+        1.0 / (4.0 * std::f64::consts::PI),
+        1e-12,
+    );
+    close(
+        uniform.entropy().unwrap(),
+        (4.0 * std::f64::consts::PI).ln(),
+        1e-12,
+    );
+
+    let watson = bayes::WatsonS2::new(UnitVector::from_coords(&[1.0, 0.0, 0.0]), 3.0).unwrap();
+    assert!(watson.is_bipolar());
+    assert!(watson.pdf(&[1.0, 0.0, 0.0]) > watson.pdf(&[0.0, 1.0, 0.0]));
+    assert!(watson.entropy().unwrap().is_finite());
+    assert!(
+        watson
+            .as_bingham_potential()
+            .unwrap()
+            .is_antipodally_symmetric()
+    );
 }
 
 #[test]

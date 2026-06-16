@@ -68,9 +68,10 @@ The concrete distributions are grouped by kind:
 - `discrete/`: Bernoulli, Binomial, Poisson, Geometric, Categorical,
   Hypergeometric, NegativeBinomial, BetaBinomial, and related count families.
 - `multivariate/`: MultivariateNormal, MultivariateStudentT, Dirichlet,
-  Multinomial, Wishart, InverseWishart, normalized von Mises-Fisher, and
-  Dirichlet-multinomial count distributions, Kent/Bingham unnormalized
-  potentials, with a small multivariate trait spine.
+  Multinomial, Wishart, InverseWishart, normalized spherical-uniform,
+  von Mises-Fisher, and Watson-on-S² laws, Dirichlet-multinomial count
+  distributions, Kent/Bingham unnormalized potentials, with a small
+  multivariate trait spine.
   MultivariateNormal owns direct Gaussian algebra: coordinate marginals,
   conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
   and precision fusion. MultivariateStudentT owns the matching elliptical
@@ -81,10 +82,13 @@ The concrete distributions are grouped by kind:
   closed under projection: component and subset-sum Beta marginals, category
   lumping into a smaller Dirichlet, conditional sub-simplex laws, and
   full Dirichlet-multinomial predictive count distributions. Directional models
-  keep the same closed-form boundary: von Mises-Fisher owns normalized entropy,
-  KL, moments, and product fusion; Kent/Bingham own potential algebra, gradients,
-  identity-shift invariance, and normalized special cases (Kent beta=0,
-  isotropic Bingham, and two-dimensional Bingham). Generic Kent/Bingham
+  keep the same closed-form boundary: spherical-uniform owns the sphere base
+  measure, von Mises-Fisher owns normalized entropy, KL, moments, and product
+  fusion, and WatsonS2 owns the antipodally symmetric S² law with closed-form
+  normalizer, moments, entropy/KL, gradients, sampling, Bingham-potential
+  embedding, and coaxial product fusion. Kent/Bingham own potential algebra,
+  gradients, identity-shift invariance, and normalized special cases (Kent
+  beta=0, isotropic Bingham, and two-dimensional Bingham). Generic Kent/Bingham
   normalizers remain outside the current closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
   Constraint transforms expose both forward and inverse log-Jacobian corrections,

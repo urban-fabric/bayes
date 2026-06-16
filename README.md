@@ -23,8 +23,9 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   and inverse-family transforms. Dirichlet distributions include component/sum Beta marginals,
   category lumping, conditional sub-simplex laws, and full Dirichlet-multinomial
   predictive count distributions. Directional models include normalized von
-  Mises/von Mises-Fisher distributions with closed-form moments, entropy/KL,
-  and product fusion. Kent/Bingham expose closed-form potential algebra
+  Mises/von Mises-Fisher, spherical-uniform, and Watson-on-S² distributions with
+  closed-form moments, entropy/KL, sampling, and same-family product algebra
+  where it stays normalized. Kent/Bingham expose closed-form potential algebra
   (ratios, gradients, identity-shift invariance) plus normalized special cases
   where the partition function is analytic; the generic Kent/Bingham normalizers
   remain outside the closed-form surface.
