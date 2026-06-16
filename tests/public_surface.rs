@@ -580,6 +580,24 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
     );
     close(bingham.trace_centered().trace(), 0.0, 1e-12);
     assert!(bingham.pdf_closed_form(&[1.0, 0.0]).unwrap().is_finite());
+    close(bingham.max_eigenvalue(), 2.0, 1e-12);
+    assert_eq!(bingham.mode_axes().len(), 1);
+    assert!(
+        bingham
+            .second_moment_matrix_closed_form()
+            .unwrap()
+            .get(0, 0)
+            > 0.5
+    );
+    assert!(bingham.entropy_closed_form().unwrap().is_finite());
+
+    let axial = BinghamPotential::from_rank_one(&[1.0, 0.0, 0.0], 3.0, 1.5).unwrap();
+    let rank_one = axial.rank_one_form().unwrap();
+    close(rank_one.concentration(), 3.0, 1e-12);
+    let watson =
+        bayes::WatsonS2::<hausdorff::space::sphere::UnitVector>::from_bingham_potential(&axial)
+            .unwrap();
+    close(watson.concentration(), 3.0, 1e-12);
 }
 
 #[test]

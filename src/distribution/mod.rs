@@ -52,9 +52,9 @@ pub use functional::{
     DiscreteDistributionExt, DiscreteFn, DiscreteMass,
 };
 pub use multivariate::{
-    BinghamPotential, Dirichlet, DirichletMultinomialDistribution, InverseWishart, KentPotential,
-    Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
-    MultivariateStudentT, SphericalUniform, VonMisesFisher, WatsonS2, Wishart,
+    BinghamPotential, BinghamRankOne, BinghamSpectrum, Dirichlet, DirichletMultinomialDistribution,
+    InverseWishart, KentPotential, Multinomial, MultivariateContinuous, MultivariateMoments,
+    MultivariateNormal, MultivariateStudentT, SphericalUniform, VonMisesFisher, WatsonS2, Wishart,
 };
 pub use probability::{
     PROBABILITY_TOLERANCE, brier_score, is_probability_vector,

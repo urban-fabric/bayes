@@ -146,6 +146,17 @@ impl<S: Sphere> WatsonS2<S> {
         BinghamPotential::new(self.concentration_matrix())
     }
 
+    /// Recover the Watson distribution from a rank-one Bingham potential on `S²`.
+    ///
+    /// Returns `None` for generic Bingham potentials or non-S² rank-one forms.
+    pub fn from_bingham_potential(potential: &BinghamPotential) -> Option<Self> {
+        let form = potential.rank_one_form()?;
+        if form.axis().len() != S2_DIM {
+            return None;
+        }
+        Self::new(S::from_ambient(form.axis()), form.concentration()).ok()
+    }
+
     /// Second-moment matrix `E[XXᵀ]`. Since the mean is zero, this is also the
     /// covariance matrix.
     #[must_use]
@@ -398,7 +409,7 @@ impl<S: Sphere> KlDivergence for WatsonS2<S> {
     }
 }
 
-fn ln_watson_s2_partition(kappa: f64) -> f64 {
+pub(crate) fn ln_watson_s2_partition(kappa: f64) -> f64 {
     (4.0 * PI).ln() + ln_uniform_quadratic_mgf(kappa)
 }
 
@@ -452,7 +463,7 @@ fn ln_positive_uniform_quadratic_mgf_series(kappa: f64) -> f64 {
     ln_sum
 }
 
-fn axial_second_moment_from_kappa(kappa: f64) -> f64 {
+pub(crate) fn axial_second_moment_from_kappa(kappa: f64) -> f64 {
     if kappa.abs() <= SERIES_RADIUS {
         return axial_second_moment_series(kappa);
     }

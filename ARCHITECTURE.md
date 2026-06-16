@@ -87,9 +87,10 @@ The concrete distributions are grouped by kind:
   fusion, and WatsonS2 owns the antipodally symmetric S² law with closed-form
   normalizer, moments, entropy/KL, gradients, sampling, Bingham-potential
   embedding, and coaxial product fusion. Kent/Bingham own potential algebra,
-  gradients, identity-shift invariance, and normalized special cases (Kent
-  beta=0, isotropic Bingham, and two-dimensional Bingham). Generic Kent/Bingham
-  normalizers remain outside the current closed-form surface.
+  gradients, spectral/canonical forms, identity-shift invariance, rank-one
+  Watson conversion, and normalized special cases (Kent beta=0, isotropic
+  Bingham, two-dimensional Bingham, and rank-one S² Bingham via Watson).
+  Generic Kent/Bingham normalizers remain outside the current closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
   Constraint transforms expose both forward and inverse log-Jacobian corrections,
   using stable log-domain sigmoid identities in the logistic tails so downstream

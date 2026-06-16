@@ -26,9 +26,10 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   Mises/von Mises-Fisher, spherical-uniform, and Watson-on-S² distributions with
   closed-form moments, entropy/KL, sampling, and same-family product algebra
   where it stays normalized. Kent/Bingham expose closed-form potential algebra
-  (ratios, gradients, identity-shift invariance) plus normalized special cases
-  where the partition function is analytic; the generic Kent/Bingham normalizers
-  remain outside the closed-form surface.
+  (ratios, gradients, spectral/canonical forms, identity-shift invariance, rank-one
+  Watson conversion) plus normalized special cases where the partition function,
+  moments, and entropy are analytic; the generic Kent/Bingham normalizers remain
+  outside the closed-form surface.
   Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
   (incl. stable `ln_cdf`/`ln_sf`/`isf`) plus reliability helpers
   (`hazard`, `ln_hazard`, `cumulative_hazard`),

@@ -22,7 +22,7 @@ pub use dirichlet::Dirichlet;
 pub use dirichlet_multinomial::DirichletMultinomialDistribution;
 pub use multinomial::Multinomial;
 pub use normal::MultivariateNormal;
-pub use orientation::{BinghamPotential, KentPotential};
+pub use orientation::{BinghamPotential, BinghamRankOne, BinghamSpectrum, KentPotential};
 use ramanujan::DenseMatrix;
 pub use spherical_uniform::SphericalUniform;
 pub use student_t::MultivariateStudentT;
