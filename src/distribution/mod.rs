@@ -25,8 +25,8 @@ pub mod transformed;
 pub use combinator::{Mixture, Truncated};
 pub use conjugate::{
     BetaBernoulli, BetaBinomialModel, Conjugate, DirichletCategorical, DirichletMultinomial,
-    GammaExponential, GammaPoisson, NaturalParams, NormalInverseGamma, NormalKnownVariance,
-    precision_weighted_mean,
+    GammaExponential, GammaPoisson, NaturalParams, NormalInverseGamma, NormalInverseWishart,
+    NormalKnownVariance, precision_weighted_mean,
 };
 pub use constraint::{Constrained, Constraint};
 pub use continuous::{
@@ -52,8 +52,9 @@ pub use functional::{
     DiscreteDistributionExt, DiscreteFn, DiscreteMass,
 };
 pub use multivariate::{
-    Dirichlet, Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
-    VonMisesFisher,
+    BinghamPotential, Dirichlet, InverseWishart, KentPotential, Multinomial,
+    MultivariateContinuous, MultivariateMoments, MultivariateNormal, MultivariateStudentT,
+    VonMisesFisher, Wishart,
 };
 pub use probability::{
     PROBABILITY_TOLERANCE, brier_score, is_probability_vector,

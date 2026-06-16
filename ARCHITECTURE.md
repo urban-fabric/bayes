@@ -67,10 +67,14 @@ The concrete distributions are grouped by kind:
   Pareto, Logistic, VonMises, and related scalar continuous families.
 - `discrete/`: Bernoulli, Binomial, Poisson, Geometric, Categorical,
   Hypergeometric, NegativeBinomial, BetaBinomial, and related count families.
-- `multivariate/`: MultivariateNormal, Dirichlet, Multinomial, with a small
-  multivariate trait spine. MultivariateNormal owns direct Gaussian algebra:
-  coordinate marginals, conditioning, affine transforms, batch likelihoods,
-  Gaussian product integrals, and precision fusion.
+- `multivariate/`: MultivariateNormal, MultivariateStudentT, Dirichlet,
+  Multinomial, Wishart, InverseWishart, normalized von Mises-Fisher, and
+  Kent/Bingham unnormalized potentials, with a small multivariate trait spine.
+  MultivariateNormal owns direct Gaussian algebra: coordinate marginals,
+  conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
+  and precision fusion. Kent/Bingham remain potential/ratio APIs because their
+  generic normalizers require special-function machinery outside the current
+  closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
   Constraint transforms expose both forward and inverse log-Jacobian corrections,
   using stable log-domain sigmoid identities in the logistic tails so downstream
@@ -86,7 +90,9 @@ The concrete distributions are grouped by kind:
   for log-likelihoods, interval probabilities, truncation, and bijective
   composition.
 - `exponential_family/`: mergeable sufficient statistics and closed-form fits.
-- `conjugate/`: closed-form conjugate prior/posterior updates and predictives.
+- `conjugate/`: closed-form conjugate prior/posterior updates and predictives,
+  including Normal-Inverse-Wishart for multivariate Gaussian mean/covariance
+  conjugacy.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
   only its statistic `T`, prior coordinates `η`, and the map back to a

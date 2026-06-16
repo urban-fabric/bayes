@@ -3,13 +3,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use bayes::{
-    Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Conjugate, Constraint,
-    Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt, ContinuousFn,
-    Dirichlet, DirichletCategorical, Discrete, DiscreteDistributionExt, DiscreteFn, Ecdf,
-    Exponential, ExponentialFamily, Gamma, GammaPoisson, MarkovChain, MeanVar, Mixture, Moments,
-    MultivariateNormal, Normal, NormalInverseGamma, NormalKnownVariance, Poisson, StudentT,
-    SufficientStatistic, histogram, is_correlation_matrix_admissible,
-    is_covariance_matrix_admissible,
+    Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, BinghamPotential, Conjugate,
+    Constraint, Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt,
+    ContinuousFn, Dirichlet, DirichletCategorical, Discrete, DiscreteDistributionExt, DiscreteFn,
+    Ecdf, Exponential, ExponentialFamily, Gamma, GammaPoisson, InverseWishart, KentPotential,
+    MarkovChain, MeanVar, Mixture, Moments, MultivariateContinuous, MultivariateMoments,
+    MultivariateNormal, MultivariateStudentT, Normal, NormalInverseGamma, NormalInverseWishart,
+    NormalKnownVariance, Poisson, StudentT, SufficientStatistic, Wishart, histogram,
+    is_correlation_matrix_admissible, is_covariance_matrix_admissible,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -91,6 +92,13 @@ fn beta_binomial_and_gamma_poisson_predictives() {
     let nb = gp.posterior_predictive(&[3, 5, 2, 4]);
     assert!(nb.pmf(3) > 0.0);
     assert!(gp.ln_marginal_likelihood(&[3, 5, 2, 4]).is_finite());
+
+    let gamma_sum = Gamma::sum_independent_same_rate(&[
+        Gamma::new(2.0, 3.0).unwrap(),
+        Gamma::new(5.0, 3.0).unwrap(),
+    ])
+    .unwrap();
+    close(gamma_sum.shape(), 7.0, 1e-12);
 }
 
 #[test]
@@ -101,6 +109,17 @@ fn normal_normal_known_variance_posterior() {
     close(post.mean().unwrap(), 5.0, 0.02);
     assert!(post.variance().unwrap() < 1.0);
     assert!(model.ln_marginal_likelihood(&data).is_finite());
+
+    let combo = Normal::linear_combination_independent(
+        &[
+            (2.0, Normal::new(1.0, 2.0).unwrap()),
+            (-1.0, Normal::new(3.0, 4.0).unwrap()),
+        ],
+        10.0,
+    )
+    .unwrap();
+    close(combo.mean().unwrap(), 9.0, 1e-12);
+    close(combo.variance().unwrap(), 32.0, 1e-12);
 }
 
 #[test]
@@ -125,6 +144,11 @@ fn dirichlet_categorical_conjugate_flow() {
     assert_eq!(post.alpha(), &[4.0, 2.0, 2.0]);
     let pred = model.posterior_predictive(&[0u64, 0, 1, 2, 0]);
     close(pred.probabilities()[0], 0.5, 1e-12);
+    close(
+        model.posterior_predictive_count_mean(&[0u64, 0, 1, 2, 0], 4)[0],
+        2.0,
+        1e-12,
+    );
     assert!(
         model
             .ln_marginal_likelihood(&[0u64, 0, 1, 2, 0])
@@ -309,6 +333,56 @@ fn multivariate_normal_closed_form_operations_are_public() {
     assert!(
         mvn.ln_likelihood(&[vec![0.0, 0.0], vec![1.0, 1.0]])
             .is_finite()
+    );
+}
+
+#[test]
+fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
+    let scale = ramanujan::DenseMatrix::identity(2);
+    let prior = NormalInverseWishart::new(vec![0.0, 0.0], 1.0, 4.0, scale).unwrap();
+    let data = vec![vec![1.0, 2.0], vec![3.0, 4.0]];
+    let post = prior.posterior(&data).unwrap();
+    close(post.mean()[0], 4.0 / 3.0, 1e-12);
+    assert!(prior.ln_marginal_likelihood(&data).is_finite());
+    let pred = post.predictive();
+    close(pred.freedom(), 5.0, 1e-12);
+    assert!(pred.ln_pdf(&[1.5, 2.5]).is_finite());
+
+    let mv_t = MultivariateStudentT::new(
+        6.0,
+        vec![0.0],
+        ramanujan::DenseMatrix::from_rows(&[vec![4.0]]),
+    )
+    .unwrap();
+    close(mv_t.covariance().get(0, 0), 6.0, 1e-12);
+
+    let wishart = Wishart::new(6.0, ramanujan::DenseMatrix::identity(2)).unwrap();
+    assert!(
+        wishart
+            .ln_pdf_matrix(&ramanujan::DenseMatrix::identity(2))
+            .is_finite()
+    );
+    let inverse_wishart = InverseWishart::new(6.0, ramanujan::DenseMatrix::identity(2)).unwrap();
+    assert!(
+        inverse_wishart
+            .ln_pdf_matrix(&ramanujan::DenseMatrix::identity(2))
+            .is_finite()
+    );
+
+    let kent =
+        KentPotential::new([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], 4.0, 1.0).unwrap();
+    close(kent.ln_unnormalized_density(&[1.0, 0.0, 0.0]), 4.0, 1e-12);
+
+    let bingham = BinghamPotential::new(ramanujan::DenseMatrix::from_rows(&[
+        vec![2.0, 0.0],
+        vec![0.0, -1.0],
+    ]))
+    .unwrap();
+    close(bingham.ln_unnormalized_density(&[1.0, 0.0]), 2.0, 1e-12);
+    close(
+        bingham.ln_unnormalized_density(&[1.0, 0.0]),
+        bingham.ln_unnormalized_density(&[-1.0, 0.0]),
+        1e-12,
     );
 }
 

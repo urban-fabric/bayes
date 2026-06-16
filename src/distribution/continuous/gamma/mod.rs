@@ -34,6 +34,31 @@ impl Gamma {
     pub fn rate(&self) -> f64 {
         self.rate
     }
+
+    /// Independent sum of Gamma variables with a common rate.
+    ///
+    /// If `X_i ~ Gamma(shape_i, rate)` independently, then
+    /// `Σ X_i ~ Gamma(Σ shape_i, rate)`. Returns an error for an empty list or
+    /// mismatched rates because the sum is not generally Gamma in that case.
+    pub fn sum_independent_same_rate(parts: &[Self]) -> Result<Self, BayesError> {
+        let Some(first) = parts.first() else {
+            return Err(BayesError::Malformed {
+                what: "gamma sum needs at least one distribution",
+            });
+        };
+        let rate = first.rate;
+        let mut shape = 0.0;
+        for part in parts {
+            let scale = rate.abs().max(part.rate.abs()).max(1.0);
+            if (part.rate - rate).abs() > 1e-12 * scale {
+                return Err(BayesError::Malformed {
+                    what: "gamma sum requires a common rate",
+                });
+            }
+            shape += part.shape;
+        }
+        Self::new(shape, rate)
+    }
 }
 
 /// Marsaglia–Tsang sampler for a standard gamma (rate 1), any `shape > 0`.
@@ -184,5 +209,21 @@ mod tests {
         let n = 60_000;
         let s: f64 = (0..n).map(|_| g.sample(&mut rng)).sum();
         close(s / n as f64, g.mean().unwrap(), 0.03);
+    }
+
+    #[test]
+    fn common_rate_gamma_sums_stay_gamma() {
+        let a = Gamma::new(2.0, 3.0).unwrap();
+        let b = Gamma::new(5.0, 3.0).unwrap();
+        let sum = Gamma::sum_independent_same_rate(&[a, b]).unwrap();
+        close(sum.shape(), 7.0, 1e-12);
+        close(sum.rate(), 3.0, 1e-12);
+        close(
+            sum.mean().unwrap(),
+            a.mean().unwrap() + b.mean().unwrap(),
+            1e-12,
+        );
+        assert!(Gamma::sum_independent_same_rate(&[]).is_err());
+        assert!(Gamma::sum_independent_same_rate(&[a, Gamma::new(1.0, 4.0).unwrap()]).is_err());
     }
 }

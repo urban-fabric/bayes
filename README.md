@@ -12,11 +12,15 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   Pareto, F, Triangular, Rayleigh, Gumbel, Half-Normal, Inverse-Gamma, Logistic,
   Lomax, Frechet, Wald, VonMises, Uniform, Uniform2D), discrete (Bernoulli,
   Binomial, Poisson, Geometric, DiscreteUniform, NegativeBinomial, Hypergeometric,
-  Categorical, BetaBinomial), multivariate (MVN, Dirichlet, Multinomial), plus combinators
+  Categorical, BetaBinomial), multivariate (MVN, multivariate Student-t,
+  Dirichlet, Multinomial, Wishart, Inverse-Wishart), plus combinators
   (Mixture, Truncated, Transformed). MVNs include closed-form marginal,
   conditional, affine-transform, batch-likelihood, and Gaussian-product /
-  precision-fusion operations.
-  Each provides PDF/PMF, CDF/quantile/survival (incl. stable `ln_cdf`/`ln_sf`/`isf`),
+  precision-fusion operations. Directional models include normalized von
+  Mises/von Mises-Fisher distributions and unnormalized Kent/Bingham potentials
+  for closed-form energy ratios where the generic normalizer is not closed form.
+  Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
+  (incl. stable `ln_cdf`/`ln_sf`/`isf`),
   analytic moments (`Option`-typed — Cauchy honestly has no mean), and `rand` sampling.
   Same-family pairs also expose a closed-form `kl_divergence` (and Jeffreys, JS,
   Hellinger, total-variation, χ², Rényi, mutual information). The **f-divergence
@@ -50,7 +54,8 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   walks.
 - **Closed-form Bayesian layer** — exponential-family fitting via mergeable
   sufficient statistics, plus conjugate posteriors, predictives, and exact log
-  marginal likelihoods.
+  marginal likelihoods, including Normal-Inverse-Wishart multivariate Gaussian
+  conjugacy.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};

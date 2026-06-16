@@ -2,8 +2,9 @@
 //! **Dirichlet–Multinomial**.
 
 use super::{Conjugate, Counts};
-use crate::distribution::{Categorical, Dirichlet};
+use crate::distribution::{Categorical, Dirichlet, MultivariateMoments};
 use crate::function::{ln_factorial, ln_multivariate_beta};
+use ramanujan::DenseMatrix;
 
 /// **Dirichlet–Categorical.** A `Dirichlet(α)` prior on category probabilities;
 /// posterior `Dirichlet(α + counts)` from observed category labels in `{0,…,K−1}`
@@ -44,6 +45,28 @@ impl DirichletCategorical {
             .map(|(&a, c)| a + c)
             .collect();
         ln_multivariate_beta(&posterior_alpha) - ln_multivariate_beta(self.prior.alpha())
+    }
+
+    /// Posterior-predictive category probabilities `E[p | data]`.
+    pub fn posterior_predictive_probabilities(&self, data: &[u64]) -> Vec<f64> {
+        self.posterior(data).mean_vector()
+    }
+
+    /// Mean count vector for `future_trials` future categorical observations
+    /// with the category probabilities integrated out.
+    pub fn posterior_predictive_count_mean(&self, data: &[u64], future_trials: u64) -> Vec<f64> {
+        self.posterior(data).predictive_count_mean(future_trials)
+    }
+
+    /// Dirichlet-multinomial covariance for `future_trials` future categorical
+    /// observations with the category probabilities integrated out.
+    pub fn posterior_predictive_count_covariance(
+        &self,
+        data: &[u64],
+        future_trials: u64,
+    ) -> DenseMatrix {
+        self.posterior(data)
+            .predictive_count_covariance(future_trials)
     }
 }
 
@@ -125,6 +148,32 @@ impl DirichletMultinomial {
             .collect();
         coeff + ln_multivariate_beta(&posterior_alpha) - ln_multivariate_beta(self.prior.alpha())
     }
+
+    /// Posterior-predictive category probabilities `E[p | data]`.
+    pub fn posterior_predictive_probabilities(&self, data: &[Vec<u64>]) -> Vec<f64> {
+        self.posterior(data).mean_vector()
+    }
+
+    /// Mean count vector for a future multinomial observation with
+    /// `future_trials`, integrating out category probabilities.
+    pub fn posterior_predictive_count_mean(
+        &self,
+        data: &[Vec<u64>],
+        future_trials: u64,
+    ) -> Vec<f64> {
+        self.posterior(data).predictive_count_mean(future_trials)
+    }
+
+    /// Dirichlet-multinomial covariance for a future multinomial observation
+    /// with `future_trials`, integrating out category probabilities.
+    pub fn posterior_predictive_count_covariance(
+        &self,
+        data: &[Vec<u64>],
+        future_trials: u64,
+    ) -> DenseMatrix {
+        self.posterior(data)
+            .predictive_count_covariance(future_trials)
+    }
 }
 
 impl Conjugate for DirichletMultinomial {
@@ -176,6 +225,12 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.probabilities()[0], 0.5, 1e-12);
         close(pred.probabilities()[1], 0.25, 1e-12);
+        let probs = model.posterior_predictive_probabilities(&data);
+        close(probs[0], 0.5, 1e-12);
+        let mean = model.posterior_predictive_count_mean(&data, 4);
+        close(mean[0], 2.0, 1e-12);
+        let cov = model.posterior_predictive_count_covariance(&data, 4);
+        close(cov.get(0, 1), -4.0 * 0.5 * 0.25 * 12.0 / 9.0, 1e-12);
         close(
             model.ln_marginal_likelihood(&data),
             ln_multivariate_beta(&[4.0, 2.0, 2.0]) - ln_multivariate_beta(&[1.0, 1.0, 1.0]),
@@ -193,6 +248,12 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.probabilities()[0], 0.6, 1e-12);
         close(pred.probabilities()[1], 0.4, 1e-12);
+        let probs = model.posterior_predictive_probabilities(&data);
+        close(probs[0], 0.6, 1e-12);
+        let mean = model.posterior_predictive_count_mean(&data, 5);
+        close(mean[0], 3.0, 1e-12);
+        let cov = model.posterior_predictive_count_covariance(&data, 5);
+        close(cov.get(0, 0), 5.0 * 0.6 * 0.4 * 15.0 / 11.0, 1e-12);
         let coeff = ln_factorial(4) - ln_factorial(3) - ln_factorial(1) + ln_factorial(4)
             - ln_factorial(2)
             - ln_factorial(2);

@@ -44,6 +44,70 @@ impl Normal {
     pub(crate) fn params(&self) -> (f64, f64) {
         (self.mean, self.std_dev)
     }
+
+    /// Independent sum `X + Y` for Normal random variables.
+    pub fn sum_independent(self, other: Self) -> Self {
+        Self {
+            mean: self.mean + other.mean,
+            std_dev: (self.std_dev * self.std_dev + other.std_dev * other.std_dev).sqrt(),
+        }
+    }
+
+    /// Independent difference `X - Y` for Normal random variables.
+    pub fn difference_independent(self, other: Self) -> Self {
+        Self {
+            mean: self.mean - other.mean,
+            std_dev: (self.std_dev * self.std_dev + other.std_dev * other.std_dev).sqrt(),
+        }
+    }
+
+    /// Affine image `aX + b`.
+    pub fn affine(self, scale: f64, shift: f64) -> Result<Self, BayesError> {
+        if !scale.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "scale",
+                value: scale,
+            });
+        }
+        if !shift.is_finite() {
+            return Err(BayesError::NonFinite {
+                name: "shift",
+                value: shift,
+            });
+        }
+        Self::new(scale * self.mean + shift, scale.abs() * self.std_dev)
+    }
+
+    /// Independent linear combination `shift + Σ aᵢXᵢ`.
+    ///
+    /// Returns an error for an empty list, non-finite coefficients, or a
+    /// degenerate all-zero coefficient vector.
+    pub fn linear_combination_independent(
+        terms: &[(f64, Self)],
+        shift: f64,
+    ) -> Result<Self, BayesError> {
+        if terms.is_empty() {
+            return Err(BayesError::Malformed {
+                what: "normal linear combination needs at least one term",
+            });
+        }
+        if !shift.is_finite() || terms.iter().any(|(a, _)| !a.is_finite()) {
+            return Err(BayesError::Malformed {
+                what: "normal linear-combination coefficients must be finite",
+            });
+        }
+        let mean = shift + terms.iter().map(|(a, n)| a * n.mean).sum::<f64>();
+        let variance = terms
+            .iter()
+            .map(|(a, n)| a * a * n.std_dev * n.std_dev)
+            .sum::<f64>();
+        if variance <= 0.0 {
+            return Err(BayesError::Malformed {
+                what: "normal linear combination has zero variance",
+            });
+        }
+        Self::new(mean, variance.sqrt())
+    }
 }
 
 impl Distribution<f64> for Normal {

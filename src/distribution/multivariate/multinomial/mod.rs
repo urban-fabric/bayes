@@ -58,6 +58,28 @@ impl Multinomial {
         self.p.len()
     }
 
+    /// Component variances `Var[C_i] = n p_i(1-p_i)`.
+    pub fn variance_vector(&self) -> Vec<f64> {
+        let n = self.n as f64;
+        self.p.iter().map(|&p| n * p * (1.0 - p)).collect()
+    }
+
+    /// Covariance entry for category counts:
+    /// diagonal `n p_i(1-p_i)`, off-diagonal `-n p_i p_j`.
+    ///
+    /// Returns `NaN` for out-of-range indices.
+    pub fn covariance_entry(&self, i: usize, j: usize) -> f64 {
+        if i >= self.p.len() || j >= self.p.len() {
+            return f64::NAN;
+        }
+        let n = self.n as f64;
+        if i == j {
+            n * self.p[i] * (1.0 - self.p[i])
+        } else {
+            -n * self.p[i] * self.p[j]
+        }
+    }
+
     /// `ln P(counts)` for a category-count vector summing to `n`. `−∞` if the
     /// counts are the wrong length or do not sum to `n`.
     pub fn ln_pmf(&self, counts: &[u64]) -> f64 {
@@ -148,5 +170,16 @@ mod tests {
         for i in 0..3 {
             close(avg[i], mean[i], 0.5);
         }
+    }
+
+    #[test]
+    fn covariance_entries_match_closed_form() {
+        let m = Multinomial::new(10, &[0.2, 0.3, 0.5]).unwrap();
+        let variance = m.variance_vector();
+        close(variance[0], 1.6, 1e-12);
+        close(variance[2], 2.5, 1e-12);
+        close(m.covariance_entry(0, 1), -0.6, 1e-12);
+        close(m.covariance().get(0, 1), m.covariance_entry(0, 1), 1e-12);
+        assert!(m.covariance_entry(0, 3).is_nan());
     }
 }
