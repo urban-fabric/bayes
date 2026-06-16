@@ -469,6 +469,26 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
     let pred = post.predictive();
     close(pred.freedom(), 5.0, 1e-12);
     assert!(pred.ln_pdf(&[1.5, 2.5]).is_finite());
+    close(
+        post.ln_predictive(&[1.5, 2.5]),
+        pred.ln_pdf(&[1.5, 2.5]),
+        1e-12,
+    );
+    close(
+        prior.ln_posterior_predictive(&data, &[1.5, 2.5]),
+        pred.ln_pdf(&[1.5, 2.5]),
+        1e-12,
+    );
+    close(
+        prior.ln_sequential_predictive(&data),
+        prior.ln_marginal_likelihood(&data),
+        1e-10,
+    );
+    assert!(
+        prior
+            .ln_posterior_predictive_likelihood(&data, &[vec![1.5, 2.5]])
+            .is_finite()
+    );
 
     let precision_prior = NormalWishart::new(
         vec![0.0, 0.0],
@@ -498,9 +518,19 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
             .ln_pdf(&[1.5, 2.5])
             .is_finite()
     );
+    assert!(
+        precision_prior
+            .ln_posterior_predictive(&data, &[1.5, 2.5])
+            .is_finite()
+    );
     close(
         precision_prior.ln_marginal_likelihood(&data),
         prior.ln_marginal_likelihood(&data),
+        1e-10,
+    );
+    close(
+        precision_prior.ln_sequential_predictive(&data),
+        precision_prior.ln_marginal_likelihood(&data),
         1e-10,
     );
 

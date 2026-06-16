@@ -70,9 +70,11 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   marginal likelihoods, including Normal-Inverse-Gamma / Normal-Gamma scalar
   Gaussian conjugacy and Normal-Inverse-Wishart / Normal-Wishart multivariate
   Gaussian conjugacy. Scalar Gaussian conjugate models expose finite-batch
-  posterior predictives for future observations, sums, and means. Gamma-Poisson
-  and Gamma-Exponential conjugacy also support closed-form exposure/right-censoring
-  sufficient statistics.
+  posterior predictives for future observations, sums, and means. Multivariate
+  Gaussian conjugate models expose closed-form predictive log densities,
+  future-batch predictive likelihoods, and sequential predictive factorizations
+  of the marginal likelihood. Gamma-Poisson and Gamma-Exponential conjugacy also
+  support closed-form exposure/right-censoring sufficient statistics.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};

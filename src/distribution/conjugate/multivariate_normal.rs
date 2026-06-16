@@ -6,7 +6,9 @@ use std::f64::consts::PI;
 use ramanujan::DenseMatrix;
 
 use crate::distribution::multivariate::matrix;
-use crate::distribution::{InverseWishart, MultivariateNormal, MultivariateStudentT, Wishart};
+use crate::distribution::{
+    InverseWishart, MultivariateContinuous, MultivariateNormal, MultivariateStudentT, Wishart,
+};
 use crate::error::BayesError;
 use crate::function::ln_multivariate_gamma;
 
@@ -171,6 +173,55 @@ impl NormalInverseWishart {
         Ok(self.posterior(data)?.predictive())
     }
 
+    /// Closed-form prior/posterior predictive log density for one observation
+    /// under this NIW state.
+    pub fn ln_predictive(&self, x: &[f64]) -> f64 {
+        self.predictive().ln_pdf(x)
+    }
+
+    /// Closed-form posterior-predictive log density for one future observation
+    /// after observing `data`.
+    pub fn ln_posterior_predictive(&self, data: &[Vec<f64>], x: &[f64]) -> f64 {
+        let Ok(post) = self.posterior(data) else {
+            return f64::NEG_INFINITY;
+        };
+        post.ln_predictive(x)
+    }
+
+    /// Closed-form log probability of a future batch after observing `data`.
+    ///
+    /// This is `ln p(future | data)`, computed as the marginal likelihood of
+    /// `future` under the posterior NIW state.
+    pub fn ln_posterior_predictive_likelihood(
+        &self,
+        data: &[Vec<f64>],
+        future: &[Vec<f64>],
+    ) -> f64 {
+        let Ok(post) = self.posterior(data) else {
+            return f64::NEG_INFINITY;
+        };
+        post.ln_marginal_likelihood(future)
+    }
+
+    /// Sequential predictive factorization `Σᵢ ln p(xᵢ | x₁,…,xᵢ₋₁)`.
+    ///
+    /// In exact arithmetic this equals [`ln_marginal_likelihood`](Self::ln_marginal_likelihood).
+    pub fn ln_sequential_predictive(&self, data: &[Vec<f64>]) -> f64 {
+        let mut state = self.clone();
+        let mut total = 0.0;
+        for x in data {
+            total += state.ln_predictive(x);
+            if !total.is_finite() {
+                return f64::NEG_INFINITY;
+            }
+            let Ok(next) = state.posterior(std::slice::from_ref(x)) else {
+                return f64::NEG_INFINITY;
+            };
+            state = next;
+        }
+        total
+    }
+
     /// Closed-form log marginal likelihood with the unknown mean/covariance
     /// integrated out.
     pub fn ln_marginal_likelihood(&self, data: &[Vec<f64>]) -> f64 {
@@ -330,6 +381,55 @@ impl NormalWishart {
         Ok(self.posterior(data)?.predictive())
     }
 
+    /// Closed-form prior/posterior predictive log density for one observation
+    /// under this Normal-Wishart state.
+    pub fn ln_predictive(&self, x: &[f64]) -> f64 {
+        self.predictive().ln_pdf(x)
+    }
+
+    /// Closed-form posterior-predictive log density for one future observation
+    /// after observing `data`.
+    pub fn ln_posterior_predictive(&self, data: &[Vec<f64>], x: &[f64]) -> f64 {
+        let Ok(post) = self.posterior(data) else {
+            return f64::NEG_INFINITY;
+        };
+        post.ln_predictive(x)
+    }
+
+    /// Closed-form log probability of a future batch after observing `data`.
+    ///
+    /// This is `ln p(future | data)`, computed as the marginal likelihood of
+    /// `future` under the posterior Normal-Wishart state.
+    pub fn ln_posterior_predictive_likelihood(
+        &self,
+        data: &[Vec<f64>],
+        future: &[Vec<f64>],
+    ) -> f64 {
+        let Ok(post) = self.posterior(data) else {
+            return f64::NEG_INFINITY;
+        };
+        post.ln_marginal_likelihood(future)
+    }
+
+    /// Sequential predictive factorization `Σᵢ ln p(xᵢ | x₁,…,xᵢ₋₁)`.
+    ///
+    /// In exact arithmetic this equals [`ln_marginal_likelihood`](Self::ln_marginal_likelihood).
+    pub fn ln_sequential_predictive(&self, data: &[Vec<f64>]) -> f64 {
+        let mut state = self.clone();
+        let mut total = 0.0;
+        for x in data {
+            total += state.ln_predictive(x);
+            if !total.is_finite() {
+                return f64::NEG_INFINITY;
+            }
+            let Ok(next) = state.posterior(std::slice::from_ref(x)) else {
+                return f64::NEG_INFINITY;
+            };
+            state = next;
+        }
+        total
+    }
+
     /// Closed-form log marginal likelihood with unknown mean and precision
     /// integrated out.
     pub fn ln_marginal_likelihood(&self, data: &[Vec<f64>]) -> f64 {
@@ -400,9 +500,35 @@ mod tests {
         close(pred.scale_matrix().get(0, 1), 1.6, 1e-10);
         close(pred.scale_matrix().get(1, 1), 2.4, 1e-10);
         assert!(pred.ln_pdf(&[1.5, 2.5]).is_finite());
+        close(
+            post.ln_predictive(&[1.5, 2.5]),
+            pred.ln_pdf(&[1.5, 2.5]),
+            1e-12,
+        );
+        close(
+            prior.ln_posterior_predictive(&data, &[1.5, 2.5]),
+            pred.ln_pdf(&[1.5, 2.5]),
+            1e-12,
+        );
 
         close(prior.ln_marginal_likelihood(&[]), 0.0, 1e-12);
         assert!(prior.ln_marginal_likelihood(&data).is_finite());
+        close(
+            prior.ln_sequential_predictive(&data),
+            prior.ln_marginal_likelihood(&data),
+            1e-10,
+        );
+
+        let future = vec![vec![1.5, 2.5], vec![2.0, 3.0]];
+        close(
+            prior.ln_posterior_predictive_likelihood(&data, &future),
+            post.ln_marginal_likelihood(&future),
+            1e-10,
+        );
+        assert_eq!(
+            prior.ln_posterior_predictive_likelihood(&[vec![1.0]], &future),
+            f64::NEG_INFINITY
+        );
     }
 
     #[test]
@@ -435,12 +561,28 @@ mod tests {
         close(pred.scale_matrix().get(0, 1), 1.6, 1e-10);
         close(pred.scale_matrix().get(1, 1), 2.4, 1e-10);
         assert!(pred.ln_pdf(&[1.5, 2.5]).is_finite());
+        close(
+            prior.ln_posterior_predictive(&data, &[1.5, 2.5]),
+            pred.ln_pdf(&[1.5, 2.5]),
+            1e-12,
+        );
 
         let niw =
             NormalInverseWishart::new(vec![0.0, 0.0], 1.0, 4.0, DenseMatrix::identity(2)).unwrap();
         close(
             prior.ln_marginal_likelihood(&data),
             niw.ln_marginal_likelihood(&data),
+            1e-10,
+        );
+        close(
+            prior.ln_sequential_predictive(&data),
+            prior.ln_marginal_likelihood(&data),
+            1e-10,
+        );
+        let future = vec![vec![1.5, 2.5], vec![2.0, 3.0]];
+        close(
+            prior.ln_posterior_predictive_likelihood(&data, &future),
+            niw.ln_posterior_predictive_likelihood(&data, &future),
             1e-10,
         );
     }

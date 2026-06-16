@@ -114,8 +114,11 @@ The concrete distributions are grouped by kind:
   mean/variance or mean/precision conjugacy, plus Normal-Inverse-Wishart and
   Normal-Wishart for multivariate Gaussian mean/covariance or mean/precision
   conjugacy. Scalar Gaussian conjugate wrappers also expose finite-batch
-  posterior predictives for future observations, sums, and means. Gamma-Poisson
-  and Gamma-Exponential expose exposure/right-censoring updates where the
+  posterior predictives for future observations, sums, and means. Multivariate
+  Gaussian conjugate wrappers expose predictive log densities, future-batch
+  predictive likelihoods, and sequential predictive factorizations of the
+  marginal likelihood. Gamma-Poisson and Gamma-Exponential expose
+  exposure/right-censoring updates where the
   sufficient statistic is `(events, exposure)` rather than raw observations.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
