@@ -20,7 +20,8 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   operations. Multivariate Student-t distributions include closed-form
   marginals, conditionals, affine transforms, Mahalanobis geometry, entropy,
   and batch likelihoods. Wishart families include matrix densities, entropy/KL,
-  expected log-determinants, entry covariances, and inverse-family transforms.
+  expected log-determinants, entry variances/covariances where their moments
+  exist, congruence transforms, and inverse-family transforms.
   Dirichlet distributions include component/sum Beta marginals,
   category lumping, conditional sub-simplex laws, and full Dirichlet-multinomial
   predictive count distributions. Directional models include normalized von

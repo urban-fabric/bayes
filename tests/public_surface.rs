@@ -550,6 +550,12 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
     );
     assert!(wishart.entropy().is_finite());
     assert!(wishart.expected_log_determinant().is_finite());
+    close(wishart.mean_matrix().get(0, 0), 6.0, 1e-12);
+    close(wishart.variance_matrix().get(0, 0), 12.0, 1e-12);
+    let congruence = ramanujan::DenseMatrix::from_rows(&[vec![2.0, 0.0], vec![0.0, 3.0]]);
+    let mapped_wishart = wishart.scale_by_congruence(&congruence).unwrap();
+    close(mapped_wishart.scale_matrix().get(0, 0), 4.0, 1e-12);
+    close(mapped_wishart.scale_matrix().get(1, 1), 9.0, 1e-12);
     close(wishart.kl_divergence(&wishart), 0.0, 1e-10);
     close(
         wishart
@@ -567,6 +573,19 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
             .is_finite()
     );
     assert!(inverse_wishart.entropy().is_finite());
+    close(
+        inverse_wishart.mean_matrix().unwrap().get(0, 0),
+        1.0 / 3.0,
+        1e-12,
+    );
+    close(
+        inverse_wishart.variance_matrix().unwrap().get(0, 0),
+        2.0 / 9.0,
+        1e-12,
+    );
+    let mapped_inverse_wishart = inverse_wishart.scale_by_congruence(&congruence).unwrap();
+    close(mapped_inverse_wishart.scale_matrix().get(0, 0), 4.0, 1e-12);
+    close(mapped_inverse_wishart.scale_matrix().get(1, 1), 9.0, 1e-12);
     close(inverse_wishart.kl_divergence(&inverse_wishart), 0.0, 1e-10);
     close(
         inverse_wishart.expected_inverse_matrix().get(0, 0),

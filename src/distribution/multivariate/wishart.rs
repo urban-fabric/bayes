@@ -109,6 +109,12 @@ impl Wishart {
         self.covariance_entry(i, j, i, j)
     }
 
+    /// Entrywise variance matrix with `(i,j) = Var(X_ij)`.
+    pub fn variance_matrix(&self) -> DenseMatrix {
+        let d = self.dimension();
+        DenseMatrix::from_fn(d, d, |i, j| self.variance_entry(i, j))
+    }
+
     /// Differential entropy in nats.
     pub fn entropy(&self) -> f64 {
         let d = self.dimension();
@@ -127,7 +133,17 @@ impl Wishart {
     /// boundary and is not an SPD matrix.
     pub fn mode_matrix(&self) -> Option<DenseMatrix> {
         let factor = self.freedom - self.dimension() as f64 - 1.0;
-        (factor >= 0.0).then(|| matrix::scaled(&self.scale, factor))
+        (factor > 0.0).then(|| matrix::scaled(&self.scale, factor))
+    }
+
+    /// Congruence image `A X Aᵀ` for nonsingular square `A`.
+    ///
+    /// If `X ~ Wishart(ν, V)`, then `A X Aᵀ ~ Wishart(ν, A V Aᵀ)`.
+    pub fn scale_by_congruence(&self, a: &DenseMatrix) -> Result<Self, BayesError> {
+        Self::new(
+            self.freedom,
+            matrix::symmetrize(&congruence_transform(a, &self.scale)?),
+        )
     }
 }
 
@@ -228,6 +244,47 @@ impl InverseWishart {
             + 0.5 * self.freedom * d as f64
     }
 
+    /// Covariance between matrix entries, available when `ν > d + 3`.
+    ///
+    /// `Cov(Σ_ij, Σ_kl) =
+    /// [2Ψ_ijΨ_kl + (ν-d-1)(Ψ_ikΨ_jl + Ψ_ilΨ_kj)]
+    /// / [(ν-d)(ν-d-1)^2(ν-d-3)]`.
+    pub fn covariance_entry(&self, i: usize, j: usize, k: usize, l: usize) -> Option<f64> {
+        let d = self.dimension();
+        if [i, j, k, l].iter().any(|&idx| idx >= d) {
+            return None;
+        }
+        let nu_minus_d = self.freedom - d as f64;
+        if nu_minus_d <= 3.0 {
+            return None;
+        }
+        Some(inverse_wishart_covariance_entry_unchecked(
+            &self.scale,
+            nu_minus_d,
+            i,
+            j,
+            k,
+            l,
+        ))
+    }
+
+    /// Variance of matrix entry `Σ_ij`, available when `ν > d + 3`.
+    pub fn variance_entry(&self, i: usize, j: usize) -> Option<f64> {
+        self.covariance_entry(i, j, i, j)
+    }
+
+    /// Entrywise variance matrix with `(i,j) = Var(Σ_ij)`, available when
+    /// `ν > d + 3`.
+    pub fn variance_matrix(&self) -> Option<DenseMatrix> {
+        let d = self.dimension();
+        let nu_minus_d = self.freedom - d as f64;
+        (nu_minus_d > 3.0).then(|| {
+            DenseMatrix::from_fn(d, d, |i, j| {
+                inverse_wishart_covariance_entry_unchecked(&self.scale, nu_minus_d, i, j, i, j)
+            })
+        })
+    }
+
     /// Distribution of `Σ⁻¹` when `Σ ~ InverseWishart(ν, Ψ)`:
     /// `Wishart(ν, Ψ⁻¹)`.
     pub fn inverse_distribution(&self) -> Wishart {
@@ -239,6 +296,17 @@ impl InverseWishart {
         matrix::scaled(
             &self.scale,
             1.0 / (self.freedom + self.dimension() as f64 + 1.0),
+        )
+    }
+
+    /// Congruence image `A Σ Aᵀ` for nonsingular square `A`.
+    ///
+    /// If `Σ ~ InverseWishart(ν, Ψ)`, then
+    /// `A Σ Aᵀ ~ InverseWishart(ν, A Ψ Aᵀ)`.
+    pub fn scale_by_congruence(&self, a: &DenseMatrix) -> Result<Self, BayesError> {
+        Self::new(
+            self.freedom,
+            matrix::symmetrize(&congruence_transform(a, &self.scale)?),
         )
     }
 }
@@ -298,6 +366,49 @@ fn digamma_wishart_sum(dimension: usize, freedom: f64) -> f64 {
 
 fn expected_log_det_wishart(dimension: usize, freedom: f64, ln_det_scale: f64) -> f64 {
     digamma_wishart_sum(dimension, freedom) + dimension as f64 * LN_2 + ln_det_scale
+}
+
+fn inverse_wishart_covariance_entry_unchecked(
+    scale: &DenseMatrix,
+    nu_minus_d: f64,
+    i: usize,
+    j: usize,
+    k: usize,
+    l: usize,
+) -> f64 {
+    let denom = nu_minus_d * (nu_minus_d - 1.0).powi(2) * (nu_minus_d - 3.0);
+    let numerator = 2.0 * scale.get(i, j) * scale.get(k, l)
+        + (nu_minus_d - 1.0)
+            * (scale.get(i, k) * scale.get(j, l) + scale.get(i, l) * scale.get(k, j));
+    numerator / denom
+}
+
+fn congruence_transform(a: &DenseMatrix, matrix: &DenseMatrix) -> Result<DenseMatrix, BayesError> {
+    let d = matrix.rows();
+    if a.rows() != d || a.cols() != d {
+        return Err(BayesError::Malformed {
+            what: "congruence transform must be square and match the distribution dimension",
+        });
+    }
+    if !a.is_finite() {
+        return Err(BayesError::Malformed {
+            what: "congruence transform entries must be finite",
+        });
+    }
+    if a.try_inverse().is_err() {
+        return Err(BayesError::Malformed {
+            what: "congruence transform must be nonsingular",
+        });
+    }
+    Ok(DenseMatrix::from_fn(d, d, |i, j| {
+        let mut acc = 0.0;
+        for r in 0..d {
+            for c in 0..d {
+                acc += a.get(i, r) * matrix.get(r, c) * a.get(j, c);
+            }
+        }
+        acc
+    }))
 }
 
 #[cfg(test)]
@@ -368,6 +479,7 @@ mod tests {
         .unwrap();
         close(w.covariance_entry(0, 0, 1, 1), 2.5, 1e-12);
         close(w.variance_entry(0, 1), 11.25, 1e-12);
+        close(w.variance_matrix().get(0, 1), 11.25, 1e-12);
         assert!(w.covariance_entry(0, 0, 2, 0).is_nan());
         let inverse_mean = w.inverse_mean_matrix().unwrap();
         close(
@@ -375,6 +487,66 @@ mod tests {
             1.0 / 1.75 / (5.0 - 2.0 - 1.0),
             1e-10,
         );
+    }
+
+    #[test]
+    fn inverse_wishart_entry_variances_are_closed_form_when_available() {
+        let iw = InverseWishart::new(
+            8.0,
+            DenseMatrix::from_rows(&[vec![2.0, 0.5], vec![0.5, 1.0]]),
+        )
+        .unwrap();
+        let diagonal = iw.variance_entry(0, 0).unwrap();
+        close(diagonal, 8.0 / 75.0, 1e-12);
+        close(iw.variance_matrix().unwrap().get(0, 0), diagonal, 1e-12);
+        assert!(iw.covariance_entry(0, 0, 2, 0).is_none());
+
+        let low_freedom = InverseWishart::new(5.0, DenseMatrix::identity(2)).unwrap();
+        assert!(low_freedom.variance_entry(0, 0).is_none());
+        assert!(low_freedom.variance_matrix().is_none());
+    }
+
+    #[test]
+    fn congruence_transforms_update_scale_matrices() {
+        let transform = DenseMatrix::from_rows(&[vec![2.0, 0.0], vec![0.0, 3.0]]);
+        let scale = DenseMatrix::from_rows(&[vec![2.0, 0.5], vec![0.5, 1.0]]);
+        let expected = DenseMatrix::from_rows(&[vec![8.0, 3.0], vec![3.0, 9.0]]);
+
+        let w = Wishart::new(6.0, scale.clone()).unwrap();
+        let mapped = w.scale_by_congruence(&transform).unwrap();
+        close(mapped.scale_matrix().get(0, 0), expected.get(0, 0), 1e-12);
+        close(mapped.scale_matrix().get(0, 1), expected.get(0, 1), 1e-12);
+        close(mapped.scale_matrix().get(1, 1), expected.get(1, 1), 1e-12);
+
+        let iw = InverseWishart::new(8.0, scale).unwrap();
+        let mapped_inverse = iw.scale_by_congruence(&transform).unwrap();
+        close(
+            mapped_inverse.scale_matrix().get(0, 0),
+            expected.get(0, 0),
+            1e-12,
+        );
+        close(
+            mapped_inverse.scale_matrix().get(0, 1),
+            expected.get(0, 1),
+            1e-12,
+        );
+        close(
+            mapped_inverse.scale_matrix().get(1, 1),
+            expected.get(1, 1),
+            1e-12,
+        );
+
+        let singular = DenseMatrix::from_rows(&[vec![1.0, 0.0], vec![0.0, 0.0]]);
+        assert!(w.scale_by_congruence(&singular).is_err());
+        assert!(iw.scale_by_congruence(&singular).is_err());
+    }
+
+    #[test]
+    fn wishart_mode_exists_only_inside_the_spd_cone() {
+        let boundary = Wishart::new(3.0, DenseMatrix::identity(2)).unwrap();
+        assert!(boundary.mode_matrix().is_none());
+        let interior = Wishart::new(4.0, DenseMatrix::identity(2)).unwrap();
+        close(interior.mode_matrix().unwrap().get(0, 0), 1.0, 1e-12);
     }
 
     #[test]
