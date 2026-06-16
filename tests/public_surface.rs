@@ -439,6 +439,7 @@ fn multivariate_student_t_closed_form_operations_are_public() {
     let conditional = t.condition(&[0], &[4.0]).unwrap();
     close(conditional.freedom(), 6.0, 1e-12);
     close(conditional.location()[0], 2.0, 1e-10);
+    close(t.squared_mahalanobis(&[4.0, 2.0]), 4.0, 1e-10);
 
     let affine = t
         .affine_transform(
@@ -449,6 +450,12 @@ fn multivariate_student_t_closed_form_operations_are_public() {
     close(affine.location()[0], 0.5, 1e-12);
     close(affine.scale_matrix().get(0, 0), 17.0, 1e-12);
     assert!(affine.ln_pdf(&[0.0]).is_finite());
+    assert!(t.entropy().unwrap().is_finite());
+    close(
+        t.ln_likelihood(&[vec![0.0, 0.0], vec![1.0, -1.0]]),
+        t.ln_pdf(&[0.0, 0.0]) + t.ln_pdf(&[1.0, -1.0]),
+        1e-12,
+    );
 }
 
 #[test]

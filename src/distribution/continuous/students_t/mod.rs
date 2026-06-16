@@ -9,7 +9,7 @@ use crate::distribution::numeric::inverse_cdf_bisect;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::beta_reg;
-use crate::function::gamma::ln_gamma;
+use crate::function::gamma::{digamma, ln_gamma};
 
 /// Student's t-distribution with `ν > 0` degrees of freedom and an optional
 /// **location** `μ` and **scale** `σ > 0`: `X = μ + σ·T`, where `T` is the standard
@@ -170,6 +170,15 @@ impl Moments for StudentT {
     fn skewness(&self) -> Option<f64> {
         (self.freedom > 3.0).then_some(0.0)
     }
+    fn entropy(&self) -> Option<f64> {
+        let nu = self.freedom;
+        let half_nu = 0.5 * nu;
+        let half_nu_plus_one = 0.5 * (nu + 1.0);
+        Some(
+            self.scale.ln() + 0.5 * (nu * PI).ln() + ln_gamma(half_nu) - ln_gamma(half_nu_plus_one)
+                + half_nu_plus_one * (digamma(half_nu_plus_one) - digamma(half_nu)),
+        )
+    }
     fn median(&self) -> Option<f64> {
         Some(self.location)
     }
@@ -207,6 +216,12 @@ mod tests {
             5.0 / 3.0,
             1e-12,
         );
+    }
+
+    #[test]
+    fn entropy_matches_cauchy_special_case() {
+        let cauchy = StudentT::new_location_scale(1.0, 3.0, 2.0).unwrap();
+        close(cauchy.entropy().unwrap(), (8.0 * PI).ln(), 1e-10);
     }
 
     #[test]

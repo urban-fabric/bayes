@@ -18,9 +18,10 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   Transformed). MVNs include closed-form marginal, conditional,
   affine-transform, batch-likelihood, and Gaussian-product / precision-fusion
   operations. Multivariate Student-t distributions include closed-form
-  marginals, conditionals, and affine transforms. Wishart families include
-  matrix densities, entropy/KL, expected log-determinants, entry covariances,
-  and inverse-family transforms. Dirichlet distributions include component/sum Beta marginals,
+  marginals, conditionals, affine transforms, Mahalanobis geometry, entropy,
+  and batch likelihoods. Wishart families include matrix densities, entropy/KL,
+  expected log-determinants, entry covariances, and inverse-family transforms.
+  Dirichlet distributions include component/sum Beta marginals,
   category lumping, conditional sub-simplex laws, and full Dirichlet-multinomial
   predictive count distributions. Directional models include normalized von
   Mises/von Mises-Fisher, spherical-uniform, and Watson-on-S² distributions with

@@ -75,9 +75,10 @@ The concrete distributions are grouped by kind:
   MultivariateNormal owns direct Gaussian algebra: coordinate marginals,
   conditioning, affine transforms, batch likelihoods, Gaussian product integrals,
   and precision fusion. MultivariateStudentT owns the matching elliptical
-  algebra that remains closed form: coordinate marginals, affine images, and
-  conditional Student-t laws. Wishart families own matrix densities, entropy/KL,
-  expected log-determinants, entry covariances where directly closed form, and
+  algebra that remains closed form: coordinate marginals, affine images,
+  conditional Student-t laws, Mahalanobis geometry, entropy, and batch
+  likelihoods. Wishart families own matrix densities, entropy/KL, expected
+  log-determinants, entry covariances where directly closed form, and
   inverse-family transforms. Dirichlet owns the simplex algebra that stays
   closed under projection: component and subset-sum Beta marginals, category
   lumping into a smaller Dirichlet, conditional sub-simplex laws, and

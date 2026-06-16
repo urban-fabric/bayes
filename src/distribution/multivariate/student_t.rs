@@ -10,7 +10,7 @@ use super::{MultivariateContinuous, MultivariateMoments};
 use crate::distribution::continuous::gamma::sample_standard_gamma;
 use crate::distribution::continuous::normal::standard_normal_polar;
 use crate::error::BayesError;
-use crate::function::ln_gamma;
+use crate::function::{digamma, ln_gamma};
 
 /// Multivariate Student-t distribution with degrees of freedom `ν`, location
 /// `μ`, and positive-definite scale matrix `Σ`.
@@ -92,6 +92,22 @@ impl MultivariateStudentT {
     /// Dimension `d`.
     pub fn dimension(&self) -> usize {
         self.location.len()
+    }
+
+    /// Squared Mahalanobis distance `(x-μ)'Σ⁻¹(x-μ)` under this Student-t scale.
+    ///
+    /// Returns `NaN` on shape or finiteness mismatch.
+    pub fn squared_mahalanobis(&self, x: &[f64]) -> f64 {
+        if x.len() != self.dimension() || x.iter().any(|v| !v.is_finite()) {
+            return f64::NAN;
+        }
+        let diff: Vec<f64> = x
+            .iter()
+            .zip(&self.location)
+            .map(|(xi, mi)| xi - mi)
+            .collect();
+        let solved = self.chol.solve(&diff);
+        diff.iter().zip(solved).map(|(&a, b)| a * b).sum()
     }
 
     /// Closed-form marginal distribution over a coordinate subset.
@@ -221,6 +237,17 @@ impl MultivariateStudentT {
         });
         Self::new(self.freedom, location, matrix::symmetrize(&scale))
     }
+
+    /// Batch log likelihood `Σ ln f(xᵢ)`. Empty samples have log likelihood `0`.
+    pub fn ln_likelihood(&self, samples: &[Vec<f64>]) -> f64 {
+        if samples
+            .iter()
+            .any(|x| x.len() != self.dimension() || x.iter().any(|v| !v.is_finite()))
+        {
+            return f64::NEG_INFINITY;
+        }
+        samples.iter().map(|x| self.ln_pdf(x)).sum()
+    }
 }
 
 impl Distribution<Vec<f64>> for MultivariateStudentT {
@@ -246,13 +273,7 @@ impl MultivariateContinuous for MultivariateStudentT {
         if x.len() != d || x.iter().any(|v| !v.is_finite()) {
             return f64::NEG_INFINITY;
         }
-        let diff: Vec<f64> = x
-            .iter()
-            .zip(&self.location)
-            .map(|(xi, mi)| xi - mi)
-            .collect();
-        let solved = self.chol.solve(&diff);
-        let quad = diff.iter().zip(solved).map(|(&a, b)| a * b).sum::<f64>();
+        let quad = self.squared_mahalanobis(x);
         let nu = self.freedom;
         ln_gamma((nu + d as f64) / 2.0)
             - ln_gamma(nu / 2.0)
@@ -276,6 +297,18 @@ impl MultivariateMoments for MultivariateStudentT {
         } else {
             DenseMatrix::from_fn(self.dimension(), self.dimension(), |_, _| f64::NAN)
         }
+    }
+
+    fn entropy(&self) -> Option<f64> {
+        let d = self.dimension() as f64;
+        let nu = self.freedom;
+        let half_nu = 0.5 * nu;
+        let half_nu_plus_d = 0.5 * (nu + d);
+        Some(
+            ln_gamma(half_nu) - ln_gamma(half_nu_plus_d)
+                + 0.5 * (d * (nu * PI).ln() + self.ln_det_scale)
+                + half_nu_plus_d * (digamma(half_nu_plus_d) - digamma(half_nu)),
+        )
     }
 }
 
@@ -321,7 +354,7 @@ fn select_matrix(matrix: &DenseMatrix, rows: &[usize], cols: &[usize]) -> DenseM
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::distribution::{Continuous, StudentT};
+    use crate::distribution::{Continuous, Moments, StudentT};
 
     fn close(a: f64, b: f64, tol: f64) {
         assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
@@ -335,6 +368,7 @@ mod tests {
         close(mv.ln_pdf(&[1.0]), scalar.ln_pdf(1.0), 1e-10);
         close(mv.mean_vector()[0], 2.0, 1e-12);
         close(mv.covariance().get(0, 0), 15.0, 1e-12);
+        close(mv.entropy().unwrap(), scalar.entropy().unwrap(), 1e-12);
     }
 
     #[test]
@@ -381,6 +415,8 @@ mod tests {
         assert_eq!(conditional.location().len(), 1);
         close(conditional.location()[0], 2.0, 1e-10);
         close(conditional.scale_matrix().get(0, 0), 12.0, 1e-10);
+        close(bivar.squared_mahalanobis(&[4.0, 2.0]), 4.0, 1e-10);
+        assert!(bivar.squared_mahalanobis(&[f64::NAN, 0.0]).is_nan());
         assert!(bivar.condition(&[0, 1], &[0.0, 0.0]).is_err());
 
         let affine = bivar
@@ -403,5 +439,14 @@ mod tests {
                 .affine_transform(&DenseMatrix::from_rows(&[vec![1.0, 0.0]]), &[0.0, 0.0])
                 .is_err()
         );
+
+        let samples = vec![vec![0.0, 0.0], vec![1.0, -1.0]];
+        close(
+            bivar.ln_likelihood(&samples),
+            bivar.ln_pdf(&samples[0]) + bivar.ln_pdf(&samples[1]),
+            1e-12,
+        );
+        assert_eq!(bivar.ln_likelihood(&[vec![0.0]]), f64::NEG_INFINITY);
+        assert!(bivar.entropy().unwrap().is_finite());
     }
 }
