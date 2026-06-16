@@ -19,6 +19,42 @@ impl BetaBernoulli {
         self.prior
     }
 
+    /// Closed-form prior/posterior predictive log probability for one future
+    /// Bernoulli outcome under this Beta state.
+    pub fn ln_predictive(&self, outcome: bool) -> f64 {
+        ln_beta_bernoulli_predictive(self.prior.alpha(), self.prior.beta(), outcome)
+    }
+
+    /// Closed-form posterior-predictive log probability for one future
+    /// Bernoulli outcome after observing `data`.
+    pub fn ln_posterior_predictive(&self, data: &[bool], outcome: bool) -> f64 {
+        Self::new(self.posterior(data)).ln_predictive(outcome)
+    }
+
+    /// Closed-form log probability of a future Bernoulli batch after observing
+    /// `data`.
+    pub fn ln_posterior_predictive_likelihood(&self, data: &[bool], future: &[bool]) -> f64 {
+        Self::new(self.posterior(data)).ln_marginal_likelihood(future)
+    }
+
+    /// Sequential predictive factorization `Σᵢ ln p(xᵢ | x₁,…,xᵢ₋₁)`.
+    ///
+    /// In exact arithmetic this equals [`ln_marginal_likelihood`](Self::ln_marginal_likelihood).
+    pub fn ln_sequential_predictive(&self, data: &[bool]) -> f64 {
+        let mut alpha = self.prior.alpha();
+        let mut beta = self.prior.beta();
+        let mut ln_prob = 0.0;
+        for &outcome in data {
+            ln_prob += ln_beta_bernoulli_predictive(alpha, beta, outcome);
+            if outcome {
+                alpha += 1.0;
+            } else {
+                beta += 1.0;
+            }
+        }
+        ln_prob
+    }
+
     /// Closed-form log marginal likelihood `ln p(data | α, β)` with the
     /// Bernoulli probability integrated out:
     /// `ln B(α+s, β+f) - ln B(α, β)`.
@@ -73,6 +109,56 @@ impl BetaBinomialModel {
     pub fn prior(&self) -> Beta {
         self.prior
     }
+    pub fn trials(&self) -> u64 {
+        self.trials
+    }
+
+    /// Closed-form prior/posterior predictive log probability for one future
+    /// fixed-trial binomial observation under this Beta state.
+    pub fn ln_predictive(&self, successes: u64) -> f64 {
+        ln_beta_binomial_predictive(
+            self.prior.alpha(),
+            self.prior.beta(),
+            self.trials,
+            successes,
+        )
+    }
+
+    /// Closed-form posterior-predictive log probability for one future
+    /// fixed-trial binomial observation after observing `data`.
+    pub fn ln_posterior_predictive(&self, data: &[u64], successes: u64) -> f64 {
+        if data.iter().any(|&k| k > self.trials) {
+            return f64::NEG_INFINITY;
+        }
+        Self::new(self.posterior(data), self.trials).ln_predictive(successes)
+    }
+
+    /// Closed-form log probability of a future fixed-trial binomial batch after
+    /// observing `data`.
+    pub fn ln_posterior_predictive_likelihood(&self, data: &[u64], future: &[u64]) -> f64 {
+        if data.iter().any(|&k| k > self.trials) {
+            return f64::NEG_INFINITY;
+        }
+        Self::new(self.posterior(data), self.trials).ln_marginal_likelihood(future)
+    }
+
+    /// Sequential predictive factorization `Σᵢ ln p(kᵢ | k₁,…,kᵢ₋₁)`.
+    ///
+    /// In exact arithmetic this equals [`ln_marginal_likelihood`](Self::ln_marginal_likelihood).
+    pub fn ln_sequential_predictive(&self, data: &[u64]) -> f64 {
+        let mut alpha = self.prior.alpha();
+        let mut beta = self.prior.beta();
+        let mut ln_prob = 0.0;
+        for &successes in data {
+            if successes > self.trials {
+                return f64::NEG_INFINITY;
+            }
+            ln_prob += ln_beta_binomial_predictive(alpha, beta, self.trials, successes);
+            alpha += successes as f64;
+            beta += (self.trials - successes) as f64;
+        }
+        ln_prob
+    }
 
     /// Closed-form log marginal likelihood for fixed-trial binomial observations
     /// with the success probability integrated out:
@@ -118,11 +204,30 @@ impl Conjugate for BetaBinomialModel {
     }
 }
 
+fn ln_beta_bernoulli_predictive(alpha: f64, beta: f64, outcome: bool) -> f64 {
+    let total = alpha + beta;
+    if outcome {
+        (alpha / total).ln()
+    } else {
+        (beta / total).ln()
+    }
+}
+
+fn ln_beta_binomial_predictive(alpha: f64, beta: f64, trials: u64, successes: u64) -> f64 {
+    if successes > trials {
+        return f64::NEG_INFINITY;
+    }
+    let successes = successes as f64;
+    let trials_f = trials as f64;
+    ln_binomial(trials, successes as u64) + ln_beta(successes + alpha, trials_f - successes + beta)
+        - ln_beta(alpha, beta)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::distribution::Moments;
+    use crate::distribution::{Discrete, Moments};
 
     fn close(a: f64, b: f64, tol: f64) {
         assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
@@ -136,9 +241,25 @@ mod tests {
         close(post.alpha(), 5.0, 1e-12);
         close(post.beta(), 3.0, 1e-12);
         close(model.posterior_predictive(&data).p(), 5.0 / 8.0, 1e-12);
+        close(model.ln_predictive(true).exp(), 0.5, 1e-12);
+        close(
+            model.ln_posterior_predictive(&data, true).exp(),
+            5.0 / 8.0,
+            1e-12,
+        );
         close(
             model.ln_marginal_likelihood(&data),
             ln_beta(5.0, 3.0) - ln_beta(2.0, 2.0),
+            1e-12,
+        );
+        close(
+            model.ln_sequential_predictive(&data),
+            model.ln_marginal_likelihood(&data),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive_likelihood(&data, &[true, false]),
+            BetaBernoulli::new(post).ln_marginal_likelihood(&[true, false]),
             1e-12,
         );
     }
@@ -150,13 +271,36 @@ mod tests {
         let post = model.posterior(&data);
         close(post.alpha(), 31.0, 1e-12);
         close(post.beta(), 11.0, 1e-12);
+        assert_eq!(model.trials(), 10);
         let pred = model.posterior_predictive(&data);
         close(pred.mean().unwrap(), 10.0 * 31.0 / 42.0, 1e-12);
+        close(
+            model.ln_predictive(7).exp(),
+            BetaBinomial::from_beta(10, model.prior()).pmf(7),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive(&data, 7).exp(),
+            pred.pmf(7),
+            1e-12,
+        );
         let evidence =
             (ln_binomial(10, 7) + ln_binomial(10, 8) + ln_binomial(10, 6) + ln_binomial(10, 9))
                 + ln_beta(31.0, 11.0)
                 - ln_beta(1.0, 1.0);
         close(model.ln_marginal_likelihood(&data), evidence, 1e-12);
+        close(
+            model.ln_sequential_predictive(&data),
+            model.ln_marginal_likelihood(&data),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive_likelihood(&data, &[7, 6]),
+            BetaBinomialModel::new(post, 10).ln_marginal_likelihood(&[7, 6]),
+            1e-12,
+        );
         assert_eq!(model.ln_marginal_likelihood(&[11]), f64::NEG_INFINITY);
+        assert_eq!(model.ln_predictive(11), f64::NEG_INFINITY);
+        assert_eq!(model.ln_posterior_predictive(&[11], 1), f64::NEG_INFINITY);
     }
 }

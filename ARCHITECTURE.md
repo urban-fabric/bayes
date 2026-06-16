@@ -82,8 +82,9 @@ The concrete distributions are grouped by kind:
   congruence transforms, and inverse-family transforms. Dirichlet owns the
   simplex algebra that stays
   closed under projection: component and subset-sum Beta marginals, category
-  lumping into a smaller Dirichlet, conditional sub-simplex laws, and
-  full Dirichlet-multinomial predictive count distributions with predictive log
+  lumping into a smaller Dirichlet, conditional sub-simplex laws, count updates,
+  expected categorical/count log likelihoods, cross-entropy, and full
+  Dirichlet-multinomial predictive count distributions with predictive log
   probabilities. Directional models keep the same closed-form boundary:
   spherical-uniform owns the sphere base
   measure, von Mises-Fisher owns normalized entropy, KL, moments, and product
@@ -119,10 +120,11 @@ The concrete distributions are grouped by kind:
   posterior predictives for future observations, sums, and means. Multivariate
   Gaussian conjugate wrappers expose predictive log densities, future-batch
   predictive likelihoods, and sequential predictive factorizations of the
-  marginal likelihood. Dirichlet categorical/count-vector wrappers expose the
-  same predictive likelihood and sequential-evidence surface. Gamma-Poisson and
-  Gamma-Exponential expose exposure/right-censoring updates where the
-  sufficient statistic is `(events, exposure)` rather than raw observations.
+  marginal likelihood. Beta, Dirichlet, Gamma, and multivariate Gaussian
+  conjugate wrappers expose the same predictive likelihood and
+  sequential-evidence surface. Gamma-Poisson and Gamma-Exponential carry that
+  surface through exposure/right-censoring updates where the sufficient
+  statistic is `(events, exposure)` rather than raw observations.
   Every family is one instance of the `Conjugate` trait's generic
   `posterior = η + Σ T(xᵢ)` accumulation in a `NaturalParams` monoid — supplying
   only its statistic `T`, prior coordinates `η`, and the map back to a

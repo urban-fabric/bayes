@@ -23,14 +23,15 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   expected log-determinants, entry variances/covariances where their moments
   exist, congruence transforms, and inverse-family transforms.
   Dirichlet distributions include component/sum Beta marginals,
-  category lumping, conditional sub-simplex laws, and full Dirichlet-multinomial
-  predictive count distributions with predictive log probabilities. Directional
-  models include normalized von Mises/von Mises-Fisher, spherical-uniform, and
-  Watson-on-S² distributions with closed-form moments, entropy/KL, sampling, and
-  same-family product algebra where it stays normalized. Kent/Bingham expose
-  closed-form potential algebra (ratios, gradients, spectral/canonical forms,
-  identity-shift invariance, rank-one Watson conversion) plus normalized special
-  cases where the partition function,
+  category lumping, conditional sub-simplex laws, count updates, expected
+  categorical/count log likelihoods, cross-entropy, and full
+  Dirichlet-multinomial predictive count distributions with predictive log
+  probabilities. Directional models include normalized von Mises/von
+  Mises-Fisher, spherical-uniform, and Watson-on-S² distributions with
+  closed-form moments, entropy/KL, sampling, and same-family product algebra
+  where it stays normalized. Kent/Bingham expose closed-form potential algebra
+  (ratios, gradients, spectral/canonical forms, identity-shift invariance,
+  rank-one Watson conversion) plus normalized special cases where the partition function,
   moments, and entropy are analytic; the generic Kent/Bingham normalizers remain
   outside the closed-form surface.
   Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
@@ -75,10 +76,10 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   posterior predictives for future observations, sums, and means. Multivariate
   Gaussian conjugate models expose closed-form predictive log densities,
   future-batch predictive likelihoods, and sequential predictive factorizations
-  of the marginal likelihood. Dirichlet categorical/count-vector conjugacy
-  exposes the same predictive likelihood and sequential-evidence surface.
-  Gamma-Poisson and Gamma-Exponential conjugacy also support closed-form
-  exposure/right-censoring sufficient statistics.
+  of the marginal likelihood. Beta, Dirichlet, Gamma, and multivariate Gaussian
+  conjugate wrappers expose the same predictive likelihood and
+  sequential-evidence surface; Gamma-Poisson and Gamma-Exponential also carry
+  that surface through exposure/right-censoring sufficient statistics.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};

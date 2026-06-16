@@ -74,10 +74,26 @@ fn beta_bernoulli_conjugate_flow() {
     close(post.beta(), 3.0, 1e-12);
     let pred: Bernoulli = model.posterior_predictive(&data);
     close(pred.p(), 6.0 / 9.0, 1e-12);
+    close(model.ln_predictive(true).exp(), 0.5, 1e-12);
+    close(
+        model.ln_posterior_predictive(&data, true).exp(),
+        pred.p(),
+        1e-12,
+    );
     close(
         model.ln_marginal_likelihood(&data),
         bayes::function::ln_beta(6.0, 3.0) - bayes::function::ln_beta(1.0, 1.0),
         1e-12,
+    );
+    close(
+        model.ln_sequential_predictive(&data),
+        model.ln_marginal_likelihood(&data),
+        1e-12,
+    );
+    assert!(
+        model
+            .ln_posterior_predictive_likelihood(&data, &[true, false])
+            .is_finite()
     );
 }
 
@@ -87,12 +103,42 @@ fn beta_binomial_and_gamma_poisson_predictives() {
     let pred: BetaBinomial = bb_model.posterior_predictive(&[3, 4, 2]);
     let mass: f64 = (0..=5u64).map(|k| pred.pmf(k)).sum();
     close(mass, 1.0, 1e-12);
+    assert_eq!(bb_model.trials(), 5);
+    close(
+        bb_model.ln_posterior_predictive(&[3, 4, 2], 3).exp(),
+        pred.pmf(3),
+        1e-12,
+    );
     assert!(bb_model.ln_marginal_likelihood(&[3, 4, 2]).is_finite());
+    close(
+        bb_model.ln_sequential_predictive(&[3, 4, 2]),
+        bb_model.ln_marginal_likelihood(&[3, 4, 2]),
+        1e-12,
+    );
+    assert!(
+        bb_model
+            .ln_posterior_predictive_likelihood(&[3, 4, 2], &[1, 5])
+            .is_finite()
+    );
 
     let gp = GammaPoisson::new(Gamma::new(2.0, 1.0).unwrap());
     let nb = gp.posterior_predictive(&[3, 5, 2, 4]);
     assert!(nb.pmf(3) > 0.0);
+    close(
+        gp.ln_posterior_predictive(&[3, 5, 2, 4], 3).exp(),
+        nb.pmf(3),
+        1e-12,
+    );
     assert!(gp.ln_marginal_likelihood(&[3, 5, 2, 4]).is_finite());
+    close(
+        gp.ln_sequential_predictive(&[3, 5, 2, 4]),
+        gp.ln_marginal_likelihood(&[3, 5, 2, 4]),
+        1e-12,
+    );
+    assert!(
+        gp.ln_posterior_predictive_likelihood(&[3, 5, 2, 4], &[1, 0])
+            .is_finite()
+    );
     let exposed_post = gp.posterior_with_exposure(&[3, 2], &[0.5, 1.5]).unwrap();
     close(exposed_post.shape(), 7.0, 1e-12);
     assert!(
@@ -102,11 +148,36 @@ fn beta_binomial_and_gamma_poisson_predictives() {
             > 0.0
     );
     assert!(
+        gp.ln_posterior_predictive_with_exposure(&[3, 2], &[0.5, 1.5], 4, 2.0)
+            .is_finite()
+    );
+    assert!(
         gp.ln_marginal_likelihood_with_exposure(&[3, 2], &[0.5, 1.5])
             .is_finite()
     );
+    close(
+        gp.ln_sequential_predictive_with_exposure(&[3, 2], &[0.5, 1.5]),
+        gp.ln_marginal_likelihood_with_exposure(&[3, 2], &[0.5, 1.5]),
+        1e-12,
+    );
 
     let ge = GammaExponential::new(Gamma::new(1.0, 1.0).unwrap());
+    let waiting = [0.5, 1.5, 2.0];
+    let waiting_pred = ge.posterior_predictive(&waiting);
+    close(
+        ge.ln_posterior_predictive(&waiting, 1.0).exp(),
+        waiting_pred.pdf(1.0),
+        1e-12,
+    );
+    close(
+        ge.ln_sequential_predictive(&waiting),
+        ge.ln_marginal_likelihood(&waiting),
+        1e-12,
+    );
+    assert!(
+        ge.ln_posterior_predictive_likelihood(&waiting, &[0.25, 0.75])
+            .is_finite()
+    );
     close(
         ge.posterior_with_exposure(2, 4.0).unwrap().rate(),
         5.0,
@@ -118,6 +189,10 @@ fn beta_binomial_and_gamma_poisson_predictives() {
             .scale(),
         5.0,
         1e-12,
+    );
+    assert!(
+        ge.ln_posterior_predictive_with_exposure(2, 4.0, 1, 2.0)
+            .is_finite()
     );
 
     let gamma_sum = Gamma::sum_independent_same_rate(&[
@@ -240,6 +315,27 @@ fn dirichlet_categorical_conjugate_flow() {
     );
 
     let simplex = Dirichlet::new(vec![2.0, 3.0, 5.0, 7.0]).unwrap();
+    close(
+        simplex.ln_normalizer(),
+        -simplex.ln_multivariate_beta(),
+        1e-12,
+    );
+    assert!(simplex.expected_log_probability(0).unwrap().is_finite());
+    assert!(
+        simplex
+            .expected_log_likelihood_counts(&[1, 2, 0, 0])
+            .is_finite()
+    );
+    let counted_simplex = simplex.add_counts(&[1, 0, 0, 2]).unwrap();
+    assert_eq!(counted_simplex.alpha(), &[3.0, 3.0, 5.0, 9.0]);
+    close(
+        simplex.cross_entropy(&simplex),
+        simplex.entropy().unwrap(),
+        1e-12,
+    );
+    let shifted_simplex = Dirichlet::new(vec![3.0, 4.0, 6.0, 8.0]).unwrap();
+    assert!(simplex.expected_log_density(&shifted_simplex).is_finite());
+    assert!(simplex.kl_divergence(&shifted_simplex) >= 0.0);
     let component = simplex.component_marginal(2).unwrap();
     close(component.alpha(), 5.0, 1e-12);
     close(component.beta(), 12.0, 1e-12);

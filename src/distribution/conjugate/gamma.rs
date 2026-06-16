@@ -20,6 +20,101 @@ impl GammaPoisson {
         self.prior
     }
 
+    /// Closed-form prior/posterior predictive log probability for one future
+    /// Poisson count over unit exposure under this Gamma state.
+    pub fn ln_predictive(&self, count: u64) -> f64 {
+        ln_gamma_poisson_predictive(self.prior.shape(), self.prior.rate(), count, 1.0)
+    }
+
+    /// Closed-form prior/posterior predictive log probability for one future
+    /// Poisson count over a supplied exposure interval under this Gamma state.
+    ///
+    /// Returns `NaN` for malformed exposures, matching
+    /// [`ln_marginal_likelihood_with_exposure`](Self::ln_marginal_likelihood_with_exposure).
+    pub fn ln_predictive_with_exposure(&self, count: u64, exposure: f64) -> f64 {
+        ln_gamma_poisson_predictive(self.prior.shape(), self.prior.rate(), count, exposure)
+    }
+
+    /// Closed-form posterior-predictive log probability for one future Poisson
+    /// count over unit exposure after observing `data`.
+    pub fn ln_posterior_predictive(&self, data: &[u64], count: u64) -> f64 {
+        Self::new(self.posterior(data)).ln_predictive(count)
+    }
+
+    /// Closed-form posterior-predictive log probability for one future Poisson
+    /// count over `future_exposure` after observing exposure-offset data.
+    pub fn ln_posterior_predictive_with_exposure(
+        &self,
+        counts: &[u64],
+        exposures: &[f64],
+        future_count: u64,
+        future_exposure: f64,
+    ) -> f64 {
+        let Ok(post) = self.posterior_with_exposure(counts, exposures) else {
+            return f64::NAN;
+        };
+        Self::new(post).ln_predictive_with_exposure(future_count, future_exposure)
+    }
+
+    /// Closed-form log probability of a future unit-exposure Poisson count batch
+    /// after observing `data`.
+    pub fn ln_posterior_predictive_likelihood(&self, data: &[u64], future: &[u64]) -> f64 {
+        Self::new(self.posterior(data)).ln_marginal_likelihood(future)
+    }
+
+    /// Closed-form log probability of a future exposure-offset Poisson batch
+    /// after observing exposure-offset data.
+    pub fn ln_posterior_predictive_likelihood_with_exposure(
+        &self,
+        counts: &[u64],
+        exposures: &[f64],
+        future_counts: &[u64],
+        future_exposures: &[f64],
+    ) -> f64 {
+        let Ok(post) = self.posterior_with_exposure(counts, exposures) else {
+            return f64::NAN;
+        };
+        Self::new(post).ln_marginal_likelihood_with_exposure(future_counts, future_exposures)
+    }
+
+    /// Sequential predictive factorization over unit-exposure Poisson counts.
+    ///
+    /// In exact arithmetic this equals [`ln_marginal_likelihood`](Self::ln_marginal_likelihood).
+    pub fn ln_sequential_predictive(&self, data: &[u64]) -> f64 {
+        let mut shape = self.prior.shape();
+        let mut rate = self.prior.rate();
+        let mut ln_prob = 0.0;
+        for &count in data {
+            ln_prob += ln_gamma_poisson_predictive(shape, rate, count, 1.0);
+            shape += count as f64;
+            rate += 1.0;
+        }
+        ln_prob
+    }
+
+    /// Sequential predictive factorization over exposure-offset Poisson counts.
+    ///
+    /// In exact arithmetic this equals
+    /// [`ln_marginal_likelihood_with_exposure`](Self::ln_marginal_likelihood_with_exposure).
+    pub fn ln_sequential_predictive_with_exposure(&self, counts: &[u64], exposures: &[f64]) -> f64 {
+        if counts.len() != exposures.len() {
+            return f64::NAN;
+        }
+        let mut shape = self.prior.shape();
+        let mut rate = self.prior.rate();
+        let mut ln_prob = 0.0;
+        for (&count, &exposure) in counts.iter().zip(exposures) {
+            let term = ln_gamma_poisson_predictive(shape, rate, count, exposure);
+            if term.is_nan() {
+                return f64::NAN;
+            }
+            ln_prob += term;
+            shape += count as f64;
+            rate += exposure;
+        }
+        ln_prob
+    }
+
     /// Closed-form posterior with per-observation Poisson exposure offsets:
     /// `y_i ~ Poisson(λ e_i)`.
     ///
@@ -139,6 +234,78 @@ impl GammaExponential {
         self.prior
     }
 
+    /// Closed-form prior/posterior predictive log density for one future
+    /// exponential waiting time under this Gamma state.
+    ///
+    /// Returns `NaN` for negative or non-finite observations, matching
+    /// [`ln_marginal_likelihood`](Self::ln_marginal_likelihood).
+    pub fn ln_predictive(&self, x: f64) -> f64 {
+        ln_gamma_exponential_predictive(self.prior.shape(), self.prior.rate(), x)
+    }
+
+    /// Closed-form prior/posterior predictive log likelihood for aggregate
+    /// right-censored/exposure data under this Gamma state.
+    pub fn ln_predictive_with_exposure(&self, failures: u64, total_exposure: f64) -> f64 {
+        ln_gamma_exponential_exposure_evidence(
+            self.prior.shape(),
+            self.prior.rate(),
+            failures,
+            total_exposure,
+        )
+    }
+
+    /// Closed-form posterior-predictive log density for one future waiting time
+    /// after observing exact waiting times `data`.
+    pub fn ln_posterior_predictive(&self, data: &[f64], x: f64) -> f64 {
+        if !exponential_data_are_valid(data) {
+            return f64::NAN;
+        }
+        Self::new(self.posterior(data)).ln_predictive(x)
+    }
+
+    /// Closed-form posterior-predictive log likelihood for future aggregate
+    /// right-censored/exposure data after observing aggregate exposure data.
+    pub fn ln_posterior_predictive_with_exposure(
+        &self,
+        failures: u64,
+        total_exposure: f64,
+        future_failures: u64,
+        future_exposure: f64,
+    ) -> f64 {
+        let Ok(post) = self.posterior_with_exposure(failures, total_exposure) else {
+            return f64::NAN;
+        };
+        Self::new(post).ln_predictive_with_exposure(future_failures, future_exposure)
+    }
+
+    /// Closed-form log probability of a future exact waiting-time batch after
+    /// observing `data`.
+    pub fn ln_posterior_predictive_likelihood(&self, data: &[f64], future: &[f64]) -> f64 {
+        if !exponential_data_are_valid(data) {
+            return f64::NAN;
+        }
+        Self::new(self.posterior(data)).ln_marginal_likelihood(future)
+    }
+
+    /// Sequential predictive factorization over exact exponential waiting times.
+    ///
+    /// In exact arithmetic this equals [`ln_marginal_likelihood`](Self::ln_marginal_likelihood).
+    pub fn ln_sequential_predictive(&self, data: &[f64]) -> f64 {
+        let mut shape = self.prior.shape();
+        let mut rate = self.prior.rate();
+        let mut ln_prob = 0.0;
+        for &x in data {
+            let term = ln_gamma_exponential_predictive(shape, rate, x);
+            if term.is_nan() {
+                return f64::NAN;
+            }
+            ln_prob += term;
+            shape += 1.0;
+            rate += x;
+        }
+        ln_prob
+    }
+
     /// Closed-form posterior from right-censored/exposure data.
     ///
     /// For an exponential rate `λ`, failures contribute `λ^d` and all observed
@@ -236,6 +403,45 @@ fn validate_exposure(value: f64, name: &'static str) -> Result<(), BayesError> {
     Ok(())
 }
 
+fn exponential_data_are_valid(data: &[f64]) -> bool {
+    data.iter().all(|&x| x.is_finite() && x >= 0.0)
+}
+
+fn ln_gamma_poisson_predictive(shape: f64, rate: f64, count: u64, exposure: f64) -> f64 {
+    if validate_exposure(exposure, "exposure").is_err() {
+        return f64::NAN;
+    }
+    if exposure == 0.0 {
+        return if count == 0 { 0.0 } else { f64::NAN };
+    }
+    let count_f = count as f64;
+    ln_gamma(shape + count_f) - ln_gamma(shape) - ln_factorial(count)
+        + shape * rate.ln()
+        + count_f * exposure.ln()
+        - (shape + count_f) * (rate + exposure).ln()
+}
+
+fn ln_gamma_exponential_predictive(shape: f64, rate: f64, x: f64) -> f64 {
+    if !x.is_finite() || x < 0.0 {
+        return f64::NAN;
+    }
+    shape.ln() + shape * rate.ln() - (shape + 1.0) * (rate + x).ln()
+}
+
+fn ln_gamma_exponential_exposure_evidence(
+    shape: f64,
+    rate: f64,
+    failures: u64,
+    total_exposure: f64,
+) -> f64 {
+    if validate_exposure(total_exposure, "total_exposure").is_err() {
+        return f64::NAN;
+    }
+    let failures = failures as f64;
+    shape * rate.ln() - ln_gamma(shape) + ln_gamma(shape + failures)
+        - (shape + failures) * (rate + total_exposure).ln()
+}
+
 fn poisson_exposure_stats(
     counts: &[u64],
     exposures: &[f64],
@@ -268,7 +474,7 @@ fn poisson_exposure_stats(
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-    use crate::distribution::{Discrete, Moments};
+    use crate::distribution::{Continuous, Discrete, Moments};
 
     fn close(a: f64, b: f64, tol: f64) {
         assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
@@ -284,11 +490,31 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.mean().unwrap(), 16.0 / 5.0, 1e-12);
         assert!(pred.pmf(3) > 0.0);
+        close(
+            model.ln_predictive(3).exp(),
+            model.posterior_predictive(&[]).pmf(3),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive(&data, 3).exp(),
+            pred.pmf(3),
+            1e-12,
+        );
         let evidence =
             2.0 * 1.0_f64.ln() - ln_gamma(2.0) - data.iter().map(|&k| ln_factorial(k)).sum::<f64>()
                 + ln_gamma(16.0)
                 - 16.0 * 5.0_f64.ln();
         close(model.ln_marginal_likelihood(&data), evidence, 1e-12);
+        close(
+            model.ln_sequential_predictive(&data),
+            model.ln_marginal_likelihood(&data),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive_likelihood(&data, &[3, 0]),
+            GammaPoisson::new(post).ln_marginal_likelihood(&[3, 0]),
+            1e-12,
+        );
     }
 
     #[test]
@@ -304,6 +530,21 @@ mod tests {
             .posterior_predictive_with_exposure(&counts, &exposures, 2.0)
             .unwrap();
         close(pred.mean().unwrap(), 14.0 / 3.0, 1e-12);
+        close(
+            model.ln_predictive_with_exposure(3, 0.5).exp(),
+            model
+                .posterior_predictive_with_exposure(&[], &[], 0.5)
+                .unwrap()
+                .pmf(3),
+            1e-12,
+        );
+        close(
+            model
+                .ln_posterior_predictive_with_exposure(&counts, &exposures, 1, 2.0)
+                .exp(),
+            pred.pmf(1),
+            1e-12,
+        );
 
         let evidence = ln_gamma(7.0) - ln_gamma(2.0) - 7.0 * 3.0_f64.ln()
             + 3.0 * 0.5_f64.ln()
@@ -315,12 +556,33 @@ mod tests {
             evidence,
             1e-12,
         );
+        close(
+            model.ln_sequential_predictive_with_exposure(&counts, &exposures),
+            model.ln_marginal_likelihood_with_exposure(&counts, &exposures),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive_likelihood_with_exposure(
+                &counts,
+                &exposures,
+                &[1],
+                &[2.0],
+            ),
+            GammaPoisson::new(post).ln_marginal_likelihood_with_exposure(&[1], &[2.0]),
+            1e-12,
+        );
         assert!(model.posterior_with_exposure(&[1], &[0.0]).is_err());
         assert!(model.posterior_with_exposure(&[0], &[-1.0]).is_err());
         assert!(
             model
                 .posterior_predictive_with_exposure(&counts, &exposures, 0.0)
                 .is_err()
+        );
+        assert!(model.ln_predictive_with_exposure(1, 0.0).is_nan());
+        assert!(
+            model
+                .ln_sequential_predictive_with_exposure(&[1], &[0.0])
+                .is_nan()
         );
     }
 
@@ -337,11 +599,33 @@ mod tests {
         close(pred.scale(), 5.0, 1e-12);
         close(pred.mean().unwrap(), 5.0 / 3.0, 1e-12);
         close(
+            model.ln_predictive(0.5).exp(),
+            model.posterior_predictive(&[]).pdf(0.5),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive(&data, 1.0).exp(),
+            pred.pdf(1.0),
+            1e-12,
+        );
+        close(
             model.ln_marginal_likelihood(&data),
             1.0 * 1.0_f64.ln() - ln_gamma(1.0) + ln_gamma(4.0) - 4.0 * 5.0_f64.ln(),
             1e-12,
         );
+        close(
+            model.ln_sequential_predictive(&data),
+            model.ln_marginal_likelihood(&data),
+            1e-12,
+        );
+        close(
+            model.ln_posterior_predictive_likelihood(&data, &[0.25, 0.75]),
+            GammaExponential::new(post).ln_marginal_likelihood(&[0.25, 0.75]),
+            1e-12,
+        );
         assert!(model.ln_marginal_likelihood(&[-1.0]).is_nan());
+        assert!(model.ln_predictive(-1.0).is_nan());
+        assert!(model.ln_posterior_predictive(&[-1.0], 1.0).is_nan());
     }
 
     #[test]
@@ -355,6 +639,11 @@ mod tests {
         close(pred.shape(), 3.0, 1e-12);
         close(pred.scale(), 5.0, 1e-12);
         close(pred.mean().unwrap(), 2.5, 1e-12);
+        close(
+            model.ln_posterior_predictive_with_exposure(2, 4.0, 1, 2.0),
+            GammaExponential::new(post).ln_marginal_likelihood_with_exposure(1, 2.0),
+            1e-12,
+        );
 
         let evidence = ln_gamma(3.0) - 3.0 * 5.0_f64.ln();
         close(
@@ -362,6 +651,7 @@ mod tests {
             evidence,
             1e-12,
         );
+        close(model.ln_predictive_with_exposure(2, 4.0), evidence, 1e-12);
         close(
             model.ln_marginal_likelihood_with_exposure(0, 0.0),
             0.0,

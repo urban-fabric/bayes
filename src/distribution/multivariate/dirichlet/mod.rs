@@ -7,7 +7,7 @@ use super::{MultivariateContinuous, MultivariateMoments};
 use crate::distribution::continuous::Beta;
 use crate::distribution::continuous::gamma::sample_standard_gamma;
 use crate::error::BayesError;
-use crate::function::gamma::{digamma, ln_gamma};
+use crate::function::{digamma, ln_factorial, ln_gamma, ln_multivariate_beta};
 
 /// The Dirichlet distribution over the `k`-simplex (vectors of non-negative
 /// components summing to 1), with concentration parameters `α₁, …, α_k > 0`.
@@ -46,6 +46,42 @@ impl Dirichlet {
     /// Alias for [`concentration`](Self::concentration).
     pub fn alpha_sum(&self) -> f64 {
         self.concentration()
+    }
+
+    /// Natural log of the multivariate beta function `ln B(α)`, the Dirichlet
+    /// partition function.
+    pub fn ln_multivariate_beta(&self) -> f64 {
+        ln_multivariate_beta(&self.alpha)
+    }
+
+    /// Natural log of the Dirichlet density normalizing constant `1 / B(α)`.
+    pub fn ln_normalizer(&self) -> f64 {
+        -self.ln_multivariate_beta()
+    }
+
+    /// Add categorical or multinomial counts to the concentration vector.
+    ///
+    /// Count vectors may be shorter than the support (missing categories are
+    /// treated as zero). Extra positive counts beyond the support are rejected.
+    pub fn add_counts(&self, counts: &[u64]) -> Result<Self, BayesError> {
+        if counts.iter().skip(self.alpha.len()).any(|&count| count > 0) {
+            return Err(BayesError::Malformed {
+                what: "Dirichlet count vector has positive mass outside support",
+            });
+        }
+        let alpha = self
+            .alpha
+            .iter()
+            .enumerate()
+            .map(|(j, &a)| a + counts.get(j).copied().unwrap_or(0) as f64)
+            .collect();
+        Self::new(alpha)
+    }
+
+    /// Alias for [`add_counts`](Self::add_counts) when the Dirichlet is being
+    /// used as a categorical/multinomial prior.
+    pub fn posterior_from_counts(&self, counts: &[u64]) -> Result<Self, BayesError> {
+        self.add_counts(counts)
     }
 
     /// Marginal distribution of component `P_i`.
@@ -164,6 +200,62 @@ impl Dirichlet {
             .collect()
     }
 
+    /// `E[ln P_i]` for one component. Returns `None` for out-of-range indices.
+    pub fn expected_log_probability(&self, index: usize) -> Option<f64> {
+        self.alpha
+            .get(index)
+            .map(|&a| digamma(a) - digamma(self.concentration()))
+    }
+
+    /// Expected categorical log likelihood `E[ln P_label]`.
+    ///
+    /// Returns `-∞` for labels outside the Dirichlet support.
+    pub fn expected_log_likelihood_categorical(&self, label: u64) -> f64 {
+        self.expected_log_probability(label as usize)
+            .unwrap_or(f64::NEG_INFINITY)
+    }
+
+    /// Expected multinomial log likelihood under this random probability vector:
+    /// `E[ln Multinomial(counts | P)]`.
+    ///
+    /// Count vectors may be shorter than the support. Extra positive counts
+    /// beyond the support return `-∞`.
+    pub fn expected_log_likelihood_counts(&self, counts: &[u64]) -> f64 {
+        let Some(coeff) = multinomial_count_log_coefficient(counts, self.alpha.len()) else {
+            return f64::NEG_INFINITY;
+        };
+        let elog = self.expected_log_probabilities();
+        coeff
+            + counts
+                .iter()
+                .take(self.alpha.len())
+                .enumerate()
+                .map(|(j, &count)| count as f64 * elog[j])
+                .sum::<f64>()
+    }
+
+    /// Cross-entropy `H(self, other) = -E_self[ln other(X)]` between Dirichlet
+    /// laws of the same dimension.
+    pub fn cross_entropy(&self, other: &Self) -> f64 {
+        if self.alpha.len() != other.alpha.len() {
+            return f64::INFINITY;
+        }
+        let elog = self.expected_log_probabilities();
+        other.ln_multivariate_beta()
+            - other
+                .alpha
+                .iter()
+                .zip(elog)
+                .map(|(&a, log_p)| (a - 1.0) * log_p)
+                .sum::<f64>()
+    }
+
+    /// Expected log density `E_self[ln other(X)]` between Dirichlet laws of the
+    /// same dimension.
+    pub fn expected_log_density(&self, other: &Self) -> f64 {
+        -self.cross_entropy(other)
+    }
+
     /// Mean count vector for a future Dirichlet-multinomial draw with `trials`.
     pub fn predictive_count_mean(&self, trials: u64) -> Vec<f64> {
         let n = trials as f64;
@@ -210,6 +302,21 @@ impl Dirichlet {
         }
         Ok(sum)
     }
+}
+
+fn multinomial_count_log_coefficient(counts: &[u64], k: usize) -> Option<f64> {
+    if counts.iter().skip(k).any(|&count| count > 0) {
+        return None;
+    }
+    let n = counts.iter().sum::<u64>();
+    Some(
+        ln_factorial(n)
+            - counts
+                .iter()
+                .take(k)
+                .map(|&count| ln_factorial(count))
+                .sum::<f64>(),
+    )
 }
 
 impl Distribution<Vec<f64>> for Dirichlet {
@@ -279,6 +386,7 @@ impl MultivariateMoments for Dirichlet {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use crate::distribution::KlDivergence;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
@@ -326,8 +434,45 @@ mod tests {
     fn closed_form_log_probability_and_predictive_count_moments() {
         let d = Dirichlet::new(vec![2.0, 3.0, 5.0]).unwrap();
         close(d.concentration(), 10.0, 1e-12);
+        close(
+            d.ln_multivariate_beta(),
+            ln_gamma(2.0) + ln_gamma(3.0) + ln_gamma(5.0) - ln_gamma(10.0),
+            1e-12,
+        );
+        close(d.ln_normalizer(), -d.ln_multivariate_beta(), 1e-12);
         let elog = d.expected_log_probabilities();
         close(elog[0], digamma(2.0) - digamma(10.0), 1e-12);
+        close(
+            d.expected_log_probability(0).unwrap(),
+            digamma(2.0) - digamma(10.0),
+            1e-12,
+        );
+        close(d.expected_log_likelihood_categorical(2), elog[2], 1e-12);
+        close(
+            d.expected_log_likelihood_counts(&[1, 2, 0]),
+            ln_factorial(3) - ln_factorial(1) - ln_factorial(2) + elog[0] + 2.0 * elog[1],
+            1e-12,
+        );
+        assert_eq!(
+            d.expected_log_likelihood_counts(&[0, 0, 0, 1]),
+            f64::NEG_INFINITY
+        );
+        let counted = d.add_counts(&[1, 2, 0]).unwrap();
+        assert_eq!(counted.alpha(), &[3.0, 5.0, 5.0]);
+        assert_eq!(d.posterior_from_counts(&[1, 2, 0]).unwrap(), counted);
+        assert!(d.add_counts(&[0, 0, 0, 1]).is_err());
+        close(d.cross_entropy(&d), d.entropy().unwrap(), 1e-12);
+        let other = Dirichlet::new(vec![3.0, 4.0, 6.0]).unwrap();
+        close(
+            d.cross_entropy(&other) - d.entropy().unwrap(),
+            d.kl_divergence(&other),
+            1e-12,
+        );
+        close(
+            d.expected_log_density(&other),
+            -d.cross_entropy(&other),
+            1e-12,
+        );
         close(d.variance_vector()[1], 3.0 * 7.0 / (100.0 * 11.0), 1e-12);
         close(d.covariance_entry(0, 2), -2.0 * 5.0 / (100.0 * 11.0), 1e-12);
 
