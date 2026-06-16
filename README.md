@@ -22,9 +22,12 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   matrix densities, entropy/KL, expected log-determinants, entry covariances,
   and inverse-family transforms. Dirichlet distributions include component/sum Beta marginals,
   category lumping, conditional sub-simplex laws, and full Dirichlet-multinomial
-  predictive count distributions. Directional models include normalized von Mises/von Mises-Fisher
-  distributions and unnormalized Kent/Bingham potentials for closed-form energy
-  ratios where the generic normalizer is not closed form.
+  predictive count distributions. Directional models include normalized von
+  Mises/von Mises-Fisher distributions with closed-form moments, entropy/KL,
+  and product fusion. Kent/Bingham expose closed-form potential algebra
+  (ratios, gradients, identity-shift invariance) plus normalized special cases
+  where the partition function is analytic; the generic Kent/Bingham normalizers
+  remain outside the closed-form surface.
   Normalized scalar distributions provide PDF/PMF, CDF/quantile/survival
   (incl. stable `ln_cdf`/`ln_sf`/`isf`) plus reliability helpers
   (`hazard`, `ln_hazard`, `cumulative_hazard`),

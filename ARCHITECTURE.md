@@ -80,9 +80,12 @@ The concrete distributions are grouped by kind:
   inverse-family transforms. Dirichlet owns the simplex algebra that stays
   closed under projection: component and subset-sum Beta marginals, category
   lumping into a smaller Dirichlet, conditional sub-simplex laws, and
-  full Dirichlet-multinomial predictive count distributions. Kent/Bingham
-  remain potential/ratio APIs because their generic normalizers require
-  special-function machinery outside the current closed-form surface.
+  full Dirichlet-multinomial predictive count distributions. Directional models
+  keep the same closed-form boundary: von Mises-Fisher owns normalized entropy,
+  KL, moments, and product fusion; Kent/Bingham own potential algebra, gradients,
+  identity-shift invariance, and normalized special cases (Kent beta=0,
+  isotropic Bingham, and two-dimensional Bingham). Generic Kent/Bingham
+  normalizers remain outside the current closed-form surface.
 - `constraint.rs`: Scalar support constraints and unconstraining transforms.
   Constraint transforms expose both forward and inverse log-Jacobian corrections,
   using stable log-domain sigmoid identities in the logistic tails so downstream

@@ -540,6 +540,24 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
     let kent =
         KentPotential::new([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], 4.0, 1.0).unwrap();
     close(kent.ln_unnormalized_density(&[1.0, 0.0, 0.0]), 4.0, 1e-12);
+    close(
+        kent.ln_density_difference(&[1.0, 0.0, 0.0], &[0.0, 1.0, 0.0]),
+        3.0,
+        1e-12,
+    );
+    close(
+        kent.tangent_gradient(&[0.0, 1.0, 0.0]).unwrap()[0],
+        4.0,
+        1e-12,
+    );
+    let kent_vmf =
+        KentPotential::new([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], 4.0, 0.0).unwrap();
+    assert!(
+        kent_vmf
+            .ln_pdf_closed_form(&[1.0, 0.0, 0.0])
+            .unwrap()
+            .is_finite()
+    );
 
     let bingham = BinghamPotential::new(ramanujan::DenseMatrix::from_rows(&[
         vec![2.0, 0.0],
@@ -552,6 +570,16 @@ fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
         bingham.ln_unnormalized_density(&[-1.0, 0.0]),
         1e-12,
     );
+    close(
+        bingham
+            .shifted_by_identity(5.0)
+            .unwrap()
+            .ln_density_difference(&[1.0, 0.0], &[0.0, 1.0]),
+        bingham.ln_density_difference(&[1.0, 0.0], &[0.0, 1.0]),
+        1e-12,
+    );
+    close(bingham.trace_centered().trace(), 0.0, 1e-12);
+    assert!(bingham.pdf_closed_form(&[1.0, 0.0]).unwrap().is_finite());
 }
 
 #[test]
@@ -606,11 +634,21 @@ fn public_distribution_surface_round_trips() {
 #[test]
 fn von_mises_directional_public_surface() {
     use bayes::VonMises;
+    use hausdorff::space::sphere::UnitVector;
+
     let vm = VonMises::new(0.0, 4.0).unwrap();
     assert!(vm.pdf(0.0) > vm.pdf(std::f64::consts::PI));
     let cv = vm.circular_variance();
     assert!((0.0..=1.0).contains(&cv) && cv < 0.5);
     close(bayes::function::i0(0.0), 1.0, 1e-12);
+
+    let p = bayes::VonMisesFisher::new(UnitVector::from_coords(&[1.0, 0.0, 0.0]), 3.0).unwrap();
+    let q = bayes::VonMisesFisher::new(UnitVector::from_coords(&[0.0, 1.0, 0.0]), 4.0).unwrap();
+    assert!(p.kl_divergence(&q) > 0.0);
+    assert!(p.entropy().unwrap().is_finite());
+    let fused = p.product_fusion(&q).unwrap();
+    close(fused.concentration(), 5.0, 1e-12);
+    assert!(p.ln_product_integral(&q).is_finite());
 }
 
 #[test]
