@@ -212,6 +212,12 @@ fn dirichlet_categorical_conjugate_flow() {
     assert_eq!(post.alpha(), &[4.0, 2.0, 2.0]);
     let pred = model.posterior_predictive(&[0u64, 0, 1, 2, 0]);
     close(pred.probabilities()[0], 0.5, 1e-12);
+    close(model.ln_predictive(0).exp(), 1.0 / 3.0, 1e-12);
+    close(
+        model.ln_posterior_predictive(&[0u64, 0, 1, 2, 0], 0).exp(),
+        0.5,
+        1e-12,
+    );
     close(
         model.posterior_predictive_count_mean(&[0u64, 0, 1, 2, 0], 4)[0],
         2.0,
@@ -220,6 +226,16 @@ fn dirichlet_categorical_conjugate_flow() {
     assert!(
         model
             .ln_marginal_likelihood(&[0u64, 0, 1, 2, 0])
+            .is_finite()
+    );
+    close(
+        model.ln_sequential_predictive(&[0u64, 0, 1, 2, 0]),
+        model.ln_marginal_likelihood(&[0u64, 0, 1, 2, 0]),
+        1e-12,
+    );
+    assert!(
+        model
+            .ln_posterior_predictive_likelihood(&[0u64, 0, 1, 2, 0], &[0u64, 1])
             .is_finite()
     );
 
@@ -241,6 +257,27 @@ fn dirichlet_categorical_conjugate_flow() {
     let dm = DirichletMultinomialDistribution::new(4, vec![2.0, 3.0, 5.0]).unwrap();
     close(dm.mean_vector()[2], 2.0, 1e-12);
     assert!(dm.pmf(&[1, 1, 2]) > 0.0);
+
+    let count_model = bayes::DirichletMultinomial::new(Dirichlet::new(vec![1.0, 1.0]).unwrap());
+    let count_data = [vec![3u64, 1], vec![2, 2]];
+    close(count_model.ln_predictive(&[1, 0]).exp(), 0.5, 1e-12);
+    close(
+        count_model
+            .ln_posterior_predictive(&count_data, &[1, 0])
+            .exp(),
+        0.6,
+        1e-12,
+    );
+    close(
+        count_model.ln_sequential_predictive(&count_data),
+        count_model.ln_marginal_likelihood(&count_data),
+        1e-12,
+    );
+    assert!(
+        count_model
+            .ln_posterior_predictive_likelihood(&count_data, &[vec![3, 2]])
+            .is_finite()
+    );
 }
 
 #[test]
