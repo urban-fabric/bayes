@@ -9,11 +9,11 @@
 //! [`Normal`](crate::Normal)) remain the semantic authority, and their scalar
 //! methods are parity-tested against these generic primitives.
 
-use euclid::numeric::RealScalar;
+use euclid::numeric::LazyReal;
 
 /// Gaussian log-density `ln N(x | µ, σ) = -½·((x-µ)/σ)² − ln σ − ½·ln(2π)`,
 /// written once over the reals.
-pub fn normal_log_prob<T: RealScalar>(x: T, mu: T, sigma: T) -> T {
+pub fn normal_log_prob<T: LazyReal>(x: T, mu: T, sigma: T) -> T {
     let z = (x - mu) / sigma.clone();
     let half = T::from_f64(0.5);
     let log_2pi = T::from_f64((2.0 * core::f64::consts::PI).ln());

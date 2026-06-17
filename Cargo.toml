@@ -22,9 +22,10 @@ rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"
 # The euclid::numeric analysis traits: bayes writes its closed forms ONCE, generic
-# over `RealScalar`, so the same formula is the scalar reference and (instantiated
-# at lebesgue::Tensor) a differentiable tensor op. bayes stays tensor-free -- it
-# only names the trait (plans/sci-comp/supercomputer.md §3).
+# over the lazy base `LazyReal`, so the same formula is the scalar reference and
+# (instantiated at a deferred backend — lebesgue::Tensor, galois Expr) a tensor /
+# columnar op. bayes stays backend-free -- it only names the trait
+# (plans/sci-comp/supercomputer.md §3).
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 
 [lints.rust]
