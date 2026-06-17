@@ -38,11 +38,6 @@ expect_used = "warn"
 panic = "warn"
 self_named_module_files = "warn"
 
-# Dev-only redirect to the euclid worktree carrying the `field` module during
-# this coordinated branch work. Ignored when bayes is consumed as a dependency.
-[patch."ssh://git@github.com/urban-fabric/euclid.git"]
-euclid = { path = "../euclid-project" }
-
 [profile.release]
 lto = "thin"
 codegen-units = 1
