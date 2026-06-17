@@ -21,6 +21,11 @@ hausdorff = { git = "ssh://git@github.com/urban-fabric/hausdorff.git", branch = 
 rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"
+# The euclid::field numeric traits: bayes writes its closed forms ONCE, generic
+# over `RealField`, so the same formula is the scalar reference and (instantiated
+# at lebesgue::Tensor) a differentiable tensor op. bayes stays tensor-free -- it
+# only names the trait (plans/sci-comp/supercomputer.md §3).
+euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 
 [lints.rust]
 unsafe_code = "warn"
@@ -31,6 +36,11 @@ unwrap_used = "warn"
 expect_used = "warn"
 panic = "warn"
 self_named_module_files = "warn"
+
+# Dev-only redirect to the euclid worktree carrying the `field` module during
+# this coordinated branch work. Ignored when bayes is consumed as a dependency.
+[patch."ssh://git@github.com/urban-fabric/euclid.git"]
+euclid = { path = "../euclid-project" }
 
 [profile.release]
 lto = "thin"
