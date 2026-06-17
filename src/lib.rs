@@ -11,8 +11,11 @@
 pub mod distribution;
 mod error;
 pub mod function;
+pub mod primitives;
 pub mod process;
 pub mod statistics;
+
+pub use primitives::normal_log_prob;
 
 pub use distribution::{
     Affine, Alpha, Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Bijector,
