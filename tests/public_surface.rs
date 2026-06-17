@@ -809,13 +809,14 @@ fn empirical_distribution_and_goodness_of_fit_public_surface() {
 #[test]
 fn confidence_intervals_and_association_public_surface() {
     use bayes::statistics::{cramers_v, hypothesis::fishers_exact};
-    use bayes::{ConfidenceInterval, mean_t_interval, proportion_wilson};
+    use bayes::{ConfidenceInterval, mcdiarmid_bound, mean_t_interval, proportion_wilson};
 
     let data = [4.8, 5.0, 5.2, 4.9, 5.1];
     let ci: ConfidenceInterval = mean_t_interval(&data, 0.95);
     assert!(ci.contains(5.0) && ci.lower < ci.upper);
     let w = proportion_wilson(8, 10, 0.95);
     assert!(w.lower > 0.0 && w.upper < 1.0);
+    assert!(mcdiarmid_bound(4.0, 1.0) < 1.0);
 
     assert!(fishers_exact(10, 0, 0, 10).p_value < 0.01);
     close(cramers_v(&[vec![10.0, 0.0], vec![0.0, 10.0]]), 1.0, 1e-12);
