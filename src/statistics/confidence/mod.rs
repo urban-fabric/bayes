@@ -9,8 +9,8 @@
 //! The shared [`ConfidenceInterval`] type and quantile helpers live here.
 //!
 //! The `concentration` group is the **distribution-free, proof-backed** companion:
-//! Markov/Chebyshev/Cantelli/Hoeffding tail bounds, the Chernoff-method and variance-aware
-//! Bernstein exponential tails, the Paley–Zygmund anti-concentration (lower) bound, a
+//! Markov/Chebyshev/Cantelli/Hoeffding/McDiarmid tail bounds, the Chernoff-method and
+//! variance-aware Bernstein exponential tails, the Paley–Zygmund anti-concentration (lower) bound, a
 //! Chebyshev mean interval and sample-size calculator, and the Popoviciu variance cap.
 //! Unlike the parametric intervals above, these assume only finite variance (or bounded
 //! support) and carry a *guaranteed* bound — each backed by a machine-checked theorem in
@@ -29,7 +29,7 @@ pub use chi_squared::{
 };
 pub use concentration::{
     bernstein_bound, cantelli_bound, chebyshev_bound, chebyshev_sample_size, chernoff_bound,
-    hoeffding_bound, is_variance_admissible, markov_bound, max_variance_for_range,
+    hoeffding_bound, is_variance_admissible, markov_bound, max_variance_for_range, mcdiarmid_bound,
     mean_chebyshev_interval, mean_chebyshev_interval_bounded, paley_zygmund_bound,
 };
 pub use mean::{mean_difference_welch_interval, mean_t_interval, mean_z_interval};

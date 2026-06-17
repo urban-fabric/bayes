@@ -15,7 +15,8 @@
 //!   [`TestResult`].
 //! * `confidence` — closed-form intervals for means, proportions, rates, variances,
 //!   standard deviations, and two-sample differences, plus a distribution-free
-//!   (Chebyshev/Hoeffding/Chernoff/Bernstein/Paley–Zygmund/Popoviciu) concentration tier.
+//!   (Chebyshev/Hoeffding/McDiarmid/Chernoff/Bernstein/Paley–Zygmund/Popoviciu)
+//!   concentration tier.
 //! * `estimation` — Cramér–Rao (and Bhattacharyya higher-order) efficiency diagnostics,
 //!   observed Fisher information, Rao–Blackwellization / grouped variance decomposition, and
 //!   the Lehmann–Scheffé UMVU certifier.
@@ -49,11 +50,11 @@ mod weighted;
 pub use confidence::{
     ConfidenceInterval, bernstein_bound, cantelli_bound, chebyshev_bound, chebyshev_sample_size,
     chernoff_bound, hoeffding_bound, is_variance_admissible, markov_bound, max_variance_for_range,
-    mean_chebyshev_interval, mean_chebyshev_interval_bounded, mean_difference_welch_interval,
-    mean_t_interval, mean_z_interval, paley_zygmund_bound, poisson_rate_interval,
-    proportion_agresti_coull, proportion_clopper_pearson, proportion_difference_wald,
-    proportion_jeffreys, proportion_wald, proportion_wilson, std_dev_chi_square_interval,
-    variance_chi_square_interval,
+    mcdiarmid_bound, mean_chebyshev_interval, mean_chebyshev_interval_bounded,
+    mean_difference_welch_interval, mean_t_interval, mean_z_interval, paley_zygmund_bound,
+    poisson_rate_interval, proportion_agresti_coull, proportion_clopper_pearson,
+    proportion_difference_wald, proportion_jeffreys, proportion_wald, proportion_wilson,
+    std_dev_chi_square_interval, variance_chi_square_interval,
 };
 pub use correlation::{cramers_v, kendall_tau, ranks, spearman};
 pub use effect::{

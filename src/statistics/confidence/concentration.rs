@@ -4,8 +4,9 @@
 //! *guaranteed* (not asymptotic) bound. Each is backed by a machine-checked theorem in
 //! riemann `RiemannLean/Bayes/Inequalities.lean` on the pinned 3-axiom basis:
 //!
-//! - tail bounds — `markov`, `chebyshev`, `cantelli`, `hoeffding_tail`, and the
-//!   exponential-MGF family `chernoff_bound` → `bernstein_tail` (variance-aware);
+//! - tail bounds — `markov`, `chebyshev`, `cantelli`, `hoeffding_tail`,
+//!   `mcdiarmid_tail_of_bounded_differences`, and the exponential-MGF family
+//!   `chernoff_bound` → `bernstein_tail` (variance-aware);
 //! - anti-concentration (a *lower* tail bound) — `paley_zygmund`;
 //! - the sample-mean interval / sample size — `chebyshev_sample_mean`
 //!   (`ε²·P(|S̄ − μ| ≥ ε) ≤ σ²/n`, Bienaymé variance scaling);
@@ -46,13 +47,24 @@ pub fn cantelli_bound(variance: f64, t: f64) -> f64 {
 
 /// **Hoeffding tail** (single observation): for one value bounded in `[a, b]`, an upper
 /// bound on `P(X − μ ≥ t)`, namely `exp(−2t²/(b−a)²)` (`t ≥ 0`). Backed by riemann
-/// `Bayes/Inequalities.hoeffding_tail`. (The `n`-sample mean version needs the
-/// independent-sum MGF — see `bayes-advanced-concentration.md`.)
+/// `Bayes/Inequalities.hoeffding_tail`.
 pub fn hoeffding_bound(a: f64, b: f64, t: f64) -> f64 {
     if b <= a || t < 0.0 {
         return f64::NAN;
     }
     (-2.0 * t * t / ((b - a) * (b - a))).exp()
+}
+
+/// **McDiarmid's bounded-differences inequality**: for an independent product input and
+/// a function whose coordinate replacement diameters are `c_j`, this bounds
+/// `P(F − E[F] ≥ t)` by `exp(−2t² / Σ c_j²)` (`t ≥ 0`, `Σ c_j² > 0`). This is the
+/// independent-product generalization behind Hoeffding-style sample-mean bounds. Backed by
+/// riemann `Bayes/ProductConcentration.mcdiarmid_tail_of_bounded_differences`.
+pub fn mcdiarmid_bound(sum_squared_differences: f64, t: f64) -> f64 {
+    if sum_squared_differences <= 0.0 || t < 0.0 {
+        return f64::NAN;
+    }
+    (-2.0 * t * t / sum_squared_differences).exp()
 }
 
 /// **Chernoff's method** — the generic exponential-Markov tail: for any tilt `s > 0`,
@@ -202,6 +214,9 @@ mod tests {
         // Hoeffding: t=0 → 1; decreasing in t.
         close(hoeffding_bound(0.0, 1.0, 0.0), 1.0, 1e-12);
         assert!(hoeffding_bound(0.0, 1.0, 0.5) < 1.0);
+        // McDiarmid: t=0 → 1; decreasing in t for fixed bounded-difference mass.
+        close(mcdiarmid_bound(4.0, 0.0), 1.0, 1e-12);
+        assert!(mcdiarmid_bound(4.0, 1.0) < 1.0);
     }
 
     #[test]
@@ -216,6 +231,22 @@ mod tests {
         assert_eq!(chernoff_bound(2.0, 0.1, 0.0), 1.0);
         assert!(chernoff_bound(-1.0, 1.0, 1.0).is_nan());
         assert!(chernoff_bound(1.0, 0.0, 1.0).is_nan());
+    }
+
+    #[test]
+    fn mcdiarmid_specializes_to_the_bounded_sample_mean() {
+        // For an n-sample mean over [a,b], changing one coordinate moves the mean by
+        // (b-a)/n, so Σ c_j² = n·((b-a)/n)² = (b-a)²/n.
+        let (a, b, n, eps) = (0.0_f64, 1.0_f64, 25.0_f64, 0.2_f64);
+        let sum_sq = (b - a) * (b - a) / n;
+        close(
+            mcdiarmid_bound(sum_sq, eps),
+            (-2.0 * n * eps * eps).exp(),
+            1e-12,
+        );
+        assert!(mcdiarmid_bound(sum_sq, eps) < hoeffding_bound(a, b, eps));
+        assert!(mcdiarmid_bound(0.0, eps).is_nan());
+        assert!(mcdiarmid_bound(sum_sq, -eps).is_nan());
     }
 
     #[test]
@@ -252,6 +283,7 @@ mod tests {
         assert!(chebyshev_bound(4.0, 0.0).is_nan());
         assert!(markov_bound(-1.0, 2.0).is_nan());
         assert!(hoeffding_bound(1.0, 1.0, 0.5).is_nan());
+        assert!(mcdiarmid_bound(-1.0, 0.5).is_nan());
         assert!(max_variance_for_range(2.0, 1.0).is_nan());
     }
 
