@@ -222,11 +222,16 @@ inference layer differentiates through — positive (`exp`/`ln`), unit-interval
 is the caller's branch, so each transform traces unchanged to a backend.
 
 Closed-form Bayesian evidence rounds it out: the conjugate posterior-predictive
-log-densities (Beta-Bernoulli, Gamma-Poisson, Gamma-Exponential) and log marginal
-likelihoods (Beta-Bernoulli over sufficient statistics, Normal known-variance
-Gaussian integral), all over the lazy `ln_gamma` with no caller-supplied
-normalizer. Only the matrix-conjugate evidences (NIW/NW) wait on the matrix
-contract.
+log-densities (Beta-Bernoulli, Beta-Binomial, Gamma-Poisson, Gamma-Exponential)
+and log marginal likelihoods — Beta-Bernoulli, Gamma-Poisson, Gamma-Exponential,
+and the Dirichlet-categorical multivariate-Beta evidence over sufficient
+statistics; the Normal known-variance Gaussian integral; and the
+Normal-Inverse-Gamma / Normal-Gamma Student-t evidence (both mean and variance
+integrated out, the posterior recovered in the additive natural coordinates) —
+all over the lazy `ln_gamma`. The genuinely data-combinatorial terms (`Σ ln kᵢ!`,
+`ln C(n, k)`) are caller supplied, matching the `ln_binomial` convention of the
+mass kernels. Only the matrix-conjugate evidences (NIW/NW) live on the
+`lazy_matrix` matrix contract.
 
 The analytic higher moments close the loop on the scalar surface: the
 parameter-dependent skewness, excess kurtosis, and non-trivial mean/variance

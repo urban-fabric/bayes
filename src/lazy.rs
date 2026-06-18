@@ -1692,6 +1692,111 @@ pub fn normal_known_variance_log_marginal_likelihood<T: LazyReal>(
         - T::half() * quad
 }
 
+/// Gamma-Poisson log marginal likelihood over count sufficient statistics
+/// `(Σk, n)`, the rate integrated out:
+/// `α·ln β − ln Γ(α) − Σ ln kᵢ! + ln Γ(α+Σk) − (α+Σk)·ln(β+n)`.
+///
+/// `ln_factorial_sum = Σ ln kᵢ!` is the data-combinatorial term and is caller
+/// supplied (like the `ln_binomial` in [`binomial_log_pmf`]). For Poisson exposure
+/// offsets, pass `n = Σ eᵢ` and add the caller's `Σ kᵢ·ln eᵢ` to the result.
+pub fn gamma_poisson_log_marginal_likelihood<T: LazyReal>(
+    shape: T,
+    rate: T,
+    count_sum: T,
+    count_n: T,
+    ln_factorial_sum: T,
+) -> T {
+    shape.clone() * rate.clone().ln() - shape.clone().ln_gamma() - ln_factorial_sum
+        + (shape.clone() + count_sum.clone()).ln_gamma()
+        - (shape + count_sum) * (rate + count_n).ln()
+}
+
+/// Gamma-Exponential log marginal likelihood over sufficient statistics `(n, Σx)`,
+/// the rate integrated out:
+/// `α·ln β − ln Γ(α) + ln Γ(α+n) − (α+n)·ln(β+Σx)`.
+///
+/// The same form carries the right-censored/exposure case: pass the failure count
+/// for `n` and the total exposure for `sum`.
+pub fn gamma_exponential_log_marginal_likelihood<T: LazyReal>(
+    shape: T,
+    rate: T,
+    count_n: T,
+    sum: T,
+) -> T {
+    shape.clone() * rate.clone().ln() - shape.clone().ln_gamma()
+        + (shape.clone() + count_n.clone()).ln_gamma()
+        - (shape + count_n) * (rate + sum).ln()
+}
+
+/// Beta-Binomial posterior-predictive log-probability for one future fixed-trial
+/// binomial observation (`successes`, `failures = trials − successes`):
+/// `ln C(trials, successes) + ln B(α+successes, β+failures) − ln B(α, β)`.
+///
+/// `ln_binomial = ln C(trials, successes)` is caller supplied.
+pub fn beta_binomial_log_predictive<T: LazyReal>(
+    alpha: T,
+    beta: T,
+    successes: T,
+    failures: T,
+    ln_binomial: T,
+) -> T {
+    let ln_beta = |a: T, b: T| a.clone().ln_gamma() + b.clone().ln_gamma() - (a + b).ln_gamma();
+    ln_binomial + ln_beta(alpha.clone() + successes, beta.clone() + failures) - ln_beta(alpha, beta)
+}
+
+/// Dirichlet-categorical log marginal likelihood for category `counts` under a
+/// `Dirichlet(α)` prior: `ln B(α + counts) − ln B(α)`, with the multivariate Beta
+/// `ln B(v) = Σ ln Γ(vᵢ) − ln Γ(Σ vᵢ)`. `None` on length mismatch or empty input.
+pub fn dirichlet_categorical_log_marginal_likelihood<T: LazyReal>(
+    alpha: &[T],
+    counts: &[T],
+) -> Option<T> {
+    if alpha.len() != counts.len() || alpha.is_empty() {
+        return None;
+    }
+    let ln_mvbeta = |v: &[T]| -> Option<T> {
+        let total = sum_log_terms(v.iter().cloned())?;
+        Some(sum_log_terms(v.iter().cloned().map(|x| x.ln_gamma()))? - total.ln_gamma())
+    };
+    let posterior: Vec<T> = alpha
+        .iter()
+        .cloned()
+        .zip(counts.iter().cloned())
+        .map(|(a, c)| a + c)
+        .collect();
+    Some(ln_mvbeta(&posterior)? - ln_mvbeta(alpha)?)
+}
+
+/// Normal-Inverse-Gamma log marginal likelihood (both mean and variance integrated
+/// out) over sufficient statistics `(n, Σx, Σx²)` and the prior `(µ₀, λ₀, α₀, β₀)`:
+/// `ln Γ(αₙ) − ln Γ(α₀) + α₀·ln β₀ − αₙ·ln βₙ + ½(ln λ₀ − ln λₙ) − ½n·ln(2π)`.
+///
+/// The posterior is recovered in the additive natural coordinates
+/// `(λ, λµ, 2α, 2β+λµ²)`: `λₙ = λ₀+n`, `αₙ = α₀+n/2`, `λµₙ = λ₀µ₀+Σx`,
+/// `2βₙ = (2β₀+λ₀µ₀²+Σx²) − λµₙ²/λₙ`. This is also the **Normal-Gamma** evidence —
+/// the precision-parametrized twin shares the identical closed form.
+pub fn normal_inverse_gamma_log_marginal_likelihood<T: LazyReal>(
+    count: T,
+    sum: T,
+    sum_sq: T,
+    prior_mean: T,
+    prior_lambda: T,
+    prior_alpha: T,
+    prior_beta: T,
+) -> T {
+    let lambda_n = prior_lambda.clone() + count.clone();
+    let lambda_mu_n = prior_lambda.clone() * prior_mean.clone() + sum;
+    let alpha_n = prior_alpha.clone() + T::half() * count.clone();
+    let sum_sq_nat = T::two() * prior_beta.clone()
+        + prior_lambda.clone() * prior_mean.clone() * prior_mean
+        + sum_sq;
+    let beta_n = T::half() * (sum_sq_nat - lambda_mu_n.clone() * lambda_mu_n / lambda_n.clone());
+    alpha_n.clone().ln_gamma() - prior_alpha.clone().ln_gamma() + prior_alpha * prior_beta.ln()
+        - alpha_n * beta_n.ln()
+        + T::half() * (prior_lambda.ln() - lambda_n.ln())
+        - T::half() * count * T::ln_tau()
+}
+
 // --- analytic higher moments (skewness, excess kurtosis, non-trivial mean/var) ---
 //
 // The closed-form moments that are genuine functions of the shape parameters —
@@ -1787,15 +1892,16 @@ pub fn negative_binomial_skewness<T: LazyReal>(successes: T, p: T) -> T {
 mod tests {
     use super::*;
     use crate::distribution::{
-        Bernoulli, Beta, BetaBernoulli, Binomial, Categorical, Cauchy, ChiSquared,
-        ChiSquaredDivergence, Continuous, ContinuousCdf, Dirichlet,
-        DirichletMultinomialDistribution, Discrete, DiscreteCdf, DiscreteUniform, Exponential,
-        FisherSnedecor, Frechet, Gamma, GammaExponential, GammaPoisson, Geometric, Gumbel,
-        HalfNormal, HellingerDistance, Hypergeometric, InverseGamma, KlDivergence, Laplace,
-        LogNormal, Logistic, Lomax, Moments, Multinomial, MultivariateContinuous,
-        MultivariateMoments, MultivariateNormal, MultivariateStudentT, NegativeBinomial, Normal,
-        NormalKnownVariance, Pareto, Poisson, Rayleigh, RenyiDivergence, StudentT, TotalVariation,
-        Triangular, Uniform, VonMises, VonMisesFisher, Wald, WatsonS2, Weibull,
+        Bernoulli, Beta, BetaBernoulli, BetaBinomialModel, Binomial, Categorical, Cauchy,
+        ChiSquared, ChiSquaredDivergence, Continuous, ContinuousCdf, Dirichlet,
+        DirichletCategorical, DirichletMultinomialDistribution, Discrete, DiscreteCdf,
+        DiscreteUniform, Exponential, FisherSnedecor, Frechet, Gamma, GammaExponential,
+        GammaPoisson, Geometric, Gumbel, HalfNormal, HellingerDistance, Hypergeometric,
+        InverseGamma, KlDivergence, Laplace, LogNormal, Logistic, Lomax, Moments, Multinomial,
+        MultivariateContinuous, MultivariateMoments, MultivariateNormal, MultivariateStudentT,
+        NegativeBinomial, Normal, NormalGamma, NormalInverseGamma, NormalKnownVariance, Pareto,
+        Poisson, Rayleigh, RenyiDivergence, StudentT, TotalVariation, Triangular, Uniform,
+        VonMises, VonMisesFisher, Wald, WatsonS2, Weibull,
     };
     use crate::function::bessel::{ln_i0, ln_iv};
     use crate::function::beta::ln_beta;
@@ -2060,6 +2166,59 @@ mod tests {
             nkv.ln_marginal_likelihood(&obs),
             1e-12,
         );
+
+        // Gamma-Poisson marginal likelihood over count sufficient statistics.
+        let counts = [2u64, 0, 3, 1];
+        let count_sum = counts.iter().sum::<u64>() as f64;
+        let ln_factorial_sum: f64 = counts.iter().map(|&k| ln_factorial(k)).sum();
+        close(
+            gamma_poisson_log_marginal_likelihood(
+                2.5,
+                1.2,
+                count_sum,
+                counts.len() as f64,
+                ln_factorial_sum,
+            ),
+            gp.ln_marginal_likelihood(&counts),
+            1e-12,
+        );
+
+        // Gamma-Exponential marginal likelihood over (n, Σx).
+        let durations = [0.8, 1.2, 0.3];
+        let dur_sum: f64 = durations.iter().sum();
+        close(
+            gamma_exponential_log_marginal_likelihood(2.0, 1.5, durations.len() as f64, dur_sum),
+            ge.ln_marginal_likelihood(&durations),
+            1e-12,
+        );
+
+        // Beta-Binomial predictive (10 trials, 4 successes ⇒ 6 failures).
+        let bbm = BetaBinomialModel::new(Beta::new(2.0, 3.0).unwrap(), 10);
+        close(
+            beta_binomial_log_predictive(2.0, 3.0, 4.0, 6.0, ln_binomial(10, 4)),
+            bbm.ln_predictive(4),
+            1e-12,
+        );
+
+        // Dirichlet-categorical marginal likelihood from category counts.
+        let dc = DirichletCategorical::new(Dirichlet::new(vec![1.0, 2.0, 0.5]).unwrap());
+        let labels = [0u64, 1, 1, 2, 0, 1];
+        let category_counts = [2.0, 3.0, 1.0];
+        close(
+            dirichlet_categorical_log_marginal_likelihood(&[1.0, 2.0, 0.5], &category_counts)
+                .unwrap(),
+            dc.ln_marginal_likelihood(&labels),
+            1e-12,
+        );
+
+        // Normal-Inverse-Gamma marginal likelihood (mean + variance integrated out);
+        // the Normal-Gamma precision twin shares the identical closed form.
+        let nig = NormalInverseGamma::new(0.5, 2.0, 3.0, 1.5).unwrap();
+        let ng = NormalGamma::new(0.5, 2.0, 3.0, 1.5).unwrap();
+        let lazy_nig =
+            normal_inverse_gamma_log_marginal_likelihood(count, sum, sum_sq, 0.5, 2.0, 3.0, 1.5);
+        close(lazy_nig, nig.ln_marginal_likelihood(&obs), 1e-12);
+        close(lazy_nig, ng.ln_marginal_likelihood(&obs), 1e-12);
     }
 
     #[test]
