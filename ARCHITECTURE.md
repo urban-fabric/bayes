@@ -263,8 +263,9 @@ rather than forming an inverse — so one source runs on the `f64` reference
 (`ramanujan::DenseMatrix`) and on a tensor backend. It carries the multivariate
 Gaussian and Student-t log-densities, the Gaussian entropy/KL, the Wishart and
 inverse-Wishart log-densities and differential **entropies** (the digamma sum and
-`ln Γ_d` coming from the scalar layer), and the Gaussian-process log marginal
-likelihood.
+`ln Γ_d` coming from the scalar layer), the Gaussian-process log marginal
+likelihood, and the sample-statistic quadratics — Hotelling's `T²` and the
+degrees-of-freedom-pooled covariance.
 
 ## Statistics Layer
 

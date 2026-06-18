@@ -187,6 +187,34 @@ pub fn multivariate_student_t_log_pdf<M: LazyMatrix>(
         - half * nu_plus_d * (M::Scalar::one() + mahalanobis / freedom).ln()
 }
 
+/// Hotelling's `T² = n·(x̄ − µ₀)ᵀ S⁻¹ (x̄ − µ₀)` — the sample mean's squared
+/// Mahalanobis distance from `µ₀` under the sample covariance `S`, scaled by `n`.
+/// No inverse is formed; the quadratic comes from the matrix contract.
+pub fn hotelling_t_squared<M: LazyMatrix>(
+    count: M::Scalar,
+    mean: M::Vector,
+    reference: M::Vector,
+    covariance: M,
+) -> M::Scalar {
+    count * covariance.mahalanobis_squared(&mean.sub(reference))
+}
+
+/// Pooled (within-group) covariance `Σᵢ dfᵢ·Sᵢ / Σᵢ dfᵢ`, the degrees-of-freedom
+/// weighted average of the per-group covariances `Sᵢ` (typically `dfᵢ = nᵢ − 1`).
+/// `None` for fewer than two groups or a length mismatch.
+pub fn pooled_covariance<M: LazyMatrix>(covariances: &[M], degrees: &[M::Scalar]) -> Option<M> {
+    if covariances.len() != degrees.len() || covariances.len() < 2 {
+        return None;
+    }
+    let mut total = degrees[0].clone();
+    let mut pooled = covariances[0].clone().scale(degrees[0].clone());
+    for i in 1..covariances.len() {
+        pooled = pooled.add(covariances[i].clone().scale(degrees[i].clone()));
+        total = total + degrees[i].clone();
+    }
+    Some(pooled.scale(M::Scalar::one() / total))
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -195,6 +223,7 @@ mod tests {
         InverseWishart, KlDivergence, MultivariateContinuous, MultivariateMoments,
         MultivariateNormal, MultivariateStudentT, Wishart,
     };
+    use crate::statistics::mahalanobis_squared;
     use ramanujan::DenseMatrix;
 
     fn close(a: f64, b: f64, tol: f64) {
@@ -523,5 +552,38 @@ mod tests {
             freedom,
         );
         close(got, mvt.ln_pdf(&x), 1e-10);
+    }
+
+    #[test]
+    fn lazy_matrix_hotelling_t_squared_matches_mahalanobis() {
+        let cov: [&[f64]; 2] = [&[2.0, 0.3], &[0.3, 1.5]];
+        let mean = [1.2, -0.4];
+        let mu0 = [0.5, 0.1];
+        let n = 8.0;
+        close(
+            hotelling_t_squared(
+                n,
+                RefVector(mean.to_vec()),
+                RefVector(mu0.to_vec()),
+                ref_matrix(2, &cov),
+            ),
+            n * mahalanobis_squared(&mean, &mu0, &dense(2, &cov)),
+            1e-10,
+        );
+    }
+
+    #[test]
+    fn lazy_matrix_pooled_covariance_is_the_df_weighted_average() {
+        let s0: [&[f64]; 2] = [&[2.0, 0.3], &[0.3, 1.5]];
+        let s1: [&[f64]; 2] = [&[1.4, -0.2], &[-0.2, 1.1]];
+        let (df0, df1) = (4.0, 6.0);
+        let pooled =
+            pooled_covariance(&[ref_matrix(2, &s0), ref_matrix(2, &s1)], &[df0, df1]).unwrap();
+        for i in 0..2 {
+            for j in 0..2 {
+                let expected = (df0 * s0[i][j] + df1 * s1[i][j]) / (df0 + df1);
+                close(pooled.at(i, j), expected, 1e-12);
+            }
+        }
     }
 }
