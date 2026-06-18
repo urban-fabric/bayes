@@ -1013,6 +1013,17 @@ pub fn kl_von_mises<T: LazyReal>(mean_self: T, kappa_self: T, mean_other: T, kap
     ln_i0(k1.clone()) - ln_i0(k0.clone()) + resultant * (k0 - k1 * (mu0 - mu1).cos())
 }
 
+/// Uniform KL on nested support (`[a₀,b₀] ⊆ [a₁,b₁]`): `ln(w₁/w₀)`, `w = b − a`. The
+/// containment test (`+∞` otherwise) is the caller's branch.
+pub fn kl_uniform_on_support<T: LazyReal>(width_self: T, width_other: T) -> T {
+    (width_other / width_self).ln()
+}
+
+/// Discrete-uniform KL on nested support: `ln(n₁/n₀)`, `n` the support count.
+pub fn kl_discrete_uniform_on_support<T: LazyReal>(count_self: T, count_other: T) -> T {
+    (count_other / count_self).ln()
+}
+
 // --- closed-form squared Hellinger distances `H² = 1 − BC` ---
 //
 // Each is built from the family Bhattacharyya coefficient `BC = ∫√(pq)`; the
@@ -1152,6 +1163,33 @@ pub fn hellinger_sq_negative_binomial<T: LazyReal>(successes: T, p_self: T, p_ot
     hellinger_sq_from_bc((successes * bc.ln()).exp())
 }
 
+/// Uniform squared Hellinger: `BC = overlap / √(w₀·w₁)`, the overlap
+/// `max(min(b₀,b₁) − max(a₀,a₁), 0)` and widths `w = b − a`. Bounded, so valid for
+/// any two uniforms (the clamp absorbs disjoint support).
+pub fn hellinger_sq_uniform<T: LazyReal>(lo_self: T, hi_self: T, lo_other: T, hi_other: T) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()))
+        .max(T::zero());
+    let width_self = hi_self - lo_self;
+    let width_other = hi_other - lo_other;
+    hellinger_sq_from_bc(overlap / (width_self * width_other).sqrt())
+}
+
+/// Discrete-uniform squared Hellinger: `BC = overlap / √(n₀·n₁)`, integer overlap
+/// `max(min(b₀,b₁) − max(a₀,a₁) + 1, 0)` and counts `n = b − a + 1`.
+pub fn hellinger_sq_discrete_uniform<T: LazyReal>(
+    lo_self: T,
+    hi_self: T,
+    lo_other: T,
+    hi_other: T,
+) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone())
+        + T::one())
+    .max(T::zero());
+    let n_self = hi_self - lo_self + T::one();
+    let n_other = hi_other - lo_other + T::one();
+    hellinger_sq_from_bc(overlap / (n_self * n_other).sqrt())
+}
+
 // --- closed-form χ² (Pearson) divergences ---
 //
 // `_on_support` forms carry the interior only; the `2λ₀>λ₁`-style convergence test
@@ -1262,6 +1300,17 @@ pub fn chi_squared_wald_on_support<T: LazyReal>(
         - T::half() * la.clone().ln()
         - (aa * la).sqrt();
     ln_int.exp() - T::one()
+}
+
+/// Uniform χ² on nested support: `w₁/w₀ − 1`, `w = b − a`. The containment test is
+/// the caller's branch.
+pub fn chi_squared_uniform_on_support<T: LazyReal>(width_self: T, width_other: T) -> T {
+    width_other / width_self - T::one()
+}
+
+/// Discrete-uniform χ² on nested support: `n₁/n₀ − 1`, `n` the support count.
+pub fn chi_squared_discrete_uniform_on_support<T: LazyReal>(count_self: T, count_other: T) -> T {
+    count_other / count_self - T::one()
 }
 
 // --- closed-form Rényi divergences `D_α` (α ≠ 1) ---
@@ -1391,6 +1440,47 @@ pub fn renyi_wald_on_support<T: LazyReal>(
         - T::half() * la.clone().ln()
         - (aa * la).sqrt();
     ln_int / (alpha - T::one())
+}
+
+/// Uniform Rényi interior: `ln(overlap · w₀^{−α} · w₁^{−(1−α)}) / (α−1)`, `w = b − a`.
+/// The `+∞` boundary (`α>1` outside containment, or disjoint support) is the caller's
+/// branch.
+pub fn renyi_uniform_on_support<T: LazyReal>(
+    lo_self: T,
+    hi_self: T,
+    lo_other: T,
+    hi_other: T,
+    alpha: T,
+) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()))
+        .max(T::zero());
+    let width_self = hi_self - lo_self;
+    let width_other = hi_other - lo_other;
+    let one_minus_alpha = T::one() - alpha.clone();
+    let s = overlap
+        * (-alpha.clone() * width_self.ln()).exp()
+        * (-one_minus_alpha * width_other.ln()).exp();
+    s.ln() / (alpha - T::one())
+}
+
+/// Discrete-uniform Rényi interior: `ln(overlap · n₀^{−α} · n₁^{−(1−α)}) / (α−1)`,
+/// integer overlap and `n = b − a + 1`. The `+∞` boundary is the caller's branch.
+pub fn renyi_discrete_uniform_on_support<T: LazyReal>(
+    lo_self: T,
+    hi_self: T,
+    lo_other: T,
+    hi_other: T,
+    alpha: T,
+) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone())
+        + T::one())
+    .max(T::zero());
+    let n_self = hi_self - lo_self + T::one();
+    let n_other = hi_other - lo_other + T::one();
+    let one_minus_alpha = T::one() - alpha.clone();
+    let s =
+        overlap * (-alpha.clone() * n_self.ln()).exp() * (-one_minus_alpha * n_other.ln()).exp();
+    s.ln() / (alpha - T::one())
 }
 
 // --- closed-form total variation ---
@@ -1898,6 +1988,12 @@ pub fn poisson_excess_kurtosis<T: LazyReal>(rate: T) -> T {
     T::one() / rate
 }
 
+/// Bernoulli skewness `(q − p)/√(p·q)`, `q = 1 − p`.
+pub fn bernoulli_skewness<T: LazyReal>(p: T) -> T {
+    let q = T::one() - p.clone();
+    (q.clone() - p.clone()) / (p * q).sqrt()
+}
+
 /// Binomial skewness `(1 − 2p)/√(n·p·(1−p))`.
 pub fn binomial_skewness<T: LazyReal>(trials: T, p: T) -> T {
     let variance = trials * p.clone() * (T::one() - p.clone());
@@ -2134,6 +2230,13 @@ mod tests {
         close(
             negative_binomial_skewness(5.0, 0.4),
             negbin.skewness().unwrap(),
+            1e-12,
+        );
+
+        let bernoulli = Bernoulli::new(0.3).unwrap();
+        close(
+            bernoulli_skewness(0.3),
+            bernoulli.skewness().unwrap(),
             1e-12,
         );
     }
@@ -2511,6 +2614,26 @@ mod tests {
             negbin.0.hellinger_sq(&negbin.1),
             1e-12,
         );
+
+        // Uniform / discrete-uniform squared Hellinger (general overlap).
+        let uniform = (
+            Uniform::new(-1.0, 2.0).unwrap(),
+            Uniform::new(0.0, 4.0).unwrap(),
+        );
+        close(
+            hellinger_sq_uniform(-1.0, 2.0, 0.0, 4.0),
+            uniform.0.hellinger_sq(&uniform.1),
+            1e-12,
+        );
+        let du = (
+            DiscreteUniform::new(0, 3).unwrap(),
+            DiscreteUniform::new(2, 6).unwrap(),
+        );
+        close(
+            hellinger_sq_discrete_uniform(0.0, 3.0, 2.0, 6.0),
+            du.0.hellinger_sq(&du.1),
+            1e-12,
+        );
     }
 
     #[test]
@@ -2621,6 +2744,36 @@ mod tests {
         close(
             renyi_wald_on_support(1.0, 3.0, 1.2, 2.0, alpha),
             wald.0.renyi_divergence(&wald.1, alpha),
+            1e-12,
+        );
+
+        // Uniform / discrete-uniform χ² and Rényi on nested support.
+        let uniform = (
+            Uniform::new(-1.0, 2.0).unwrap(),
+            Uniform::new(-2.0, 3.0).unwrap(),
+        );
+        close(
+            chi_squared_uniform_on_support(3.0, 5.0),
+            uniform.0.chi_squared_divergence(&uniform.1),
+            1e-12,
+        );
+        close(
+            renyi_uniform_on_support(-1.0, 2.0, -2.0, 3.0, alpha),
+            uniform.0.renyi_divergence(&uniform.1, alpha),
+            1e-12,
+        );
+        let du = (
+            DiscreteUniform::new(0, 3).unwrap(),
+            DiscreteUniform::new(-1, 5).unwrap(),
+        );
+        close(
+            chi_squared_discrete_uniform_on_support(4.0, 7.0),
+            du.0.chi_squared_divergence(&du.1),
+            1e-12,
+        );
+        close(
+            renyi_discrete_uniform_on_support(0.0, 3.0, -1.0, 5.0, alpha),
+            du.0.renyi_divergence(&du.1, alpha),
             1e-12,
         );
     }
@@ -2800,6 +2953,26 @@ mod tests {
         close(
             kl_binomial(12.0, 0.3, 0.5),
             binomial.0.kl_divergence(&binomial.1),
+            1e-12,
+        );
+
+        // Uniform / discrete-uniform on nested support.
+        let uniform = (
+            Uniform::new(-1.0, 2.0).unwrap(),
+            Uniform::new(-2.0, 3.0).unwrap(),
+        );
+        close(
+            kl_uniform_on_support(3.0, 5.0),
+            uniform.0.kl_divergence(&uniform.1),
+            1e-12,
+        );
+        let du = (
+            DiscreteUniform::new(0, 3).unwrap(),
+            DiscreteUniform::new(-1, 5).unwrap(),
+        );
+        close(
+            kl_discrete_uniform_on_support(4.0, 7.0),
+            du.0.kl_divergence(&du.1),
             1e-12,
         );
     }

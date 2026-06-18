@@ -203,8 +203,10 @@ the **von Mises-Fisher**/**Watson** directional laws); the same-family
 **divergences** — KL, squared Hellinger, Pearson χ², Rényi, and total variation —
 over the families whose closed form needs only the lazy surface (now including the
 circular **von Mises** divergences, written with `cos` and the scaled Bessel
-`I₀ᵉ`/`I₁ᵉ`, and the **Wald**/**binomial**/**negative-binomial** divergences across
-KL/Hellinger/χ²/Rényi — the binomial as `n ×` / `(·)^n` of its Bernoulli kernel);
+`I₀ᵉ`/`I₁ᵉ`, the **Wald**/**binomial**/**negative-binomial** divergences across
+KL/Hellinger/χ²/Rényi — the binomial as `n ×` / `(·)^n` of its Bernoulli kernel —
+and the support-geometry **uniform**/**discrete-uniform** divergences, whose
+Hellinger/Rényi forms fold the overlap through the `min`/`max` selectors);
 and the stable log-CDF tails via `ln_1m_exp`/`ln_1p_exp`. The
 Student-t CDF is written branch-free with `sign`, and the `+∞`-outside-containment
 divergences carry an `_on_support` interior form, so every entry point stays
@@ -237,8 +239,9 @@ mass kernels. Only the matrix-conjugate evidences (NIW/NW) live on the
 
 The analytic higher moments close the loop on the scalar surface: the
 parameter-dependent skewness, excess kurtosis, and non-trivial mean/variance
-(log-normal, gamma, beta, chi-squared, Wald, Poisson, binomial, geometric,
-negative-binomial) — pure algebra in the shape parameters.
+(log-normal, gamma, beta, chi-squared, Wald, Poisson, Bernoulli, binomial,
+geometric, negative-binomial) — pure algebra in the shape parameters. The constant
+moments (Normal skew 0, exponential skew 2, …) need no kernel.
 
 Euclid's `LazyReal` carries the whole elementwise analysis surface —
 transcendentals, trig, `min`/`max`/`clamp` selectors, and the special functions
