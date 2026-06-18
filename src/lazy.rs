@@ -808,6 +808,32 @@ pub fn students_t_entropy<T: LazyReal>(scale: T, freedom: T) -> T {
         + half_nu_plus_one.clone() * (half_nu_plus_one.digamma() - half_nu.digamma())
 }
 
+/// von Mises entropy: `ln(2π) + ln I₀(κ) − κ·A(κ)`, `A = I₁/I₀` the mean resultant
+/// length — over the scaled Bessel surface (`ln I₀ = ln I₀ᵉ + |κ|`, `A = I₁ᵉ/I₀ᵉ`).
+pub fn von_mises_entropy<T: LazyReal>(kappa: T) -> T {
+    let resultant = kappa.clone().bessel_i1e() / kappa.clone().bessel_i0e();
+    T::ln_tau() + ln_i0(kappa.clone()) - kappa * resultant
+}
+
+/// von Mises-Fisher entropy: `−ln C_p(κ) − κ·R`. The caller supplies the log
+/// normalizer `ln C_p(κ)` and the mean resultant length `R = I_{p/2}/I_{p/2−1}`
+/// (both arbitrary-order Bessel, off the scalar lazy surface) — the same caller
+/// contract as [`von_mises_fisher_log_pdf`].
+pub fn von_mises_fisher_entropy<T: LazyReal>(
+    log_normalizer: T,
+    kappa: T,
+    mean_resultant_length: T,
+) -> T {
+    -log_normalizer - kappa * mean_resultant_length
+}
+
+/// Watson entropy: `ln Z(κ) − κ·E[(µᵀx)²]`. The caller supplies the log partition
+/// `ln Z(κ)` and the axial second moment `E[(µᵀx)²]` (a Kummer-function ratio off
+/// the scalar lazy surface) — the same caller contract as [`watson_log_pdf`].
+pub fn watson_entropy<T: LazyReal>(log_partition: T, kappa: T, axial_second_moment: T) -> T {
+    log_partition - kappa * axial_second_moment
+}
+
 // --- closed-form Kullback–Leibler divergences `D(self ‖ other)` ---
 //
 // Same-family closed forms in nats. The gamma/beta-shaped ones reach for the lazy
@@ -3165,6 +3191,41 @@ mod tests {
         close(
             watson_log_pdf(mu.dot(x), watson.concentration(), watson.ln_partition()),
             watson.ln_pdf_point(&x),
+            1e-12,
+        );
+    }
+
+    #[test]
+    fn lazy_real_directional_entropy_kernels_match_distribution() {
+        // Circular von Mises, fully on the i0e/i1e surface (κ ≤ 15 keeps parity).
+        let vm = VonMises::new(0.3, 2.0).unwrap();
+        close(von_mises_entropy(2.0), vm.entropy().unwrap(), 1e-12);
+
+        fn pt(lat: f64, lon: f64) -> S2Point {
+            S2Point::from_geo_point(GeoPoint::from_lat_lon(lat, lon))
+        }
+        let mu = pt(35.0, -80.0);
+
+        // von Mises-Fisher on S² (p = 3): caller supplies ln C_p(κ) and R.
+        let kappa = 4.0;
+        let vmf = VonMisesFisher::new(mu, kappa).unwrap();
+        let ln_normalizer =
+            0.5 * kappa.ln() - 1.5 * core::f64::consts::TAU.ln() - ln_iv(0.5, kappa);
+        close(
+            von_mises_fisher_entropy(ln_normalizer, kappa, vmf.mean_resultant_length()),
+            vmf.entropy_closed_form(),
+            1e-12,
+        );
+
+        // Watson on S²: caller supplies the log partition and axial second moment.
+        let watson = WatsonS2::new(mu, 2.5).unwrap();
+        close(
+            watson_entropy(
+                watson.ln_partition(),
+                watson.concentration(),
+                watson.axial_second_moment(),
+            ),
+            watson.entropy_closed_form(),
             1e-12,
         );
     }

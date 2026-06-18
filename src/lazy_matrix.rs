@@ -88,6 +88,58 @@ pub fn inverse_wishart_log_pdf<M: LazyMatrix>(sigma: M, scale: M, freedom: M::Sc
     ln_normalizer - half.clone() * (freedom + dim + M::Scalar::one()) * log_det_sigma - half * trace
 }
 
+/// `Σ_{i=1}^{d} ψ((ν + 1 − i)/2)` — the Wishart multivariate digamma sum. A host-side
+/// fold over the structural dimension `d` building lazy `digamma` terms, the same
+/// shape as [`crate::lazy::ln_multivariate_gamma`].
+fn digamma_wishart_sum<S: LazyReal>(dimension: usize, freedom: S) -> S {
+    let mut acc = S::zero();
+    for i in 1..=dimension {
+        acc = acc + ((freedom.clone() + S::scalar(1.0 - i as f64)) * S::half()).digamma();
+    }
+    acc
+}
+
+/// Wishart differential entropy (scale `V`, degrees `ν`):
+/// `−½(ν−d−1)·E[ln|X|] + ½νd + lnZ`, with `E[ln|X|] = ln|V| + d·ln2 + Σ ψ((ν+1−i)/2)`
+/// and `lnZ = ½νd·ln2 + ½ν·ln|V| + ln Γ_d(ν/2)`. The log-determinant comes from the
+/// matrix contract; the digamma sum and `ln Γ_d` are pure scalar analysis.
+pub fn wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
+    let d = scale.shape().0;
+    let dim = M::Scalar::scalar(d as f64);
+    let half = M::Scalar::half();
+    let log_det_scale = scale.logdet_spd();
+    let digamma_sum = digamma_wishart_sum(d, freedom.clone());
+
+    let expected_log_det = log_det_scale.clone() + dim.clone() * M::Scalar::ln_2() + digamma_sum;
+    let ln_normalizer = half.clone() * freedom.clone() * dim.clone() * M::Scalar::ln_2()
+        + half.clone() * freedom.clone() * log_det_scale
+        + crate::lazy::ln_multivariate_gamma(d, freedom.clone() * half.clone());
+
+    -half.clone() * (freedom.clone() - dim.clone() - M::Scalar::one()) * expected_log_det
+        + half * freedom * dim
+        + ln_normalizer
+}
+
+/// Inverse-Wishart differential entropy (scale `V`, degrees `ν`):
+/// `−lnZ + ½(ν+d+1)·E[ln|Σ|] + ½νd`, with `E[ln|Σ|] = ln|V| − d·ln2 − Σ ψ((ν+1−i)/2)`
+/// and `lnZ = ½ν·ln|V| − ½νd·ln2 − ln Γ_d(ν/2)`.
+pub fn inverse_wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
+    let d = scale.shape().0;
+    let dim = M::Scalar::scalar(d as f64);
+    let half = M::Scalar::half();
+    let log_det_scale = scale.logdet_spd();
+    let digamma_sum = digamma_wishart_sum(d, freedom.clone());
+
+    let expected_log_det = log_det_scale.clone() - dim.clone() * M::Scalar::ln_2() - digamma_sum;
+    let ln_normalizer = half.clone() * freedom.clone() * log_det_scale
+        - half.clone() * freedom.clone() * dim.clone() * M::Scalar::ln_2()
+        - crate::lazy::ln_multivariate_gamma(d, freedom.clone() * half.clone());
+
+    -ln_normalizer
+        + half.clone() * (freedom.clone() + dim.clone() + M::Scalar::one()) * expected_log_det
+        + half * freedom * dim
+}
+
 /// Multivariate Student-t entropy (scale `Σ`, degrees `ν`):
 /// `lnΓ(ν/2) − lnΓ((ν+d)/2) + ½(d·ln(νπ) + ln|Σ|) + (ν+d)/2·(ψ((ν+d)/2) − ψ(ν/2))`.
 pub fn multivariate_student_t_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
@@ -407,6 +459,26 @@ mod tests {
         close(
             inverse_wishart_log_pdf(ref_matrix(2, &sigma), ref_matrix(2, &scale), freedom),
             inv_wishart.ln_pdf_matrix(&dense(2, &sigma)),
+            1e-10,
+        );
+    }
+
+    #[test]
+    fn lazy_matrix_wishart_entropy_matches_distribution() {
+        let scale: [&[f64]; 2] = [&[2.0, 0.4], &[0.4, 1.3]];
+        let freedom = 5.0;
+
+        let wishart = Wishart::new(freedom, dense(2, &scale)).unwrap();
+        close(
+            wishart_entropy(ref_matrix(2, &scale), freedom),
+            wishart.entropy(),
+            1e-10,
+        );
+
+        let inv_wishart = InverseWishart::new(freedom, dense(2, &scale)).unwrap();
+        close(
+            inverse_wishart_entropy(ref_matrix(2, &scale), freedom),
+            inv_wishart.entropy(),
             1e-10,
         );
     }

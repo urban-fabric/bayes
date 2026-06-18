@@ -197,7 +197,9 @@ exponential/logistic/Cauchy/Laplace/uniform/Weibull/Gumbel/Frechet/Pareto/Lomax/
 Rayleigh and Normal/half-normal/log-normal via `erf_inv`, each total on `p ∈ (0,1)`
 with the boundary the caller's branch; and the
 differential/Shannon **entropies** for the same families (pure algebra for most,
-the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones); the same-family
+the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones, the scaled Bessel
+`I₀ᵉ`/`I₁ᵉ` for the circular **von Mises**, and a caller-supplied normalizer for
+the **von Mises-Fisher**/**Watson** directional laws); the same-family
 **divergences** — KL, squared Hellinger, Pearson χ², Rényi, and total variation —
 over the families whose closed form needs only the lazy surface (now including the
 circular **von Mises** divergences, written with `cos` and the scaled Bessel
@@ -247,6 +249,16 @@ implementation). What still must be caller-supplied is therefore only the
 genuinely non-scalar work: a matrix solve/log-determinant, or a general-order
 Bessel normalizer. Each entry point stays pure analysis over the lazy traits, so
 it lowers unchanged to a tensor backend.
+
+The matrix companion `lazy_matrix` writes the genuinely multivariate kernels over
+Euclid's `LazyMatrix`/`LazyVector` contract — asking the matrix type for the
+quantities it owns (`mahalanobis_squared`, `logdet_spd`, `solve_spd`, `trace`)
+rather than forming an inverse — so one source runs on the `f64` reference
+(`ramanujan::DenseMatrix`) and on a tensor backend. It carries the multivariate
+Gaussian and Student-t log-densities, the Gaussian entropy/KL, the Wishart and
+inverse-Wishart log-densities and differential **entropies** (the digamma sum and
+`ln Γ_d` coming from the scalar layer), and the Gaussian-process log marginal
+likelihood.
 
 ## Statistics Layer
 
