@@ -781,6 +781,13 @@ pub fn kl_negative_binomial<T: LazyReal>(successes: T, p_self: T, p_other: T) ->
         + successes * (q_self.clone() / p_self) * (q_self / q_other).ln()
 }
 
+/// Binomial KL for a matched trial count `n`: `n · D_KL(Bernoulli(p₀) ‖ Bernoulli(p₁))`
+/// — the binomial coefficient cancels in the log-ratio. A differing trial count is
+/// out of family and is the caller's branch.
+pub fn kl_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+    trials * kl_bernoulli_on_unit(p_self, p_other)
+}
+
 /// Cauchy KL: `ln[((γ₀+γ₁)² + (x₀−x₁)²) / (4 γ₀ γ₁)]`.
 pub fn kl_cauchy<T: LazyReal>(loc_self: T, scale_self: T, loc_other: T, scale_other: T) -> T {
     let scale_sum = scale_self.clone() + scale_other.clone();
@@ -1017,6 +1024,25 @@ pub fn hellinger_sq_von_mises<T: LazyReal>(
     hellinger_sq_from_bc(ln_bc.exp())
 }
 
+/// Binomial squared Hellinger for a matched trial count `n`: the Bhattacharyya
+/// coefficient factorizes over the `n` iid Bernoulli trials, `BC = BC_Bernoulli^n`,
+/// so `H² = 1 − BC`. A differing trial count is the caller's out-of-family branch.
+pub fn hellinger_sq_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+    let one = T::one();
+    let bc_bernoulli = (p_self.clone() * p_other.clone()).sqrt()
+        + ((one.clone() - p_self) * (one - p_other)).sqrt();
+    hellinger_sq_from_bc((trials * bc_bernoulli.ln()).exp())
+}
+
+/// Negative-binomial squared Hellinger for a matched number of successes `r`:
+/// `BC = [√(p₀p₁) / (1 − √((1−p₀)(1−p₁)))]^r`, so `H² = 1 − BC`.
+pub fn hellinger_sq_negative_binomial<T: LazyReal>(successes: T, p_self: T, p_other: T) -> T {
+    let one = T::one();
+    let bc = (p_self.clone() * p_other.clone()).sqrt()
+        / (one.clone() - ((one.clone() - p_self) * (one - p_other)).sqrt());
+    hellinger_sq_from_bc((successes * bc.ln()).exp())
+}
+
 // --- closed-form χ² (Pearson) divergences ---
 //
 // `_on_support` forms carry the interior only; the `2λ₀>λ₁`-style convergence test
@@ -1085,6 +1111,48 @@ pub fn chi_squared_von_mises<T: LazyReal>(
         - T::scalar(4.0) * k0.clone() * k1.clone() * cos)
         .sqrt();
     (ln_i0(r) + ln_i0(k1) - T::two() * ln_i0(k0)).exp() - T::one()
+}
+
+/// Binomial χ² for a matched trial count `n`: `(1 + χ²_Bernoulli)^n − 1`, always
+/// finite. A differing trial count is the caller's out-of-family branch.
+pub fn chi_squared_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+    let diff = p_self - p_other.clone();
+    let chi_bernoulli = diff.clone() * diff / (p_other.clone() * (T::one() - p_other));
+    (trials * (T::one() + chi_bernoulli).ln()).exp() - T::one()
+}
+
+/// Negative-binomial χ² interior for a matched number of successes `r`
+/// (finite when `(1−p₀)² < 1−p₁`): `exp(r·(2 ln p₀ − ln p₁ − ln(1 − z))) − 1`,
+/// `z = (1−p₀)²/(1−p₁)`. The convergence test is the caller's branch.
+pub fn chi_squared_negative_binomial_on_support<T: LazyReal>(
+    successes: T,
+    p_self: T,
+    p_other: T,
+) -> T {
+    let one = T::one();
+    let q_self = one.clone() - p_self.clone();
+    let z = q_self.clone() * q_self / (one.clone() - p_other.clone());
+    (successes * (T::two() * p_self.ln() - p_other.ln() - (one - z).ln())).exp() - T::one()
+}
+
+/// Wald / inverse-Gaussian χ² interior (mean µ, shape λ; finite when `2λ₀ > λ₁` and
+/// `2λ₀/µ₀² > λ₁/µ₁²`): `exp(ln λ₀ − ½ln λ₁ + 2λ₀/µ₀ − λ₁/µ₁ − ½ln la − √(aa·la)) − 1`,
+/// `la = 2λ₀ − λ₁`, `aa = 2λ₀/µ₀² − λ₁/µ₁²`. The convergence test is the caller's branch.
+pub fn chi_squared_wald_on_support<T: LazyReal>(
+    mean_self: T,
+    shape_self: T,
+    mean_other: T,
+    shape_other: T,
+) -> T {
+    let (m0, l0, m1, l1) = (mean_self, shape_self, mean_other, shape_other);
+    let la = T::two() * l0.clone() - l1.clone();
+    let aa =
+        T::two() * l0.clone() / (m0.clone() * m0.clone()) - l1.clone() / (m1.clone() * m1.clone());
+    let ln_int = l0.clone().ln() - T::half() * l1.clone().ln() + T::two() * l0 / m0
+        - l1 / m1
+        - T::half() * la.clone().ln()
+        - (aa * la).sqrt();
+    ln_int.exp() - T::one()
 }
 
 // --- closed-form Rényi divergences `D_α` (α ≠ 1) ---
@@ -1159,6 +1227,61 @@ pub fn renyi_von_mises<T: LazyReal>(
         + T::two() * alpha.clone() * one_minus_alpha.clone() * k0.clone() * k1.clone() * cos)
         .sqrt();
     (ln_i0(r_alpha) - alpha.clone() * ln_i0(k0) - one_minus_alpha * ln_i0(k1)) / (alpha - T::one())
+}
+
+/// Binomial Rényi for a matched trial count `n`: `n ·` the per-trial Bernoulli
+/// Rényi, `n · ln(p₀^α p₁^{1−α} + (1−p₀)^α (1−p₁)^{1−α}) / (α−1)`. A differing trial
+/// count is the caller's out-of-family branch.
+pub fn renyi_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T, alpha: T) -> T {
+    let one = T::one();
+    let one_minus_alpha = one.clone() - alpha.clone();
+    let term =
+        |p: T, q: T| (alpha.clone() * p.ln()).exp() * (one_minus_alpha.clone() * q.ln()).exp();
+    let s = term(p_self.clone(), p_other.clone()) + term(one.clone() - p_self, one - p_other);
+    trials * s.ln() / (alpha - T::one())
+}
+
+/// Negative-binomial Rényi interior for matched successes `r`
+/// (finite when `w = (1−p₀)^α (1−p₁)^{1−α} < 1`):
+/// `r · (α ln p₀ + (1−α) ln p₁ − ln(1 − w)) / (α−1)`. The convergence test is the
+/// caller's branch.
+pub fn renyi_negative_binomial_on_support<T: LazyReal>(
+    successes: T,
+    p_self: T,
+    p_other: T,
+    alpha: T,
+) -> T {
+    let one = T::one();
+    let one_minus_alpha = one.clone() - alpha.clone();
+    let w = (alpha.clone() * (one.clone() - p_self.clone()).ln()).exp()
+        * (one_minus_alpha.clone() * (one.clone() - p_other.clone()).ln()).exp();
+    successes * (alpha.clone() * p_self.ln() + one_minus_alpha * p_other.ln() - (one - w).ln())
+        / (alpha - T::one())
+}
+
+/// Wald / inverse-Gaussian Rényi interior (mean µ, shape λ; finite when
+/// `la = α λ₀ + (1−α) λ₁ > 0` and `aa = α λ₀/µ₀² + (1−α) λ₁/µ₁² > 0`):
+/// `[½(α ln λ₀ + (1−α) ln λ₁) + α λ₀/µ₀ + (1−α) λ₁/µ₁ − ½ ln la − √(aa·la)] / (α−1)`.
+/// The convergence test is the caller's branch.
+pub fn renyi_wald_on_support<T: LazyReal>(
+    mean_self: T,
+    shape_self: T,
+    mean_other: T,
+    shape_other: T,
+    alpha: T,
+) -> T {
+    let (m0, l0, m1, l1) = (mean_self, shape_self, mean_other, shape_other);
+    let one_minus_alpha = T::one() - alpha.clone();
+    let la = alpha.clone() * l0.clone() + one_minus_alpha.clone() * l1.clone();
+    let aa = alpha.clone() * l0.clone() / (m0.clone() * m0.clone())
+        + one_minus_alpha.clone() * l1.clone() / (m1.clone() * m1.clone());
+    let ln_int = T::half()
+        * (alpha.clone() * l0.clone().ln() + one_minus_alpha.clone() * l1.clone().ln())
+        + alpha.clone() * l0 / m0
+        + one_minus_alpha * l1 / m1
+        - T::half() * la.clone().ln()
+        - (aa * la).sqrt();
+    ln_int / (alpha - T::one())
 }
 
 // --- closed-form total variation ---
@@ -2098,6 +2221,28 @@ mod tests {
             wald.0.hellinger_sq(&wald.1),
             1e-12,
         );
+
+        // Binomial with a matched trial count n = 12 (BC_Bernoulli^n).
+        let binomial = (
+            Binomial::new(12, 0.3).unwrap(),
+            Binomial::new(12, 0.5).unwrap(),
+        );
+        close(
+            hellinger_sq_binomial(12.0, 0.3, 0.5),
+            binomial.0.hellinger_sq(&binomial.1),
+            1e-12,
+        );
+
+        // Negative-binomial with matched successes r = 5.
+        let negbin = (
+            NegativeBinomial::new(5.0, 0.4).unwrap(),
+            NegativeBinomial::new(5.0, 0.6).unwrap(),
+        );
+        close(
+            hellinger_sq_negative_binomial(5.0, 0.4, 0.6),
+            negbin.0.hellinger_sq(&negbin.1),
+            1e-12,
+        );
     }
 
     #[test]
@@ -2163,6 +2308,51 @@ mod tests {
         close(
             renyi_gamma_on_support(2.5, 1.2, 3.0, 0.8, alpha),
             gamma.0.renyi_divergence(&gamma.1, alpha),
+            1e-12,
+        );
+
+        // Binomial with a matched trial count n = 12 (always finite).
+        let binomial = (
+            Binomial::new(12, 0.3).unwrap(),
+            Binomial::new(12, 0.5).unwrap(),
+        );
+        close(
+            chi_squared_binomial(12.0, 0.3, 0.5),
+            binomial.0.chi_squared_divergence(&binomial.1),
+            1e-12,
+        );
+        close(
+            renyi_binomial(12.0, 0.3, 0.5, alpha),
+            binomial.0.renyi_divergence(&binomial.1, alpha),
+            1e-12,
+        );
+
+        // Negative-binomial interiors in their convergence region (matched r = 5).
+        let negbin = (
+            NegativeBinomial::new(5.0, 0.6).unwrap(),
+            NegativeBinomial::new(5.0, 0.4).unwrap(),
+        );
+        close(
+            chi_squared_negative_binomial_on_support(5.0, 0.6, 0.4),
+            negbin.0.chi_squared_divergence(&negbin.1),
+            1e-12,
+        );
+        close(
+            renyi_negative_binomial_on_support(5.0, 0.6, 0.4, alpha),
+            negbin.0.renyi_divergence(&negbin.1, alpha),
+            1e-12,
+        );
+
+        // Wald / inverse-Gaussian interiors in their convergence region.
+        let wald = (Wald::new(1.0, 3.0).unwrap(), Wald::new(1.2, 2.0).unwrap());
+        close(
+            chi_squared_wald_on_support(1.0, 3.0, 1.2, 2.0),
+            wald.0.chi_squared_divergence(&wald.1),
+            1e-12,
+        );
+        close(
+            renyi_wald_on_support(1.0, 3.0, 1.2, 2.0, alpha),
+            wald.0.renyi_divergence(&wald.1, alpha),
             1e-12,
         );
     }
@@ -2331,6 +2521,17 @@ mod tests {
         close(
             kl_pareto_on_support(3.0, 2.0, 2.0, 1.5),
             pareto.0.kl_divergence(&pareto.1),
+            1e-12,
+        );
+
+        // Binomial with a matched trial count n = 12 (n × the Bernoulli KL).
+        let binomial = (
+            Binomial::new(12, 0.3).unwrap(),
+            Binomial::new(12, 0.5).unwrap(),
+        );
+        close(
+            kl_binomial(12.0, 0.3, 0.5),
+            binomial.0.kl_divergence(&binomial.1),
             1e-12,
         );
     }

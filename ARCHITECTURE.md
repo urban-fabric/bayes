@@ -197,7 +197,9 @@ the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones); the same-family
 **divergences** — KL, squared Hellinger, Pearson χ², Rényi, and total variation —
 over the families whose closed form needs only the lazy surface (now including the
 circular **von Mises** divergences, written with `cos` and the scaled Bessel
-`I₀ᵉ`/`I₁ᵉ`); and the stable log-CDF tails via `ln_1m_exp`/`ln_1p_exp`. The
+`I₀ᵉ`/`I₁ᵉ`, and the **Wald**/**binomial**/**negative-binomial** divergences across
+KL/Hellinger/χ²/Rényi — the binomial as `n ×` / `(·)^n` of its Bernoulli kernel);
+and the stable log-CDF tails via `ln_1m_exp`/`ln_1p_exp`. The
 Student-t CDF is written branch-free with `sign`, and the `+∞`-outside-containment
 divergences carry an `_on_support` interior form, so every entry point stays
 traceable.
