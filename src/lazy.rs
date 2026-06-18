@@ -564,6 +564,13 @@ pub fn negative_binomial_cdf<T: LazyReal>(failures: T, successes_until_stop: T, 
     p.beta_reg(successes_until_stop, failures + T::one())
 }
 
+/// k-th order-statistic CDF of `sample_size` iid draws from a base CDF value
+/// `u = F(x)`: the regularized incomplete beta `I_u(rank, sample_size − rank + 1)`.
+/// `rank = 1` gives the minimum (`1 − (1−u)ⁿ`), `rank = n` the maximum (`uⁿ`).
+pub fn order_statistic_cdf<T: LazyReal>(base_cdf: T, rank: T, sample_size: T) -> T {
+    base_cdf.beta_reg(rank.clone(), sample_size - rank + T::one())
+}
+
 // --- stable log-CDF / log-survival tails ---
 //
 // Branch-free log-domain forms via the lazy `ln_1m_exp` / `ln_1p_exp`, accurate in
@@ -590,6 +597,89 @@ pub fn logistic_ln_sf<T: LazyReal>(x: T, location: T, scale: T) -> T {
 pub fn gumbel_ln_cdf<T: LazyReal>(x: T, location: T, scale: T) -> T {
     let z = (x - location) / scale;
     -(-z).exp()
+}
+
+// --- closed-form quantiles (inverse CDFs) ---
+//
+// The inverse-CDF maps `p ∈ (0, 1)` to the support — a total formula on the open
+// interval, so (as with `logit`) clamping `p` and the `p = 0`/`p = 1` boundary are
+// the caller's branch. Variable powers `(·)^{1/shape}` go through
+// `exp((1/shape)·ln(·))` because the lazy `powf` takes a *constant* exponent.
+
+/// Exponential quantile: `−ln(1 − p) / rate`.
+pub fn exponential_quantile<T: LazyReal>(p: T, rate: T) -> T {
+    -((T::one() - p).ln()) / rate
+}
+
+/// Logistic quantile: `location + scale · ln(p / (1 − p))`.
+pub fn logistic_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+    location + scale * (p.clone() / (T::one() - p)).ln()
+}
+
+/// Cauchy quantile: `location + scale · tan(π·(p − ½))`.
+pub fn cauchy_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+    location + scale * (T::pi() * (p - T::half())).tan()
+}
+
+/// Laplace quantile: `location − scale · sign(q) · ln(1 − 2|q|)`, `q = p − ½`.
+pub fn laplace_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+    let q = p - T::half();
+    location - scale * q.clone().signum() * (T::one() - T::two() * q.abs()).ln()
+}
+
+/// Uniform quantile: `lo + width · p`, with `width = hi − lo`.
+pub fn uniform_quantile<T: LazyReal>(p: T, lo: T, width: T) -> T {
+    lo + width * p
+}
+
+/// Weibull quantile: `scale · (−ln(1 − p))^{1/shape}`.
+pub fn weibull_quantile<T: LazyReal>(p: T, scale: T, shape: T) -> T {
+    let base = -((T::one() - p).ln());
+    scale * ((T::one() / shape) * base.ln()).exp()
+}
+
+/// Gumbel quantile: `location − scale · ln(−ln p)`.
+pub fn gumbel_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+    location - scale * (-(p.ln())).ln()
+}
+
+/// Fréchet quantile: `scale · (−ln p)^{−1/shape}`.
+pub fn frechet_quantile<T: LazyReal>(p: T, scale: T, shape: T) -> T {
+    let base = -(p.ln());
+    scale * ((-(T::one() / shape)) * base.ln()).exp()
+}
+
+/// Pareto quantile: `minimum · (1 − p)^{−1/shape}`.
+pub fn pareto_quantile<T: LazyReal>(p: T, minimum: T, shape: T) -> T {
+    let base = T::one() - p;
+    minimum * ((-(T::one() / shape)) * base.ln()).exp()
+}
+
+/// Lomax quantile: `scale · ((1 − p)^{−1/shape} − 1)`.
+pub fn lomax_quantile<T: LazyReal>(p: T, scale: T, shape: T) -> T {
+    let base = T::one() - p;
+    scale * (((-(T::one() / shape)) * base.ln()).exp() - T::one())
+}
+
+/// Rayleigh quantile: `scale · √(−2·ln(1 − p))`.
+pub fn rayleigh_quantile<T: LazyReal>(p: T, scale: T) -> T {
+    scale * (-T::two() * (T::one() - p).ln()).sqrt()
+}
+
+/// Normal quantile: `mean + std·√2·erf⁻¹(2p − 1)`.
+pub fn normal_quantile<T: LazyReal>(p: T, mean: T, std_dev: T) -> T {
+    mean + std_dev * T::sqrt_2() * (T::two() * p - T::one()).erf_inv()
+}
+
+/// Half-normal quantile: `scale·√2·erf⁻¹(p)`.
+pub fn half_normal_quantile<T: LazyReal>(p: T, scale: T) -> T {
+    scale * T::sqrt_2() * p.erf_inv()
+}
+
+/// Log-normal quantile: the Normal quantile on the log scale, exponentiated —
+/// `exp(mean_log + σ_log·√2·erf⁻¹(2p − 1))`.
+pub fn lognormal_quantile<T: LazyReal>(p: T, mean_log: T, std_log: T) -> T {
+    normal_quantile(p, mean_log, std_log).exp()
 }
 
 // --- closed-form differential / Shannon entropies ---
@@ -691,6 +781,16 @@ pub fn ln_multivariate_gamma<T: LazyReal>(dimension: usize, a: T) -> T {
     acc
 }
 
+/// Log multivariate Beta `ln B(α) = Σ ln Γ(αᵢ) − ln Γ(Σ αᵢ)` — the Dirichlet
+/// normalizer. `None` on empty input.
+pub fn ln_multivariate_beta<T: LazyReal>(alpha: &[T]) -> Option<T> {
+    if alpha.is_empty() {
+        return None;
+    }
+    let total = sum_log_terms(alpha.iter().cloned())?;
+    Some(sum_log_terms(alpha.iter().cloned().map(|a| a.ln_gamma()))? - total.ln_gamma())
+}
+
 /// Chi-squared entropy — the gamma entropy at `shape = freedom/2`, `rate = ½`.
 pub fn chi_squared_entropy<T: LazyReal>(half_freedom: T) -> T {
     gamma_entropy(half_freedom, T::half())
@@ -723,6 +823,62 @@ pub fn students_t_entropy<T: LazyReal>(scale: T, freedom: T) -> T {
     scale.ln() + T::half() * (freedom * T::pi()).ln() + half_nu.clone().ln_gamma()
         - half_nu_plus_one.clone().ln_gamma()
         + half_nu_plus_one.clone() * (half_nu_plus_one.digamma() - half_nu.digamma())
+}
+
+/// von Mises entropy: `ln(2π) + ln I₀(κ) − κ·A(κ)`, `A = I₁/I₀` the mean resultant
+/// length — over the scaled Bessel surface (`ln I₀ = ln I₀ᵉ + |κ|`, `A = I₁ᵉ/I₀ᵉ`).
+pub fn von_mises_entropy<T: LazyReal>(kappa: T) -> T {
+    let resultant = kappa.clone().bessel_i1e() / kappa.clone().bessel_i0e();
+    T::ln_tau() + ln_i0(kappa.clone()) - kappa * resultant
+}
+
+/// von Mises-Fisher entropy: `−ln C_p(κ) − κ·R`. The caller supplies the log
+/// normalizer `ln C_p(κ)` and the mean resultant length `R = I_{p/2}/I_{p/2−1}`
+/// (both arbitrary-order Bessel, off the scalar lazy surface) — the same caller
+/// contract as [`von_mises_fisher_log_pdf`].
+pub fn von_mises_fisher_entropy<T: LazyReal>(
+    log_normalizer: T,
+    kappa: T,
+    mean_resultant_length: T,
+) -> T {
+    -log_normalizer - kappa * mean_resultant_length
+}
+
+/// Watson entropy: `ln Z(κ) − κ·E[(µᵀx)²]`. The caller supplies the log partition
+/// `ln Z(κ)` and the axial second moment `E[(µᵀx)²]` (a Kummer-function ratio off
+/// the scalar lazy surface) — the same caller contract as [`watson_log_pdf`].
+pub fn watson_entropy<T: LazyReal>(log_partition: T, kappa: T, axial_second_moment: T) -> T {
+    log_partition - kappa * axial_second_moment
+}
+
+/// von Mises-Fisher cross-entropy `H(p, q) = −ln C_p(κ_q) − κ_q·R_p·(µ_p·µ_q)`. The
+/// caller supplies `q`'s log normalizer, `p`'s mean resultant length `R_p`, and the
+/// mean-direction cosine — the same caller contract as [`von_mises_fisher_entropy`].
+/// KL is then `cross_entropy(p, q) − entropy(p)`.
+pub fn von_mises_fisher_cross_entropy<T: LazyReal>(
+    log_normalizer_other: T,
+    kappa_other: T,
+    mean_resultant_length_self: T,
+    mean_cosine: T,
+) -> T {
+    -log_normalizer_other - kappa_other * mean_resultant_length_self * mean_cosine
+}
+
+/// Watson cross-entropy `H(p, q) = ln Z(κ_q) − κ_q·E_p[(µ_q·x)²]`. The caller supplies
+/// `q`'s log partition and `p`'s second moment along `q`'s axis. KL is then
+/// `cross_entropy(p, q) − entropy(p)`.
+pub fn watson_cross_entropy<T: LazyReal>(
+    log_partition_other: T,
+    kappa_other: T,
+    second_moment_self_along_other: T,
+) -> T {
+    log_partition_other - kappa_other * second_moment_self_along_other
+}
+
+/// Watson log unnormalized-density difference `κ·((µ·x)² − (µ·y)²)` from the two axis
+/// cosines — the partition function cancels, so no normalizer is needed.
+pub fn watson_ln_density_difference<T: LazyReal>(kappa: T, axis_dot_x: T, axis_dot_y: T) -> T {
+    kappa * (square(axis_dot_x) - square(axis_dot_y))
 }
 
 // --- closed-form Kullback–Leibler divergences `D(self ‖ other)` ---
@@ -779,6 +935,13 @@ pub fn kl_negative_binomial<T: LazyReal>(successes: T, p_self: T, p_other: T) ->
     let q_other = one - p_other.clone();
     successes.clone() * (p_self.clone() / p_other).ln()
         + successes * (q_self.clone() / p_self) * (q_self / q_other).ln()
+}
+
+/// Binomial KL for a matched trial count `n`: `n · D_KL(Bernoulli(p₀) ‖ Bernoulli(p₁))`
+/// — the binomial coefficient cancels in the log-ratio. A differing trial count is
+/// out of family and is the caller's branch.
+pub fn kl_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+    trials * kl_bernoulli_on_unit(p_self, p_other)
 }
 
 /// Cauchy KL: `ln[((γ₀+γ₁)² + (x₀−x₁)²) / (4 γ₀ γ₁)]`.
@@ -895,6 +1058,17 @@ pub fn kl_von_mises<T: LazyReal>(mean_self: T, kappa_self: T, mean_other: T, kap
     let (mu0, k0, mu1, k1) = (mean_self, kappa_self, mean_other, kappa_other);
     let resultant = k0.clone().bessel_i1e() / k0.clone().bessel_i0e();
     ln_i0(k1.clone()) - ln_i0(k0.clone()) + resultant * (k0 - k1 * (mu0 - mu1).cos())
+}
+
+/// Uniform KL on nested support (`[a₀,b₀] ⊆ [a₁,b₁]`): `ln(w₁/w₀)`, `w = b − a`. The
+/// containment test (`+∞` otherwise) is the caller's branch.
+pub fn kl_uniform_on_support<T: LazyReal>(width_self: T, width_other: T) -> T {
+    (width_other / width_self).ln()
+}
+
+/// Discrete-uniform KL on nested support: `ln(n₁/n₀)`, `n` the support count.
+pub fn kl_discrete_uniform_on_support<T: LazyReal>(count_self: T, count_other: T) -> T {
+    (count_other / count_self).ln()
 }
 
 // --- closed-form squared Hellinger distances `H² = 1 − BC` ---
@@ -1017,6 +1191,52 @@ pub fn hellinger_sq_von_mises<T: LazyReal>(
     hellinger_sq_from_bc(ln_bc.exp())
 }
 
+/// Binomial squared Hellinger for a matched trial count `n`: the Bhattacharyya
+/// coefficient factorizes over the `n` iid Bernoulli trials, `BC = BC_Bernoulli^n`,
+/// so `H² = 1 − BC`. A differing trial count is the caller's out-of-family branch.
+pub fn hellinger_sq_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+    let one = T::one();
+    let bc_bernoulli = (p_self.clone() * p_other.clone()).sqrt()
+        + ((one.clone() - p_self) * (one - p_other)).sqrt();
+    hellinger_sq_from_bc((trials * bc_bernoulli.ln()).exp())
+}
+
+/// Negative-binomial squared Hellinger for a matched number of successes `r`:
+/// `BC = [√(p₀p₁) / (1 − √((1−p₀)(1−p₁)))]^r`, so `H² = 1 − BC`.
+pub fn hellinger_sq_negative_binomial<T: LazyReal>(successes: T, p_self: T, p_other: T) -> T {
+    let one = T::one();
+    let bc = (p_self.clone() * p_other.clone()).sqrt()
+        / (one.clone() - ((one.clone() - p_self) * (one - p_other)).sqrt());
+    hellinger_sq_from_bc((successes * bc.ln()).exp())
+}
+
+/// Uniform squared Hellinger: `BC = overlap / √(w₀·w₁)`, the overlap
+/// `max(min(b₀,b₁) − max(a₀,a₁), 0)` and widths `w = b − a`. Bounded, so valid for
+/// any two uniforms (the clamp absorbs disjoint support).
+pub fn hellinger_sq_uniform<T: LazyReal>(lo_self: T, hi_self: T, lo_other: T, hi_other: T) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()))
+        .max(T::zero());
+    let width_self = hi_self - lo_self;
+    let width_other = hi_other - lo_other;
+    hellinger_sq_from_bc(overlap / (width_self * width_other).sqrt())
+}
+
+/// Discrete-uniform squared Hellinger: `BC = overlap / √(n₀·n₁)`, integer overlap
+/// `max(min(b₀,b₁) − max(a₀,a₁) + 1, 0)` and counts `n = b − a + 1`.
+pub fn hellinger_sq_discrete_uniform<T: LazyReal>(
+    lo_self: T,
+    hi_self: T,
+    lo_other: T,
+    hi_other: T,
+) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone())
+        + T::one())
+    .max(T::zero());
+    let n_self = hi_self - lo_self + T::one();
+    let n_other = hi_other - lo_other + T::one();
+    hellinger_sq_from_bc(overlap / (n_self * n_other).sqrt())
+}
+
 // --- closed-form χ² (Pearson) divergences ---
 //
 // `_on_support` forms carry the interior only; the `2λ₀>λ₁`-style convergence test
@@ -1085,6 +1305,59 @@ pub fn chi_squared_von_mises<T: LazyReal>(
         - T::scalar(4.0) * k0.clone() * k1.clone() * cos)
         .sqrt();
     (ln_i0(r) + ln_i0(k1) - T::two() * ln_i0(k0)).exp() - T::one()
+}
+
+/// Binomial χ² for a matched trial count `n`: `(1 + χ²_Bernoulli)^n − 1`, always
+/// finite. A differing trial count is the caller's out-of-family branch.
+pub fn chi_squared_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+    let diff = p_self - p_other.clone();
+    let chi_bernoulli = diff.clone() * diff / (p_other.clone() * (T::one() - p_other));
+    (trials * (T::one() + chi_bernoulli).ln()).exp() - T::one()
+}
+
+/// Negative-binomial χ² interior for a matched number of successes `r`
+/// (finite when `(1−p₀)² < 1−p₁`): `exp(r·(2 ln p₀ − ln p₁ − ln(1 − z))) − 1`,
+/// `z = (1−p₀)²/(1−p₁)`. The convergence test is the caller's branch.
+pub fn chi_squared_negative_binomial_on_support<T: LazyReal>(
+    successes: T,
+    p_self: T,
+    p_other: T,
+) -> T {
+    let one = T::one();
+    let q_self = one.clone() - p_self.clone();
+    let z = q_self.clone() * q_self / (one.clone() - p_other.clone());
+    (successes * (T::two() * p_self.ln() - p_other.ln() - (one - z).ln())).exp() - T::one()
+}
+
+/// Wald / inverse-Gaussian χ² interior (mean µ, shape λ; finite when `2λ₀ > λ₁` and
+/// `2λ₀/µ₀² > λ₁/µ₁²`): `exp(ln λ₀ − ½ln λ₁ + 2λ₀/µ₀ − λ₁/µ₁ − ½ln la − √(aa·la)) − 1`,
+/// `la = 2λ₀ − λ₁`, `aa = 2λ₀/µ₀² − λ₁/µ₁²`. The convergence test is the caller's branch.
+pub fn chi_squared_wald_on_support<T: LazyReal>(
+    mean_self: T,
+    shape_self: T,
+    mean_other: T,
+    shape_other: T,
+) -> T {
+    let (m0, l0, m1, l1) = (mean_self, shape_self, mean_other, shape_other);
+    let la = T::two() * l0.clone() - l1.clone();
+    let aa =
+        T::two() * l0.clone() / (m0.clone() * m0.clone()) - l1.clone() / (m1.clone() * m1.clone());
+    let ln_int = l0.clone().ln() - T::half() * l1.clone().ln() + T::two() * l0 / m0
+        - l1 / m1
+        - T::half() * la.clone().ln()
+        - (aa * la).sqrt();
+    ln_int.exp() - T::one()
+}
+
+/// Uniform χ² on nested support: `w₁/w₀ − 1`, `w = b − a`. The containment test is
+/// the caller's branch.
+pub fn chi_squared_uniform_on_support<T: LazyReal>(width_self: T, width_other: T) -> T {
+    width_other / width_self - T::one()
+}
+
+/// Discrete-uniform χ² on nested support: `n₁/n₀ − 1`, `n` the support count.
+pub fn chi_squared_discrete_uniform_on_support<T: LazyReal>(count_self: T, count_other: T) -> T {
+    count_other / count_self - T::one()
 }
 
 // --- closed-form Rényi divergences `D_α` (α ≠ 1) ---
@@ -1159,6 +1432,102 @@ pub fn renyi_von_mises<T: LazyReal>(
         + T::two() * alpha.clone() * one_minus_alpha.clone() * k0.clone() * k1.clone() * cos)
         .sqrt();
     (ln_i0(r_alpha) - alpha.clone() * ln_i0(k0) - one_minus_alpha * ln_i0(k1)) / (alpha - T::one())
+}
+
+/// Binomial Rényi for a matched trial count `n`: `n ·` the per-trial Bernoulli
+/// Rényi, `n · ln(p₀^α p₁^{1−α} + (1−p₀)^α (1−p₁)^{1−α}) / (α−1)`. A differing trial
+/// count is the caller's out-of-family branch.
+pub fn renyi_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T, alpha: T) -> T {
+    let one = T::one();
+    let one_minus_alpha = one.clone() - alpha.clone();
+    let term =
+        |p: T, q: T| (alpha.clone() * p.ln()).exp() * (one_minus_alpha.clone() * q.ln()).exp();
+    let s = term(p_self.clone(), p_other.clone()) + term(one.clone() - p_self, one - p_other);
+    trials * s.ln() / (alpha - T::one())
+}
+
+/// Negative-binomial Rényi interior for matched successes `r`
+/// (finite when `w = (1−p₀)^α (1−p₁)^{1−α} < 1`):
+/// `r · (α ln p₀ + (1−α) ln p₁ − ln(1 − w)) / (α−1)`. The convergence test is the
+/// caller's branch.
+pub fn renyi_negative_binomial_on_support<T: LazyReal>(
+    successes: T,
+    p_self: T,
+    p_other: T,
+    alpha: T,
+) -> T {
+    let one = T::one();
+    let one_minus_alpha = one.clone() - alpha.clone();
+    let w = (alpha.clone() * (one.clone() - p_self.clone()).ln()).exp()
+        * (one_minus_alpha.clone() * (one.clone() - p_other.clone()).ln()).exp();
+    successes * (alpha.clone() * p_self.ln() + one_minus_alpha * p_other.ln() - (one - w).ln())
+        / (alpha - T::one())
+}
+
+/// Wald / inverse-Gaussian Rényi interior (mean µ, shape λ; finite when
+/// `la = α λ₀ + (1−α) λ₁ > 0` and `aa = α λ₀/µ₀² + (1−α) λ₁/µ₁² > 0`):
+/// `[½(α ln λ₀ + (1−α) ln λ₁) + α λ₀/µ₀ + (1−α) λ₁/µ₁ − ½ ln la − √(aa·la)] / (α−1)`.
+/// The convergence test is the caller's branch.
+pub fn renyi_wald_on_support<T: LazyReal>(
+    mean_self: T,
+    shape_self: T,
+    mean_other: T,
+    shape_other: T,
+    alpha: T,
+) -> T {
+    let (m0, l0, m1, l1) = (mean_self, shape_self, mean_other, shape_other);
+    let one_minus_alpha = T::one() - alpha.clone();
+    let la = alpha.clone() * l0.clone() + one_minus_alpha.clone() * l1.clone();
+    let aa = alpha.clone() * l0.clone() / (m0.clone() * m0.clone())
+        + one_minus_alpha.clone() * l1.clone() / (m1.clone() * m1.clone());
+    let ln_int = T::half()
+        * (alpha.clone() * l0.clone().ln() + one_minus_alpha.clone() * l1.clone().ln())
+        + alpha.clone() * l0 / m0
+        + one_minus_alpha * l1 / m1
+        - T::half() * la.clone().ln()
+        - (aa * la).sqrt();
+    ln_int / (alpha - T::one())
+}
+
+/// Uniform Rényi interior: `ln(overlap · w₀^{−α} · w₁^{−(1−α)}) / (α−1)`, `w = b − a`.
+/// The `+∞` boundary (`α>1` outside containment, or disjoint support) is the caller's
+/// branch.
+pub fn renyi_uniform_on_support<T: LazyReal>(
+    lo_self: T,
+    hi_self: T,
+    lo_other: T,
+    hi_other: T,
+    alpha: T,
+) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()))
+        .max(T::zero());
+    let width_self = hi_self - lo_self;
+    let width_other = hi_other - lo_other;
+    let one_minus_alpha = T::one() - alpha.clone();
+    let s = overlap
+        * (-alpha.clone() * width_self.ln()).exp()
+        * (-one_minus_alpha * width_other.ln()).exp();
+    s.ln() / (alpha - T::one())
+}
+
+/// Discrete-uniform Rényi interior: `ln(overlap · n₀^{−α} · n₁^{−(1−α)}) / (α−1)`,
+/// integer overlap and `n = b − a + 1`. The `+∞` boundary is the caller's branch.
+pub fn renyi_discrete_uniform_on_support<T: LazyReal>(
+    lo_self: T,
+    hi_self: T,
+    lo_other: T,
+    hi_other: T,
+    alpha: T,
+) -> T {
+    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone())
+        + T::one())
+    .max(T::zero());
+    let n_self = hi_self - lo_self + T::one();
+    let n_other = hi_other - lo_other + T::one();
+    let one_minus_alpha = T::one() - alpha.clone();
+    let s =
+        overlap * (-alpha.clone() * n_self.ln()).exp() * (-one_minus_alpha * n_other.ln()).exp();
+    s.ln() / (alpha - T::one())
 }
 
 // --- closed-form total variation ---
@@ -1486,6 +1855,107 @@ pub fn normal_known_variance_log_marginal_likelihood<T: LazyReal>(
         - T::half() * quad
 }
 
+/// Gamma-Poisson log marginal likelihood over count sufficient statistics
+/// `(Σk, n)`, the rate integrated out:
+/// `α·ln β − ln Γ(α) − Σ ln kᵢ! + ln Γ(α+Σk) − (α+Σk)·ln(β+n)`.
+///
+/// `ln_factorial_sum = Σ ln kᵢ!` is the data-combinatorial term and is caller
+/// supplied (like the `ln_binomial` in [`binomial_log_pmf`]). For Poisson exposure
+/// offsets, pass `n = Σ eᵢ` and add the caller's `Σ kᵢ·ln eᵢ` to the result.
+pub fn gamma_poisson_log_marginal_likelihood<T: LazyReal>(
+    shape: T,
+    rate: T,
+    count_sum: T,
+    count_n: T,
+    ln_factorial_sum: T,
+) -> T {
+    shape.clone() * rate.clone().ln() - shape.clone().ln_gamma() - ln_factorial_sum
+        + (shape.clone() + count_sum.clone()).ln_gamma()
+        - (shape + count_sum) * (rate + count_n).ln()
+}
+
+/// Gamma-Exponential log marginal likelihood over sufficient statistics `(n, Σx)`,
+/// the rate integrated out:
+/// `α·ln β − ln Γ(α) + ln Γ(α+n) − (α+n)·ln(β+Σx)`.
+///
+/// The same form carries the right-censored/exposure case: pass the failure count
+/// for `n` and the total exposure for `sum`.
+pub fn gamma_exponential_log_marginal_likelihood<T: LazyReal>(
+    shape: T,
+    rate: T,
+    count_n: T,
+    sum: T,
+) -> T {
+    shape.clone() * rate.clone().ln() - shape.clone().ln_gamma()
+        + (shape.clone() + count_n.clone()).ln_gamma()
+        - (shape + count_n) * (rate + sum).ln()
+}
+
+/// Beta-Binomial posterior-predictive log-probability for one future fixed-trial
+/// binomial observation (`successes`, `failures = trials − successes`):
+/// `ln C(trials, successes) + ln B(α+successes, β+failures) − ln B(α, β)`.
+///
+/// `ln_binomial = ln C(trials, successes)` is caller supplied.
+pub fn beta_binomial_log_predictive<T: LazyReal>(
+    alpha: T,
+    beta: T,
+    successes: T,
+    failures: T,
+    ln_binomial: T,
+) -> T {
+    let ln_beta = |a: T, b: T| a.clone().ln_gamma() + b.clone().ln_gamma() - (a + b).ln_gamma();
+    ln_binomial + ln_beta(alpha.clone() + successes, beta.clone() + failures) - ln_beta(alpha, beta)
+}
+
+/// Dirichlet-categorical log marginal likelihood for category `counts` under a
+/// `Dirichlet(α)` prior: `ln B(α + counts) − ln B(α)`, with the multivariate Beta
+/// `ln B(v) = Σ ln Γ(vᵢ) − ln Γ(Σ vᵢ)`. `None` on length mismatch or empty input.
+pub fn dirichlet_categorical_log_marginal_likelihood<T: LazyReal>(
+    alpha: &[T],
+    counts: &[T],
+) -> Option<T> {
+    if alpha.len() != counts.len() || alpha.is_empty() {
+        return None;
+    }
+    let posterior: Vec<T> = alpha
+        .iter()
+        .cloned()
+        .zip(counts.iter().cloned())
+        .map(|(a, c)| a + c)
+        .collect();
+    Some(ln_multivariate_beta(&posterior)? - ln_multivariate_beta(alpha)?)
+}
+
+/// Normal-Inverse-Gamma log marginal likelihood (both mean and variance integrated
+/// out) over sufficient statistics `(n, Σx, Σx²)` and the prior `(µ₀, λ₀, α₀, β₀)`:
+/// `ln Γ(αₙ) − ln Γ(α₀) + α₀·ln β₀ − αₙ·ln βₙ + ½(ln λ₀ − ln λₙ) − ½n·ln(2π)`.
+///
+/// The posterior is recovered in the additive natural coordinates
+/// `(λ, λµ, 2α, 2β+λµ²)`: `λₙ = λ₀+n`, `αₙ = α₀+n/2`, `λµₙ = λ₀µ₀+Σx`,
+/// `2βₙ = (2β₀+λ₀µ₀²+Σx²) − λµₙ²/λₙ`. This is also the **Normal-Gamma** evidence —
+/// the precision-parametrized twin shares the identical closed form.
+pub fn normal_inverse_gamma_log_marginal_likelihood<T: LazyReal>(
+    count: T,
+    sum: T,
+    sum_sq: T,
+    prior_mean: T,
+    prior_lambda: T,
+    prior_alpha: T,
+    prior_beta: T,
+) -> T {
+    let lambda_n = prior_lambda.clone() + count.clone();
+    let lambda_mu_n = prior_lambda.clone() * prior_mean.clone() + sum;
+    let alpha_n = prior_alpha.clone() + T::half() * count.clone();
+    let sum_sq_nat = T::two() * prior_beta.clone()
+        + prior_lambda.clone() * prior_mean.clone() * prior_mean
+        + sum_sq;
+    let beta_n = T::half() * (sum_sq_nat - lambda_mu_n.clone() * lambda_mu_n / lambda_n.clone());
+    alpha_n.clone().ln_gamma() - prior_alpha.clone().ln_gamma() + prior_alpha * prior_beta.ln()
+        - alpha_n * beta_n.ln()
+        + T::half() * (prior_lambda.ln() - lambda_n.ln())
+        - T::half() * count * T::ln_tau()
+}
+
 // --- analytic higher moments (skewness, excess kurtosis, non-trivial mean/var) ---
 //
 // The closed-form moments that are genuine functions of the shape parameters —
@@ -1561,6 +2031,12 @@ pub fn poisson_excess_kurtosis<T: LazyReal>(rate: T) -> T {
     T::one() / rate
 }
 
+/// Bernoulli skewness `(q − p)/√(p·q)`, `q = 1 − p`.
+pub fn bernoulli_skewness<T: LazyReal>(p: T) -> T {
+    let q = T::one() - p.clone();
+    (q.clone() - p.clone()) / (p * q).sqrt()
+}
+
 /// Binomial skewness `(1 − 2p)/√(n·p·(1−p))`.
 pub fn binomial_skewness<T: LazyReal>(trials: T, p: T) -> T {
     let variance = trials * p.clone() * (T::one() - p.clone());
@@ -1581,14 +2057,15 @@ pub fn negative_binomial_skewness<T: LazyReal>(successes: T, p: T) -> T {
 mod tests {
     use super::*;
     use crate::distribution::{
-        Bernoulli, Beta, BetaBernoulli, Binomial, Categorical, Cauchy, ChiSquared,
-        ChiSquaredDivergence, Continuous, ContinuousCdf, Dirichlet,
-        DirichletMultinomialDistribution, Discrete, DiscreteCdf, DiscreteUniform, Exponential,
-        FisherSnedecor, Frechet, Gamma, GammaExponential, GammaPoisson, Geometric, Gumbel,
-        HalfNormal, HellingerDistance, Hypergeometric, InverseGamma, KlDivergence, Laplace,
-        LogNormal, Logistic, Lomax, Moments, Multinomial, MultivariateContinuous,
-        MultivariateMoments, MultivariateNormal, MultivariateStudentT, NegativeBinomial, Normal,
-        NormalKnownVariance, Pareto, Poisson, Rayleigh, RenyiDivergence, StudentT, TotalVariation,
+        Bernoulli, Beta, BetaBernoulli, BetaBinomialModel, Binomial, Categorical, Cauchy,
+        ChiSquared, ChiSquaredDivergence, Continuous, ContinuousCdf, Dirichlet,
+        DirichletCategorical, DirichletMultinomialDistribution, Discrete, DiscreteCdf,
+        DiscreteUniform, Exponential, FisherSnedecor, Frechet, Gamma, GammaExponential,
+        GammaPoisson, Geometric, Gumbel, HalfNormal, HellingerDistance, Hypergeometric,
+        InverseGamma, KlDivergence, Laplace, LogNormal, Logistic, Lomax, Moments, Multinomial,
+        MultivariateContinuous, MultivariateMoments, MultivariateNormal, MultivariateStudentT,
+        NegativeBinomial, Normal, NormalGamma, NormalInverseGamma, NormalKnownVariance,
+        OrderStatistic, Pareto, Poisson, Rayleigh, RenyiDivergence, StudentT, TotalVariation,
         Triangular, Uniform, VonMises, VonMisesFisher, Wald, WatsonS2, Weibull,
     };
     use crate::function::bessel::{ln_i0, ln_iv};
@@ -1798,6 +2275,13 @@ mod tests {
             negbin.skewness().unwrap(),
             1e-12,
         );
+
+        let bernoulli = Bernoulli::new(0.3).unwrap();
+        close(
+            bernoulli_skewness(0.3),
+            bernoulli.skewness().unwrap(),
+            1e-12,
+        );
     }
 
     #[test]
@@ -1852,6 +2336,67 @@ mod tests {
         close(
             normal_known_variance_log_marginal_likelihood(count, sum, sum_sq, 0.5, 2.0, 1.3),
             nkv.ln_marginal_likelihood(&obs),
+            1e-12,
+        );
+
+        // Gamma-Poisson marginal likelihood over count sufficient statistics.
+        let counts = [2u64, 0, 3, 1];
+        let count_sum = counts.iter().sum::<u64>() as f64;
+        let ln_factorial_sum: f64 = counts.iter().map(|&k| ln_factorial(k)).sum();
+        close(
+            gamma_poisson_log_marginal_likelihood(
+                2.5,
+                1.2,
+                count_sum,
+                counts.len() as f64,
+                ln_factorial_sum,
+            ),
+            gp.ln_marginal_likelihood(&counts),
+            1e-12,
+        );
+
+        // Gamma-Exponential marginal likelihood over (n, Σx).
+        let durations = [0.8, 1.2, 0.3];
+        let dur_sum: f64 = durations.iter().sum();
+        close(
+            gamma_exponential_log_marginal_likelihood(2.0, 1.5, durations.len() as f64, dur_sum),
+            ge.ln_marginal_likelihood(&durations),
+            1e-12,
+        );
+
+        // Beta-Binomial predictive (10 trials, 4 successes ⇒ 6 failures).
+        let bbm = BetaBinomialModel::new(Beta::new(2.0, 3.0).unwrap(), 10);
+        close(
+            beta_binomial_log_predictive(2.0, 3.0, 4.0, 6.0, ln_binomial(10, 4)),
+            bbm.ln_predictive(4),
+            1e-12,
+        );
+
+        // Dirichlet-categorical marginal likelihood from category counts.
+        let dc = DirichletCategorical::new(Dirichlet::new(vec![1.0, 2.0, 0.5]).unwrap());
+        let labels = [0u64, 1, 1, 2, 0, 1];
+        let category_counts = [2.0, 3.0, 1.0];
+        close(
+            dirichlet_categorical_log_marginal_likelihood(&[1.0, 2.0, 0.5], &category_counts)
+                .unwrap(),
+            dc.ln_marginal_likelihood(&labels),
+            1e-12,
+        );
+
+        // Normal-Inverse-Gamma marginal likelihood (mean + variance integrated out);
+        // the Normal-Gamma precision twin shares the identical closed form.
+        let nig = NormalInverseGamma::new(0.5, 2.0, 3.0, 1.5).unwrap();
+        let ng = NormalGamma::new(0.5, 2.0, 3.0, 1.5).unwrap();
+        let lazy_nig =
+            normal_inverse_gamma_log_marginal_likelihood(count, sum, sum_sq, 0.5, 2.0, 3.0, 1.5);
+        close(lazy_nig, nig.ln_marginal_likelihood(&obs), 1e-12);
+        close(lazy_nig, ng.ln_marginal_likelihood(&obs), 1e-12);
+
+        // Multivariate Beta normalizer (the Dirichlet log-normalizer).
+        let mvbeta_alpha = [1.5, 2.0, 0.7];
+        close(
+            crate::lazy::ln_multivariate_beta(&mvbeta_alpha).unwrap(),
+            ln_multivariate_beta(&mvbeta_alpha),
             1e-12,
         );
     }
@@ -2098,6 +2643,48 @@ mod tests {
             wald.0.hellinger_sq(&wald.1),
             1e-12,
         );
+
+        // Binomial with a matched trial count n = 12 (BC_Bernoulli^n).
+        let binomial = (
+            Binomial::new(12, 0.3).unwrap(),
+            Binomial::new(12, 0.5).unwrap(),
+        );
+        close(
+            hellinger_sq_binomial(12.0, 0.3, 0.5),
+            binomial.0.hellinger_sq(&binomial.1),
+            1e-12,
+        );
+
+        // Negative-binomial with matched successes r = 5.
+        let negbin = (
+            NegativeBinomial::new(5.0, 0.4).unwrap(),
+            NegativeBinomial::new(5.0, 0.6).unwrap(),
+        );
+        close(
+            hellinger_sq_negative_binomial(5.0, 0.4, 0.6),
+            negbin.0.hellinger_sq(&negbin.1),
+            1e-12,
+        );
+
+        // Uniform / discrete-uniform squared Hellinger (general overlap).
+        let uniform = (
+            Uniform::new(-1.0, 2.0).unwrap(),
+            Uniform::new(0.0, 4.0).unwrap(),
+        );
+        close(
+            hellinger_sq_uniform(-1.0, 2.0, 0.0, 4.0),
+            uniform.0.hellinger_sq(&uniform.1),
+            1e-12,
+        );
+        let du = (
+            DiscreteUniform::new(0, 3).unwrap(),
+            DiscreteUniform::new(2, 6).unwrap(),
+        );
+        close(
+            hellinger_sq_discrete_uniform(0.0, 3.0, 2.0, 6.0),
+            du.0.hellinger_sq(&du.1),
+            1e-12,
+        );
     }
 
     #[test]
@@ -2163,6 +2750,81 @@ mod tests {
         close(
             renyi_gamma_on_support(2.5, 1.2, 3.0, 0.8, alpha),
             gamma.0.renyi_divergence(&gamma.1, alpha),
+            1e-12,
+        );
+
+        // Binomial with a matched trial count n = 12 (always finite).
+        let binomial = (
+            Binomial::new(12, 0.3).unwrap(),
+            Binomial::new(12, 0.5).unwrap(),
+        );
+        close(
+            chi_squared_binomial(12.0, 0.3, 0.5),
+            binomial.0.chi_squared_divergence(&binomial.1),
+            1e-12,
+        );
+        close(
+            renyi_binomial(12.0, 0.3, 0.5, alpha),
+            binomial.0.renyi_divergence(&binomial.1, alpha),
+            1e-12,
+        );
+
+        // Negative-binomial interiors in their convergence region (matched r = 5).
+        let negbin = (
+            NegativeBinomial::new(5.0, 0.6).unwrap(),
+            NegativeBinomial::new(5.0, 0.4).unwrap(),
+        );
+        close(
+            chi_squared_negative_binomial_on_support(5.0, 0.6, 0.4),
+            negbin.0.chi_squared_divergence(&negbin.1),
+            1e-12,
+        );
+        close(
+            renyi_negative_binomial_on_support(5.0, 0.6, 0.4, alpha),
+            negbin.0.renyi_divergence(&negbin.1, alpha),
+            1e-12,
+        );
+
+        // Wald / inverse-Gaussian interiors in their convergence region.
+        let wald = (Wald::new(1.0, 3.0).unwrap(), Wald::new(1.2, 2.0).unwrap());
+        close(
+            chi_squared_wald_on_support(1.0, 3.0, 1.2, 2.0),
+            wald.0.chi_squared_divergence(&wald.1),
+            1e-12,
+        );
+        close(
+            renyi_wald_on_support(1.0, 3.0, 1.2, 2.0, alpha),
+            wald.0.renyi_divergence(&wald.1, alpha),
+            1e-12,
+        );
+
+        // Uniform / discrete-uniform χ² and Rényi on nested support.
+        let uniform = (
+            Uniform::new(-1.0, 2.0).unwrap(),
+            Uniform::new(-2.0, 3.0).unwrap(),
+        );
+        close(
+            chi_squared_uniform_on_support(3.0, 5.0),
+            uniform.0.chi_squared_divergence(&uniform.1),
+            1e-12,
+        );
+        close(
+            renyi_uniform_on_support(-1.0, 2.0, -2.0, 3.0, alpha),
+            uniform.0.renyi_divergence(&uniform.1, alpha),
+            1e-12,
+        );
+        let du = (
+            DiscreteUniform::new(0, 3).unwrap(),
+            DiscreteUniform::new(-1, 5).unwrap(),
+        );
+        close(
+            chi_squared_discrete_uniform_on_support(4.0, 7.0),
+            du.0.chi_squared_divergence(&du.1),
+            1e-12,
+        );
+        close(
+            renyi_discrete_uniform_on_support(0.0, 3.0, -1.0, 5.0, alpha),
+            du.0.renyi_divergence(&du.1, alpha),
             1e-12,
         );
     }
@@ -2333,6 +2995,37 @@ mod tests {
             pareto.0.kl_divergence(&pareto.1),
             1e-12,
         );
+
+        // Binomial with a matched trial count n = 12 (n × the Bernoulli KL).
+        let binomial = (
+            Binomial::new(12, 0.3).unwrap(),
+            Binomial::new(12, 0.5).unwrap(),
+        );
+        close(
+            kl_binomial(12.0, 0.3, 0.5),
+            binomial.0.kl_divergence(&binomial.1),
+            1e-12,
+        );
+
+        // Uniform / discrete-uniform on nested support.
+        let uniform = (
+            Uniform::new(-1.0, 2.0).unwrap(),
+            Uniform::new(-2.0, 3.0).unwrap(),
+        );
+        close(
+            kl_uniform_on_support(3.0, 5.0),
+            uniform.0.kl_divergence(&uniform.1),
+            1e-12,
+        );
+        let du = (
+            DiscreteUniform::new(0, 3).unwrap(),
+            DiscreteUniform::new(-1, 5).unwrap(),
+        );
+        close(
+            kl_discrete_uniform_on_support(4.0, 7.0),
+            du.0.kl_divergence(&du.1),
+            1e-12,
+        );
     }
 
     #[test]
@@ -2422,6 +3115,89 @@ mod tests {
         close(
             negative_binomial_cdf(3.0, 5.0, 0.4),
             negative_binomial.cdf(3),
+            1e-12,
+        );
+
+        // k-th order-statistic CDF via the regularized incomplete beta.
+        let os_base = Normal::new(0.0, 1.0).unwrap();
+        let os_u = os_base.cdf(0.4);
+        let os = OrderStatistic::new(os_base, 7, 3).unwrap();
+        close(order_statistic_cdf(os_u, 3.0, 7.0), os.cdf(0.4), 1e-10);
+    }
+
+    #[test]
+    fn lazy_real_quantile_kernels_match_distribution() {
+        let p = 0.37;
+
+        let exponential = Exponential::new(1.7).unwrap();
+        close(
+            exponential_quantile(p, 1.7),
+            exponential.inverse_cdf(p),
+            1e-12,
+        );
+
+        let logistic = Logistic::new(-0.5, 1.3).unwrap();
+        close(
+            logistic_quantile(p, -0.5, 1.3),
+            logistic.inverse_cdf(p),
+            1e-12,
+        );
+
+        let cauchy = Cauchy::new(0.5, 1.7).unwrap();
+        close(cauchy_quantile(p, 0.5, 1.7), cauchy.inverse_cdf(p), 1e-12);
+
+        // Both sides of the median to exercise the `sign(p − ½)` branch.
+        let laplace = Laplace::new(0.5, 1.7).unwrap();
+        close(laplace_quantile(p, 0.5, 1.7), laplace.inverse_cdf(p), 1e-12);
+        close(
+            laplace_quantile(0.8, 0.5, 1.7),
+            laplace.inverse_cdf(0.8),
+            1e-12,
+        );
+
+        // Uniform::new(lo, hi); the kernel takes (p, lo, width = hi − lo).
+        let uniform = Uniform::new(-2.0, 3.0).unwrap();
+        close(
+            uniform_quantile(p, -2.0, 5.0),
+            uniform.inverse_cdf(p),
+            1e-12,
+        );
+
+        // Weibull::new(scale, shape); the kernel takes (p, scale, shape).
+        let weibull = Weibull::new(1.4, 2.2).unwrap();
+        close(weibull_quantile(p, 1.4, 2.2), weibull.inverse_cdf(p), 1e-12);
+
+        let gumbel = Gumbel::new(1.0, 2.0).unwrap();
+        close(gumbel_quantile(p, 1.0, 2.0), gumbel.inverse_cdf(p), 1e-12);
+
+        // Frechet/Lomax::new(shape, scale); the kernels take (p, scale, shape).
+        let frechet = Frechet::new(3.0, 2.0).unwrap();
+        close(frechet_quantile(p, 2.0, 3.0), frechet.inverse_cdf(p), 1e-12);
+
+        // Pareto::new(minimum, shape); the kernel takes (p, minimum, shape).
+        let pareto = Pareto::new(2.0, 3.0).unwrap();
+        close(pareto_quantile(p, 2.0, 3.0), pareto.inverse_cdf(p), 1e-12);
+
+        let lomax = Lomax::new(3.0, 2.0).unwrap();
+        close(lomax_quantile(p, 2.0, 3.0), lomax.inverse_cdf(p), 1e-12);
+
+        let rayleigh = Rayleigh::new(1.4).unwrap();
+        close(rayleigh_quantile(p, 1.4), rayleigh.inverse_cdf(p), 1e-12);
+
+        let normal = Normal::new(1.0, 2.0).unwrap();
+        close(normal_quantile(p, 1.0, 2.0), normal.inverse_cdf(p), 1e-12);
+
+        let half_normal = HalfNormal::new(1.4).unwrap();
+        close(
+            half_normal_quantile(p, 1.4),
+            half_normal.inverse_cdf(p),
+            1e-12,
+        );
+
+        let lognormal = LogNormal::new(0.2, 0.7).unwrap();
+        close(
+            lognormal_quantile(p, 0.2, 0.7),
+            lognormal.inverse_cdf(p),
             1e-12,
         );
     }
@@ -2645,6 +3421,78 @@ mod tests {
         close(
             watson_log_pdf(mu.dot(x), watson.concentration(), watson.ln_partition()),
             watson.ln_pdf_point(&x),
+            1e-12,
+        );
+    }
+
+    #[test]
+    fn lazy_real_directional_entropy_kernels_match_distribution() {
+        // Circular von Mises, fully on the i0e/i1e surface (κ ≤ 15 keeps parity).
+        let vm = VonMises::new(0.3, 2.0).unwrap();
+        close(von_mises_entropy(2.0), vm.entropy().unwrap(), 1e-12);
+
+        fn pt(lat: f64, lon: f64) -> S2Point {
+            S2Point::from_geo_point(GeoPoint::from_lat_lon(lat, lon))
+        }
+        let mu = pt(35.0, -80.0);
+
+        // von Mises-Fisher on S² (p = 3): caller supplies ln C_p(κ) and R.
+        let kappa = 4.0;
+        let vmf = VonMisesFisher::new(mu, kappa).unwrap();
+        let ln_normalizer =
+            0.5 * kappa.ln() - 1.5 * core::f64::consts::TAU.ln() - ln_iv(0.5, kappa);
+        close(
+            von_mises_fisher_entropy(ln_normalizer, kappa, vmf.mean_resultant_length()),
+            vmf.entropy_closed_form(),
+            1e-12,
+        );
+
+        // Watson on S²: caller supplies the log partition and axial second moment.
+        let watson = WatsonS2::new(mu, 2.5).unwrap();
+        close(
+            watson_entropy(
+                watson.ln_partition(),
+                watson.concentration(),
+                watson.axial_second_moment(),
+            ),
+            watson.entropy_closed_form(),
+            1e-12,
+        );
+
+        // Directional cross-entropies: caller supplies q's normalizer and p's geometry.
+        let mu_q = pt(10.0, 50.0);
+        let kappa_q = 2.5;
+        let vmf_q = VonMisesFisher::new(mu_q, kappa_q).unwrap();
+        let ln_normalizer_q =
+            0.5 * kappa_q.ln() - 1.5 * core::f64::consts::TAU.ln() - ln_iv(0.5, kappa_q);
+        close(
+            von_mises_fisher_cross_entropy(
+                ln_normalizer_q,
+                kappa_q,
+                vmf.mean_resultant_length(),
+                mu.dot(mu_q),
+            ),
+            vmf.cross_entropy(&vmf_q),
+            1e-12,
+        );
+
+        let watson_q = WatsonS2::new(mu_q, 1.5).unwrap();
+        close(
+            watson_cross_entropy(
+                watson_q.ln_partition(),
+                watson_q.concentration(),
+                watson.second_moment_along_axis(watson_q.axis()),
+            ),
+            watson.cross_entropy(&watson_q),
+            1e-12,
+        );
+
+        // Watson log unnormalized-density difference (the partition cancels).
+        let dx = pt(12.0, 34.0);
+        let dy = pt(-20.0, 100.0);
+        close(
+            watson_ln_density_difference(watson.concentration(), mu.dot(dx), mu.dot(dy)),
+            watson.ln_pdf_point(&dx) - watson.ln_pdf_point(&dy),
             1e-12,
         );
     }

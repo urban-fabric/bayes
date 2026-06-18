@@ -88,6 +88,58 @@ pub fn inverse_wishart_log_pdf<M: LazyMatrix>(sigma: M, scale: M, freedom: M::Sc
     ln_normalizer - half.clone() * (freedom + dim + M::Scalar::one()) * log_det_sigma - half * trace
 }
 
+/// `Σ_{i=1}^{d} ψ((ν + 1 − i)/2)` — the Wishart multivariate digamma sum. A host-side
+/// fold over the structural dimension `d` building lazy `digamma` terms, the same
+/// shape as [`crate::lazy::ln_multivariate_gamma`].
+fn digamma_wishart_sum<S: LazyReal>(dimension: usize, freedom: S) -> S {
+    let mut acc = S::zero();
+    for i in 1..=dimension {
+        acc = acc + ((freedom.clone() + S::scalar(1.0 - i as f64)) * S::half()).digamma();
+    }
+    acc
+}
+
+/// Wishart differential entropy (scale `V`, degrees `ν`):
+/// `−½(ν−d−1)·E[ln|X|] + ½νd + lnZ`, with `E[ln|X|] = ln|V| + d·ln2 + Σ ψ((ν+1−i)/2)`
+/// and `lnZ = ½νd·ln2 + ½ν·ln|V| + ln Γ_d(ν/2)`. The log-determinant comes from the
+/// matrix contract; the digamma sum and `ln Γ_d` are pure scalar analysis.
+pub fn wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
+    let d = scale.shape().0;
+    let dim = M::Scalar::scalar(d as f64);
+    let half = M::Scalar::half();
+    let log_det_scale = scale.logdet_spd();
+    let digamma_sum = digamma_wishart_sum(d, freedom.clone());
+
+    let expected_log_det = log_det_scale.clone() + dim.clone() * M::Scalar::ln_2() + digamma_sum;
+    let ln_normalizer = half.clone() * freedom.clone() * dim.clone() * M::Scalar::ln_2()
+        + half.clone() * freedom.clone() * log_det_scale
+        + crate::lazy::ln_multivariate_gamma(d, freedom.clone() * half.clone());
+
+    -half.clone() * (freedom.clone() - dim.clone() - M::Scalar::one()) * expected_log_det
+        + half * freedom * dim
+        + ln_normalizer
+}
+
+/// Inverse-Wishart differential entropy (scale `V`, degrees `ν`):
+/// `−lnZ + ½(ν+d+1)·E[ln|Σ|] + ½νd`, with `E[ln|Σ|] = ln|V| − d·ln2 − Σ ψ((ν+1−i)/2)`
+/// and `lnZ = ½ν·ln|V| − ½νd·ln2 − ln Γ_d(ν/2)`.
+pub fn inverse_wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
+    let d = scale.shape().0;
+    let dim = M::Scalar::scalar(d as f64);
+    let half = M::Scalar::half();
+    let log_det_scale = scale.logdet_spd();
+    let digamma_sum = digamma_wishart_sum(d, freedom.clone());
+
+    let expected_log_det = log_det_scale.clone() - dim.clone() * M::Scalar::ln_2() - digamma_sum;
+    let ln_normalizer = half.clone() * freedom.clone() * log_det_scale
+        - half.clone() * freedom.clone() * dim.clone() * M::Scalar::ln_2()
+        - crate::lazy::ln_multivariate_gamma(d, freedom.clone() * half.clone());
+
+    -ln_normalizer
+        + half.clone() * (freedom.clone() + dim.clone() + M::Scalar::one()) * expected_log_det
+        + half * freedom * dim
+}
+
 /// Multivariate Student-t entropy (scale `Σ`, degrees `ν`):
 /// `lnΓ(ν/2) − lnΓ((ν+d)/2) + ½(d·ln(νπ) + ln|Σ|) + (ν+d)/2·(ψ((ν+d)/2) − ψ(ν/2))`.
 pub fn multivariate_student_t_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
@@ -135,6 +187,34 @@ pub fn multivariate_student_t_log_pdf<M: LazyMatrix>(
         - half * nu_plus_d * (M::Scalar::one() + mahalanobis / freedom).ln()
 }
 
+/// Hotelling's `T² = n·(x̄ − µ₀)ᵀ S⁻¹ (x̄ − µ₀)` — the sample mean's squared
+/// Mahalanobis distance from `µ₀` under the sample covariance `S`, scaled by `n`.
+/// No inverse is formed; the quadratic comes from the matrix contract.
+pub fn hotelling_t_squared<M: LazyMatrix>(
+    count: M::Scalar,
+    mean: M::Vector,
+    reference: M::Vector,
+    covariance: M,
+) -> M::Scalar {
+    count * covariance.mahalanobis_squared(&mean.sub(reference))
+}
+
+/// Pooled (within-group) covariance `Σᵢ dfᵢ·Sᵢ / Σᵢ dfᵢ`, the degrees-of-freedom
+/// weighted average of the per-group covariances `Sᵢ` (typically `dfᵢ = nᵢ − 1`).
+/// `None` for fewer than two groups or a length mismatch.
+pub fn pooled_covariance<M: LazyMatrix>(covariances: &[M], degrees: &[M::Scalar]) -> Option<M> {
+    if covariances.len() != degrees.len() || covariances.len() < 2 {
+        return None;
+    }
+    let mut total = degrees[0].clone();
+    let mut pooled = covariances[0].clone().scale(degrees[0].clone());
+    for i in 1..covariances.len() {
+        pooled = pooled.add(covariances[i].clone().scale(degrees[i].clone()));
+        total = total + degrees[i].clone();
+    }
+    Some(pooled.scale(M::Scalar::one() / total))
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -143,6 +223,7 @@ mod tests {
         InverseWishart, KlDivergence, MultivariateContinuous, MultivariateMoments,
         MultivariateNormal, MultivariateStudentT, Wishart,
     };
+    use crate::statistics::mahalanobis_squared;
     use ramanujan::DenseMatrix;
 
     fn close(a: f64, b: f64, tol: f64) {
@@ -412,6 +493,26 @@ mod tests {
     }
 
     #[test]
+    fn lazy_matrix_wishart_entropy_matches_distribution() {
+        let scale: [&[f64]; 2] = [&[2.0, 0.4], &[0.4, 1.3]];
+        let freedom = 5.0;
+
+        let wishart = Wishart::new(freedom, dense(2, &scale)).unwrap();
+        close(
+            wishart_entropy(ref_matrix(2, &scale), freedom),
+            wishart.entropy(),
+            1e-10,
+        );
+
+        let inv_wishart = InverseWishart::new(freedom, dense(2, &scale)).unwrap();
+        close(
+            inverse_wishart_entropy(ref_matrix(2, &scale), freedom),
+            inv_wishart.entropy(),
+            1e-10,
+        );
+    }
+
+    #[test]
     fn lazy_matrix_mvt_entropy_matches_distribution() {
         let scale: [&[f64]; 2] = [&[2.0, 0.5], &[0.5, 1.3]];
         let freedom = 6.0;
@@ -451,5 +552,38 @@ mod tests {
             freedom,
         );
         close(got, mvt.ln_pdf(&x), 1e-10);
+    }
+
+    #[test]
+    fn lazy_matrix_hotelling_t_squared_matches_mahalanobis() {
+        let cov: [&[f64]; 2] = [&[2.0, 0.3], &[0.3, 1.5]];
+        let mean = [1.2, -0.4];
+        let mu0 = [0.5, 0.1];
+        let n = 8.0;
+        close(
+            hotelling_t_squared(
+                n,
+                RefVector(mean.to_vec()),
+                RefVector(mu0.to_vec()),
+                ref_matrix(2, &cov),
+            ),
+            n * mahalanobis_squared(&mean, &mu0, &dense(2, &cov)),
+            1e-10,
+        );
+    }
+
+    #[test]
+    fn lazy_matrix_pooled_covariance_is_the_df_weighted_average() {
+        let s0: [&[f64]; 2] = [&[2.0, 0.3], &[0.3, 1.5]];
+        let s1: [&[f64]; 2] = [&[1.4, -0.2], &[-0.2, 1.1]];
+        let (df0, df1) = (4.0, 6.0);
+        let pooled =
+            pooled_covariance(&[ref_matrix(2, &s0), ref_matrix(2, &s1)], &[df0, df1]).unwrap();
+        for i in 0..2 {
+            for j in 0..2 {
+                let expected = (df0 * s0[i][j] + df1 * s1[i][j]) / (df0 + df1);
+                close(pooled.at(i, j), expected, 1e-12);
+            }
+        }
     }
 }

@@ -190,14 +190,27 @@ quadratic form, and the von Mises-Fisher and Watson directional log-densities
 from a precomputed sphere cosine. It also includes the circular von Mises
 density (over the lazy `cos`); the closed-form **CDFs** — Normal/half-normal (erf),
 Gamma/chi-squared/Poisson (regularized incomplete gamma), Beta/Student-t/F/
-binomial/negative-binomial (regularized incomplete beta), and the pure-on-support
-exponential/logistic/Weibull/Gumbel/Frechet/Rayleigh/Pareto/Lomax; and the
+binomial/negative-binomial (regularized incomplete beta), the pure-on-support
+exponential/logistic/Weibull/Gumbel/Frechet/Rayleigh/Pareto/Lomax, and the k-th
+**order-statistic** CDF `I_u(k, n−k+1)`; the closed-form
+**quantiles** (inverse CDFs) for the analytically-invertible families —
+exponential/logistic/Cauchy/Laplace/uniform/Weibull/Gumbel/Frechet/Pareto/Lomax/
+Rayleigh and Normal/half-normal/log-normal via `erf_inv`, each total on `p ∈ (0,1)`
+with the boundary the caller's branch; and the
 differential/Shannon **entropies** for the same families (pure algebra for most,
-the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones); the same-family
+the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones, the scaled Bessel
+`I₀ᵉ`/`I₁ᵉ` for the circular **von Mises**, and a caller-supplied normalizer for
+the **von Mises-Fisher**/**Watson** directional laws — which also expose the
+matching cross-entropies and the normalizer-free Watson density difference); the
+same-family
 **divergences** — KL, squared Hellinger, Pearson χ², Rényi, and total variation —
 over the families whose closed form needs only the lazy surface (now including the
 circular **von Mises** divergences, written with `cos` and the scaled Bessel
-`I₀ᵉ`/`I₁ᵉ`); and the stable log-CDF tails via `ln_1m_exp`/`ln_1p_exp`. The
+`I₀ᵉ`/`I₁ᵉ`, the **Wald**/**binomial**/**negative-binomial** divergences across
+KL/Hellinger/χ²/Rényi — the binomial as `n ×` / `(·)^n` of its Bernoulli kernel —
+and the support-geometry **uniform**/**discrete-uniform** divergences, whose
+Hellinger/Rényi forms fold the overlap through the `min`/`max` selectors);
+and the stable log-CDF tails via `ln_1m_exp`/`ln_1p_exp`. The
 Student-t CDF is written branch-free with `sign`, and the `+∞`-outside-containment
 divergences carry an `_on_support` interior form, so every entry point stays
 traceable.
@@ -216,16 +229,22 @@ inference layer differentiates through — positive (`exp`/`ln`), unit-interval
 is the caller's branch, so each transform traces unchanged to a backend.
 
 Closed-form Bayesian evidence rounds it out: the conjugate posterior-predictive
-log-densities (Beta-Bernoulli, Gamma-Poisson, Gamma-Exponential) and log marginal
-likelihoods (Beta-Bernoulli over sufficient statistics, Normal known-variance
-Gaussian integral), all over the lazy `ln_gamma` with no caller-supplied
-normalizer. Only the matrix-conjugate evidences (NIW/NW) wait on the matrix
-contract.
+log-densities (Beta-Bernoulli, Beta-Binomial, Gamma-Poisson, Gamma-Exponential)
+and log marginal likelihoods — Beta-Bernoulli, Gamma-Poisson, Gamma-Exponential,
+and the Dirichlet-categorical multivariate-Beta evidence over sufficient
+statistics; the Normal known-variance Gaussian integral; and the
+Normal-Inverse-Gamma / Normal-Gamma Student-t evidence (both mean and variance
+integrated out, the posterior recovered in the additive natural coordinates) —
+all over the lazy `ln_gamma`. The genuinely data-combinatorial terms (`Σ ln kᵢ!`,
+`ln C(n, k)`) are caller supplied, matching the `ln_binomial` convention of the
+mass kernels. Only the matrix-conjugate evidences (NIW/NW) live on the
+`lazy_matrix` matrix contract.
 
 The analytic higher moments close the loop on the scalar surface: the
 parameter-dependent skewness, excess kurtosis, and non-trivial mean/variance
-(log-normal, gamma, beta, chi-squared, Wald, Poisson, binomial, geometric,
-negative-binomial) — pure algebra in the shape parameters.
+(log-normal, gamma, beta, chi-squared, Wald, Poisson, Bernoulli, binomial,
+geometric, negative-binomial) — pure algebra in the shape parameters. The constant
+moments (Normal skew 0, exponential skew 2, …) need no kernel.
 
 Euclid's `LazyReal` carries the whole elementwise analysis surface —
 transcendentals, trig, `min`/`max`/`clamp` selectors, and the special functions
@@ -236,6 +255,17 @@ implementation). What still must be caller-supplied is therefore only the
 genuinely non-scalar work: a matrix solve/log-determinant, or a general-order
 Bessel normalizer. Each entry point stays pure analysis over the lazy traits, so
 it lowers unchanged to a tensor backend.
+
+The matrix companion `lazy_matrix` writes the genuinely multivariate kernels over
+Euclid's `LazyMatrix`/`LazyVector` contract — asking the matrix type for the
+quantities it owns (`mahalanobis_squared`, `logdet_spd`, `solve_spd`, `trace`)
+rather than forming an inverse — so one source runs on the `f64` reference
+(`ramanujan::DenseMatrix`) and on a tensor backend. It carries the multivariate
+Gaussian and Student-t log-densities, the Gaussian entropy/KL, the Wishart and
+inverse-Wishart log-densities and differential **entropies** (the digamma sum and
+`ln Γ_d` coming from the scalar layer), the Gaussian-process log marginal
+likelihood, and the sample-statistic quadratics — Hotelling's `T²` and the
+degrees-of-freedom-pooled covariance.
 
 ## Statistics Layer
 
