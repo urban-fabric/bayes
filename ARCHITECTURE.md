@@ -191,7 +191,11 @@ from a precomputed sphere cosine. It also includes the circular von Mises
 density (over the lazy `cos`); the closed-form **CDFs** — Normal/half-normal (erf),
 Gamma/chi-squared/Poisson (regularized incomplete gamma), Beta/Student-t/F/
 binomial/negative-binomial (regularized incomplete beta), and the pure-on-support
-exponential/logistic/Weibull/Gumbel/Frechet/Rayleigh/Pareto/Lomax; and the
+exponential/logistic/Weibull/Gumbel/Frechet/Rayleigh/Pareto/Lomax; the closed-form
+**quantiles** (inverse CDFs) for the analytically-invertible families —
+exponential/logistic/Cauchy/Laplace/uniform/Weibull/Gumbel/Frechet/Pareto/Lomax/
+Rayleigh and Normal/half-normal/log-normal via `erf_inv`, each total on `p ∈ (0,1)`
+with the boundary the caller's branch; and the
 differential/Shannon **entropies** for the same families (pure algebra for most,
 the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones); the same-family
 **divergences** — KL, squared Hellinger, Pearson χ², Rényi, and total variation —
