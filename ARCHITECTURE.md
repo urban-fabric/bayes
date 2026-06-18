@@ -181,6 +181,62 @@ Scalar constants are lifted through Euclid's lazy scalar substrate; callers
 provide precomputed special-function normalizers. The existing distribution
 spine remains `f64`-first and source-compatible.
 
+The kernel surface covers the scalar continuous and discrete log-densities
+(Normal through Gumbel, Bernoulli through hypergeometric), the simplex/diagonal
+vector forms (Dirichlet, diagonal Normal, multinomial, Dirichlet-multinomial),
+and — taking the caller's linear-algebra/geometry term as input — the
+multivariate Gaussian and Student-t log-densities from a precomputed Mahalanobis
+quadratic form, and the von Mises-Fisher and Watson directional log-densities
+from a precomputed sphere cosine. It also includes the circular von Mises
+density (over the lazy `cos`); the closed-form **CDFs** — Normal/half-normal (erf),
+Gamma/chi-squared/Poisson (regularized incomplete gamma), Beta/Student-t/F/
+binomial/negative-binomial (regularized incomplete beta), and the pure-on-support
+exponential/logistic/Weibull/Gumbel/Frechet/Rayleigh/Pareto/Lomax; and the
+differential/Shannon **entropies** for the same families (pure algebra for most,
+the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones); the same-family
+**divergences** — KL, squared Hellinger, Pearson χ², Rényi, and total variation —
+over the families whose closed form needs only the lazy surface (now including the
+circular **von Mises** divergences, written with `cos` and the scaled Bessel
+`I₀ᵉ`/`I₁ᵉ`); and the stable log-CDF tails via `ln_1m_exp`/`ln_1p_exp`. The
+Student-t CDF is written branch-free with `sign`, and the `+∞`-outside-containment
+divergences carry an `_on_support` interior form, so every entry point stays
+traceable.
+
+The vector layer is the simplex/log-domain reductions (tensor `Reduce` shaped):
+the log-sum-exp family (`log_sum_exp`/`log_mean_exp`/`softmax`/`log_softmax`),
+the probability-vector information theory (Shannon/cross entropy, Bhattacharyya,
+Jensen–Shannon), the categorical divergences (KL, χ², Rényi, total variation,
+Hellinger), and Dirichlet KL/entropy over the lazy `ln_gamma`/`digamma`. These take
+equal-length, on-support vectors and fold branch-free.
+
+The reparameterization layer carries the constrained↔unconstrained bijections an
+inference layer differentiates through — positive (`exp`/`ln`), unit-interval
+(`sigmoid`/`logit`), and bounded-interval maps with their log-Jacobian corrections
+— plus the categorical proper scoring rules (Brier, spherical). The boundary `±∞`
+is the caller's branch, so each transform traces unchanged to a backend.
+
+Closed-form Bayesian evidence rounds it out: the conjugate posterior-predictive
+log-densities (Beta-Bernoulli, Gamma-Poisson, Gamma-Exponential) and log marginal
+likelihoods (Beta-Bernoulli over sufficient statistics, Normal known-variance
+Gaussian integral), all over the lazy `ln_gamma` with no caller-supplied
+normalizer. Only the matrix-conjugate evidences (NIW/NW) wait on the matrix
+contract.
+
+The analytic higher moments close the loop on the scalar surface: the
+parameter-dependent skewness, excess kurtosis, and non-trivial mean/variance
+(log-normal, gamma, beta, chi-squared, Wald, Poisson, binomial, geometric,
+negative-binomial) — pure algebra in the shape parameters.
+
+Euclid's `LazyReal` carries the whole elementwise analysis surface —
+transcendentals, trig, `min`/`max`/`clamp` selectors, and the special functions
+(`erf`/`erfc`/`erf_inv`, `ln_gamma`/`digamma`/`trigamma`, regularized incomplete
+gamma/beta) whose concrete `f64` reference lives in `euclid::special` (re-exported
+through `bayes::function` so the distribution spine and the lazy kernels share one
+implementation). What still must be caller-supplied is therefore only the
+genuinely non-scalar work: a matrix solve/log-determinant, or a general-order
+Bessel normalizer. Each entry point stays pure analysis over the lazy traits, so
+it lowers unchanged to a tensor backend.
+
 ## Statistics Layer
 
 `statistics/` is organized by statistical task. Most module files are private

@@ -12,6 +12,7 @@ pub mod distribution;
 mod error;
 pub mod function;
 pub mod lazy;
+pub mod lazy_matrix;
 pub mod primitives;
 pub mod process;
 pub mod statistics;

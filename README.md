@@ -81,9 +81,12 @@ finite-sample algorithms, exact/direct sampling, and bounded streaming summaries
   sequential-evidence surface; Gamma-Poisson and Gamma-Exponential also carry
   that surface through exposure/right-censoring sufficient statistics.
 - **Lazy numeric kernels** (`lazy`) — unchecked/on-support log-density and
-  log-mass formulas over `euclid::numeric::LazyReal` / `LazyComplex`; scalar
-  constants come from Euclid's lazy scalar substrate, while callers provide
-  precomputed special-function normalizers.
+  log-mass formulas over `euclid::numeric::LazyReal` / `LazyComplex`, spanning the
+  scalar continuous/discrete families, the simplex/diagonal vector forms, the
+  multivariate Gaussian and Student-t densities from a precomputed Mahalanobis
+  term, and the von Mises-Fisher and Watson directional densities from a
+  precomputed sphere cosine; scalar constants come from Euclid's lazy scalar
+  substrate, while callers provide precomputed special-function normalizers.
 
 ```rust
 use bayes::{Normal, Continuous, ContinuousCdf, Moments, Distribution};
