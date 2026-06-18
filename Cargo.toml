@@ -27,9 +27,6 @@ thiserror = "2.0"
 # caller supplied.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 
-[patch."ssh://git@github.com/urban-fabric/euclid.git"]
-euclid = { path = "../euclid-lazy-real-constants" }
-
 [lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"
