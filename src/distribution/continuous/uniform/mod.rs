@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, ContinuousCdf, Estimate, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Uniform {
@@ -67,6 +68,13 @@ impl Continuous for Uniform {
             1.0 / self.width
         } else {
             0.0
+        }
+    }
+    fn ln_pdf(&self, x: f64) -> f64 {
+        if x >= self.lo && x <= self.lo + self.width {
+            lazy::uniform_log_pdf_on_support(self.width)
+        } else {
+            f64::NEG_INFINITY
         }
     }
 }

@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, ContinuousCdf, Estimate, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 use crate::statistics::median;
 
 /// The Laplace (double-exponential) distribution with `location μ` and
@@ -56,7 +57,7 @@ impl Continuous for Laplace {
         (-(x - self.location).abs() / self.scale).exp() / (2.0 * self.scale)
     }
     fn ln_pdf(&self, x: f64) -> f64 {
-        -(x - self.location).abs() / self.scale - (2.0 * self.scale).ln()
+        lazy::laplace_log_pdf(x, self.location, self.scale)
     }
 }
 

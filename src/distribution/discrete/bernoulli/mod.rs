@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Discrete, DiscreteCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bernoulli {
@@ -45,6 +46,14 @@ impl Discrete<u64> for Bernoulli {
             0 => 1.0 - self.p,
             1 => self.p,
             _ => 0.0,
+        }
+    }
+    fn ln_pmf(&self, k: u64) -> f64 {
+        match (k, self.p) {
+            (0, 0.0) | (1, 1.0) => 0.0,
+            (0, 1.0) | (1, 0.0) => f64::NEG_INFINITY,
+            (0 | 1, p) => lazy::bernoulli_log_pmf(k as f64, p),
+            _ => f64::NEG_INFINITY,
         }
     }
 }

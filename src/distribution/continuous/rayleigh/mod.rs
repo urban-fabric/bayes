@@ -5,6 +5,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, ContinuousCdf, Estimate, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 /// The Rayleigh distribution with scale `σ > 0`, support `[0, ∞)`. Density
 /// `f(x) = (x/σ²) exp(−x²/(2σ²))` — the magnitude of a 2-D centered Gaussian vector.
@@ -48,6 +49,13 @@ impl Continuous for Rayleigh {
         }
         let s2 = self.scale * self.scale;
         (x / s2) * (-x * x / (2.0 * s2)).exp()
+    }
+    fn ln_pdf(&self, x: f64) -> f64 {
+        if x < 0.0 {
+            f64::NEG_INFINITY
+        } else {
+            lazy::rayleigh_log_pdf_on_support(x, self.scale)
+        }
     }
 }
 

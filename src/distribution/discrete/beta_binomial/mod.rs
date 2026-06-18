@@ -7,6 +7,7 @@ use crate::distribution::{Discrete, DiscreteCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::ln_beta;
 use crate::function::factorial::ln_binomial;
+use crate::lazy;
 
 /// The **beta-binomial** distribution: a binomial whose success probability is
 /// itself `Beta(α, β)`-distributed — equivalently, the marginal of `K | p ~
@@ -85,8 +86,11 @@ impl Discrete<u64> for BetaBinomial {
         }
         let kf = k as f64;
         let nf = self.n as f64;
-        ln_binomial(self.n, k) + ln_beta(kf + self.alpha, nf - kf + self.beta)
-            - ln_beta(self.alpha, self.beta)
+        lazy::beta_binomial_log_pmf(
+            ln_binomial(self.n, k),
+            ln_beta(kf + self.alpha, nf - kf + self.beta),
+            ln_beta(self.alpha, self.beta),
+        )
     }
 }
 

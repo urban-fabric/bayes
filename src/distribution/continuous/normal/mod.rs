@@ -7,6 +7,7 @@ use crate::distribution::{Continuous, ContinuousCdf, Estimate, Moments, Support}
 use crate::error::BayesError;
 use crate::function::erf::{erf_inv, erfc};
 use crate::function::stable::{erfcx, ln_1m_exp};
+use crate::lazy;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Normal {
@@ -131,12 +132,10 @@ pub(crate) fn standard_normal_polar<R: Rng + ?Sized>(rng: &mut R) -> f64 {
 
 impl Continuous for Normal {
     fn pdf(&self, x: f64) -> f64 {
-        let z = (x - self.mean) / self.std_dev;
-        (-0.5 * z * z).exp() / (self.std_dev * TAU.sqrt())
+        self.ln_pdf(x).exp()
     }
     fn ln_pdf(&self, x: f64) -> f64 {
-        let z = (x - self.mean) / self.std_dev;
-        -0.5 * z * z - (self.std_dev * TAU.sqrt()).ln()
+        lazy::normal_log_pdf(x, self.mean, self.std_dev)
     }
 }
 

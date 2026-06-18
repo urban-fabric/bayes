@@ -8,6 +8,7 @@ use crate::error::BayesError;
 use crate::function::beta::beta_reg;
 use crate::function::factorial::ln_factorial;
 use crate::function::gamma::ln_gamma;
+use crate::lazy;
 
 /// The negative binomial distribution: the number of failures before the `r`-th
 /// success in independent `Bernoulli(p)` trials (`r > 0` may be real — the
@@ -71,10 +72,12 @@ impl Discrete<u64> for NegativeBinomial {
         self.ln_pmf(k).exp()
     }
     fn ln_pmf(&self, k: u64) -> f64 {
+        if self.p >= 1.0 {
+            return if k == 0 { 0.0 } else { f64::NEG_INFINITY };
+        }
         let kf = k as f64;
-        ln_gamma(kf + self.r) - ln_gamma(self.r) - ln_factorial(k)
-            + self.r * self.p.ln()
-            + kf * (1.0 - self.p).ln()
+        let ln_coefficient = ln_gamma(kf + self.r) - ln_gamma(self.r) - ln_factorial(k);
+        lazy::negative_binomial_log_pmf(kf, self.r, self.p, ln_coefficient)
     }
 }
 

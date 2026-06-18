@@ -1,4 +1,4 @@
-use std::f64::consts::{SQRT_2, TAU};
+use std::f64::consts::SQRT_2;
 
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
@@ -9,6 +9,7 @@ use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::erf::erfc;
 use crate::function::stable::erfcx;
+use crate::lazy;
 
 /// The Wald (a.k.a. **inverse Gaussian**) distribution with mean `μ > 0` and shape
 /// `λ > 0`, support `(0, ∞)` — the first-passage-time law of Brownian motion with
@@ -64,9 +65,7 @@ impl Continuous for Wald {
         if x <= 0.0 {
             return f64::NEG_INFINITY;
         }
-        let d = x - self.mu;
-        0.5 * (self.shape.ln() - TAU.ln() - 3.0 * x.ln())
-            - self.shape * d * d / (2.0 * self.mu * self.mu * x)
+        lazy::wald_log_pdf_on_support(x, self.mu, self.shape)
     }
 }
 

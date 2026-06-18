@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, ContinuousCdf, Estimate, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 /// The Pareto distribution with `scale x_m > 0` (the minimum) and `shape α > 0`,
 /// support `[x_m, ∞)`. Density `f(x) = α x_mᵅ / x^{α+1}` for `x ≥ x_m`.
@@ -52,7 +53,7 @@ impl Continuous for Pareto {
         if x < self.scale {
             f64::NEG_INFINITY
         } else {
-            self.shape.ln() + self.shape * self.scale.ln() - (self.shape + 1.0) * x.ln()
+            lazy::pareto_log_pdf_on_support(x, self.scale, self.shape)
         }
     }
 }

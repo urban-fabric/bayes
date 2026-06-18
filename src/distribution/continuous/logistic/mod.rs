@@ -4,6 +4,7 @@ use rand::{Rng, RngExt};
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::stable::ln_1p_exp;
+use crate::lazy;
 
 /// The logistic distribution with `location` `μ` and `scale` `s > 0`, support
 /// `(-∞, ∞)`. Density `f(x) = e^{-z} / (s(1 + e^{-z})²)` with `z = (x − μ)/s`; the
@@ -57,8 +58,7 @@ impl Continuous for Logistic {
         self.ln_pdf(x).exp()
     }
     fn ln_pdf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        -z - self.scale.ln() - 2.0 * ln_1p_exp(-z)
+        lazy::logistic_log_pdf(x, self.location, self.scale)
     }
 }
 

@@ -6,6 +6,7 @@ use crate::distribution::numeric::inverse_cdf_bisect;
 use crate::distribution::{Continuous, ContinuousCdf, Estimate, Moments, Support};
 use crate::error::BayesError;
 use crate::function::gamma::{digamma, gamma_lr, ln_gamma};
+use crate::lazy;
 
 /// The gamma distribution with `shape (k) > 0` and `rate (β) > 0` (mean `k/β`),
 /// support `(0, ∞)`. Density `f(x) = βᵏ x^{k-1} e^{-βx} / Γ(k)`.
@@ -102,9 +103,7 @@ impl Continuous for Gamma {
         if x <= 0.0 {
             return f64::NEG_INFINITY;
         }
-        self.shape * self.rate.ln() + (self.shape - 1.0) * x.ln()
-            - self.rate * x
-            - ln_gamma(self.shape)
+        lazy::gamma_log_pdf_on_support(x, self.shape, self.rate, ln_gamma(self.shape))
     }
 }
 

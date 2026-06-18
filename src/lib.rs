@@ -11,11 +11,16 @@
 pub mod distribution;
 mod error;
 pub mod function;
+pub mod lazy;
+pub mod lazy_matrix;
 pub mod primitives;
 pub mod process;
 pub mod statistics;
 
-pub use primitives::normal_log_prob;
+pub use primitives::{
+    complex_normal_log_prob_with_normalizer, complex_residual_norm_sqr, normal_log_kernel,
+    normal_log_prob, normal_log_prob_with_constants, normal_log_prob_with_normalizer,
+};
 
 pub use distribution::{
     Affine, Alpha, Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Bijector,

@@ -5,6 +5,7 @@ use crate::distribution::{Discrete, DiscreteCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::factorial::ln_factorial;
 use crate::function::gamma::gamma_ur;
+use crate::lazy;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Poisson {
@@ -99,7 +100,7 @@ impl Discrete<u64> for Poisson {
         self.ln_pmf(k).exp()
     }
     fn ln_pmf(&self, k: u64) -> f64 {
-        (k as f64) * self.lambda.ln() - self.lambda - ln_factorial(k)
+        lazy::poisson_log_pmf(k as f64, self.lambda, ln_factorial(k))
     }
 }
 
