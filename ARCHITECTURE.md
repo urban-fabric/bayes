@@ -190,8 +190,9 @@ quadratic form, and the von Mises-Fisher and Watson directional log-densities
 from a precomputed sphere cosine. It also includes the circular von Mises
 density (over the lazy `cos`); the closed-form **CDFs** — Normal/half-normal (erf),
 Gamma/chi-squared/Poisson (regularized incomplete gamma), Beta/Student-t/F/
-binomial/negative-binomial (regularized incomplete beta), and the pure-on-support
-exponential/logistic/Weibull/Gumbel/Frechet/Rayleigh/Pareto/Lomax; the closed-form
+binomial/negative-binomial (regularized incomplete beta), the pure-on-support
+exponential/logistic/Weibull/Gumbel/Frechet/Rayleigh/Pareto/Lomax, and the k-th
+**order-statistic** CDF `I_u(k, n−k+1)`; the closed-form
 **quantiles** (inverse CDFs) for the analytically-invertible families —
 exponential/logistic/Cauchy/Laplace/uniform/Weibull/Gumbel/Frechet/Pareto/Lomax/
 Rayleigh and Normal/half-normal/log-normal via `erf_inv`, each total on `p ∈ (0,1)`
@@ -199,7 +200,9 @@ with the boundary the caller's branch; and the
 differential/Shannon **entropies** for the same families (pure algebra for most,
 the lazy `ln_gamma`/`digamma` for the gamma/beta-shaped ones, the scaled Bessel
 `I₀ᵉ`/`I₁ᵉ` for the circular **von Mises**, and a caller-supplied normalizer for
-the **von Mises-Fisher**/**Watson** directional laws); the same-family
+the **von Mises-Fisher**/**Watson** directional laws — which also expose the
+matching cross-entropies and the normalizer-free Watson density difference); the
+same-family
 **divergences** — KL, squared Hellinger, Pearson χ², Rényi, and total variation —
 over the families whose closed form needs only the lazy surface (now including the
 circular **von Mises** divergences, written with `cos` and the scaled Bessel

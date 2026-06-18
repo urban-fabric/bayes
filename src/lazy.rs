@@ -564,6 +564,13 @@ pub fn negative_binomial_cdf<T: LazyReal>(failures: T, successes_until_stop: T, 
     p.beta_reg(successes_until_stop, failures + T::one())
 }
 
+/// k-th order-statistic CDF of `sample_size` iid draws from a base CDF value
+/// `u = F(x)`: the regularized incomplete beta `I_u(rank, sample_size − rank + 1)`.
+/// `rank = 1` gives the minimum (`1 − (1−u)ⁿ`), `rank = n` the maximum (`uⁿ`).
+pub fn order_statistic_cdf<T: LazyReal>(base_cdf: T, rank: T, sample_size: T) -> T {
+    base_cdf.beta_reg(rank.clone(), sample_size - rank + T::one())
+}
+
 // --- stable log-CDF / log-survival tails ---
 //
 // Branch-free log-domain forms via the lazy `ln_1m_exp` / `ln_1p_exp`, accurate in
@@ -774,6 +781,16 @@ pub fn ln_multivariate_gamma<T: LazyReal>(dimension: usize, a: T) -> T {
     acc
 }
 
+/// Log multivariate Beta `ln B(α) = Σ ln Γ(αᵢ) − ln Γ(Σ αᵢ)` — the Dirichlet
+/// normalizer. `None` on empty input.
+pub fn ln_multivariate_beta<T: LazyReal>(alpha: &[T]) -> Option<T> {
+    if alpha.is_empty() {
+        return None;
+    }
+    let total = sum_log_terms(alpha.iter().cloned())?;
+    Some(sum_log_terms(alpha.iter().cloned().map(|a| a.ln_gamma()))? - total.ln_gamma())
+}
+
 /// Chi-squared entropy — the gamma entropy at `shape = freedom/2`, `rate = ½`.
 pub fn chi_squared_entropy<T: LazyReal>(half_freedom: T) -> T {
     gamma_entropy(half_freedom, T::half())
@@ -832,6 +849,36 @@ pub fn von_mises_fisher_entropy<T: LazyReal>(
 /// the scalar lazy surface) — the same caller contract as [`watson_log_pdf`].
 pub fn watson_entropy<T: LazyReal>(log_partition: T, kappa: T, axial_second_moment: T) -> T {
     log_partition - kappa * axial_second_moment
+}
+
+/// von Mises-Fisher cross-entropy `H(p, q) = −ln C_p(κ_q) − κ_q·R_p·(µ_p·µ_q)`. The
+/// caller supplies `q`'s log normalizer, `p`'s mean resultant length `R_p`, and the
+/// mean-direction cosine — the same caller contract as [`von_mises_fisher_entropy`].
+/// KL is then `cross_entropy(p, q) − entropy(p)`.
+pub fn von_mises_fisher_cross_entropy<T: LazyReal>(
+    log_normalizer_other: T,
+    kappa_other: T,
+    mean_resultant_length_self: T,
+    mean_cosine: T,
+) -> T {
+    -log_normalizer_other - kappa_other * mean_resultant_length_self * mean_cosine
+}
+
+/// Watson cross-entropy `H(p, q) = ln Z(κ_q) − κ_q·E_p[(µ_q·x)²]`. The caller supplies
+/// `q`'s log partition and `p`'s second moment along `q`'s axis. KL is then
+/// `cross_entropy(p, q) − entropy(p)`.
+pub fn watson_cross_entropy<T: LazyReal>(
+    log_partition_other: T,
+    kappa_other: T,
+    second_moment_self_along_other: T,
+) -> T {
+    log_partition_other - kappa_other * second_moment_self_along_other
+}
+
+/// Watson log unnormalized-density difference `κ·((µ·x)² − (µ·y)²)` from the two axis
+/// cosines — the partition function cancels, so no normalizer is needed.
+pub fn watson_ln_density_difference<T: LazyReal>(kappa: T, axis_dot_x: T, axis_dot_y: T) -> T {
+    kappa * (square(axis_dot_x) - square(axis_dot_y))
 }
 
 // --- closed-form Kullback–Leibler divergences `D(self ‖ other)` ---
@@ -1870,17 +1917,13 @@ pub fn dirichlet_categorical_log_marginal_likelihood<T: LazyReal>(
     if alpha.len() != counts.len() || alpha.is_empty() {
         return None;
     }
-    let ln_mvbeta = |v: &[T]| -> Option<T> {
-        let total = sum_log_terms(v.iter().cloned())?;
-        Some(sum_log_terms(v.iter().cloned().map(|x| x.ln_gamma()))? - total.ln_gamma())
-    };
     let posterior: Vec<T> = alpha
         .iter()
         .cloned()
         .zip(counts.iter().cloned())
         .map(|(a, c)| a + c)
         .collect();
-    Some(ln_mvbeta(&posterior)? - ln_mvbeta(alpha)?)
+    Some(ln_multivariate_beta(&posterior)? - ln_multivariate_beta(alpha)?)
 }
 
 /// Normal-Inverse-Gamma log marginal likelihood (both mean and variance integrated
@@ -2021,9 +2064,9 @@ mod tests {
         GammaPoisson, Geometric, Gumbel, HalfNormal, HellingerDistance, Hypergeometric,
         InverseGamma, KlDivergence, Laplace, LogNormal, Logistic, Lomax, Moments, Multinomial,
         MultivariateContinuous, MultivariateMoments, MultivariateNormal, MultivariateStudentT,
-        NegativeBinomial, Normal, NormalGamma, NormalInverseGamma, NormalKnownVariance, Pareto,
-        Poisson, Rayleigh, RenyiDivergence, StudentT, TotalVariation, Triangular, Uniform,
-        VonMises, VonMisesFisher, Wald, WatsonS2, Weibull,
+        NegativeBinomial, Normal, NormalGamma, NormalInverseGamma, NormalKnownVariance,
+        OrderStatistic, Pareto, Poisson, Rayleigh, RenyiDivergence, StudentT, TotalVariation,
+        Triangular, Uniform, VonMises, VonMisesFisher, Wald, WatsonS2, Weibull,
     };
     use crate::function::bessel::{ln_i0, ln_iv};
     use crate::function::beta::ln_beta;
@@ -2348,6 +2391,14 @@ mod tests {
             normal_inverse_gamma_log_marginal_likelihood(count, sum, sum_sq, 0.5, 2.0, 3.0, 1.5);
         close(lazy_nig, nig.ln_marginal_likelihood(&obs), 1e-12);
         close(lazy_nig, ng.ln_marginal_likelihood(&obs), 1e-12);
+
+        // Multivariate Beta normalizer (the Dirichlet log-normalizer).
+        let mvbeta_alpha = [1.5, 2.0, 0.7];
+        close(
+            crate::lazy::ln_multivariate_beta(&mvbeta_alpha).unwrap(),
+            ln_multivariate_beta(&mvbeta_alpha),
+            1e-12,
+        );
     }
 
     #[test]
@@ -3066,6 +3117,12 @@ mod tests {
             negative_binomial.cdf(3),
             1e-12,
         );
+
+        // k-th order-statistic CDF via the regularized incomplete beta.
+        let os_base = Normal::new(0.0, 1.0).unwrap();
+        let os_u = os_base.cdf(0.4);
+        let os = OrderStatistic::new(os_base, 7, 3).unwrap();
+        close(order_statistic_cdf(os_u, 3.0, 7.0), os.cdf(0.4), 1e-10);
     }
 
     #[test]
@@ -3399,6 +3456,43 @@ mod tests {
                 watson.axial_second_moment(),
             ),
             watson.entropy_closed_form(),
+            1e-12,
+        );
+
+        // Directional cross-entropies: caller supplies q's normalizer and p's geometry.
+        let mu_q = pt(10.0, 50.0);
+        let kappa_q = 2.5;
+        let vmf_q = VonMisesFisher::new(mu_q, kappa_q).unwrap();
+        let ln_normalizer_q =
+            0.5 * kappa_q.ln() - 1.5 * core::f64::consts::TAU.ln() - ln_iv(0.5, kappa_q);
+        close(
+            von_mises_fisher_cross_entropy(
+                ln_normalizer_q,
+                kappa_q,
+                vmf.mean_resultant_length(),
+                mu.dot(mu_q),
+            ),
+            vmf.cross_entropy(&vmf_q),
+            1e-12,
+        );
+
+        let watson_q = WatsonS2::new(mu_q, 1.5).unwrap();
+        close(
+            watson_cross_entropy(
+                watson_q.ln_partition(),
+                watson_q.concentration(),
+                watson.second_moment_along_axis(watson_q.axis()),
+            ),
+            watson.cross_entropy(&watson_q),
+            1e-12,
+        );
+
+        // Watson log unnormalized-density difference (the partition cancels).
+        let dx = pt(12.0, 34.0);
+        let dy = pt(-20.0, 100.0);
+        close(
+            watson_ln_density_difference(watson.concentration(), mu.dot(dx), mu.dot(dy)),
+            watson.ln_pdf_point(&dx) - watson.ln_pdf_point(&dy),
             1e-12,
         );
     }
