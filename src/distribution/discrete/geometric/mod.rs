@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Discrete, DiscreteCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 /// The geometric distribution: the number of independent `Bernoulli(p)` trials up
 /// to and including the first success. Support `{1, 2, 3, …}`, `p ∈ (0, 1]`.
@@ -46,6 +47,15 @@ impl Discrete<u64> for Geometric {
             return 0.0;
         }
         (1.0 - self.p).powi((k - 1) as i32) * self.p
+    }
+    fn ln_pmf(&self, k: u64) -> f64 {
+        if k == 0 {
+            return f64::NEG_INFINITY;
+        }
+        if self.p >= 1.0 {
+            return if k == 1 { 0.0 } else { f64::NEG_INFINITY };
+        }
+        lazy::geometric_log_pmf(k as f64, self.p)
     }
 }
 

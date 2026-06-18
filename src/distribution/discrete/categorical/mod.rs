@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Discrete, DiscreteCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 /// The categorical distribution over the integer categories `{0, …, k-1}` with
 /// (normalized) probabilities `p`. Built from non-negative, not-all-zero weights.
@@ -67,6 +68,13 @@ impl Distribution<u64> for Categorical {
 impl Discrete<u64> for Categorical {
     fn pmf(&self, k: u64) -> f64 {
         self.p.get(k as usize).copied().unwrap_or(0.0)
+    }
+    fn ln_pmf(&self, k: u64) -> f64 {
+        self.p
+            .get(k as usize)
+            .copied()
+            .map(lazy::categorical_log_pmf)
+            .unwrap_or(f64::NEG_INFINITY)
     }
 }
 

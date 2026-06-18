@@ -4,6 +4,7 @@ use rand::{Rng, RngExt};
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::gamma::gamma;
+use crate::lazy;
 
 /// The Weibull distribution with `scale λ > 0` and `shape k > 0`, support `[0, ∞)`.
 /// Density `f(x) = (k/λ)(x/λ)^{k-1} exp(-(x/λ)^k)`.
@@ -53,8 +54,7 @@ impl Continuous for Weibull {
         if x < 0.0 {
             return f64::NEG_INFINITY;
         }
-        let z = x / self.scale;
-        (self.shape / self.scale).ln() + (self.shape - 1.0) * z.ln() - z.powf(self.shape)
+        lazy::weibull_log_pdf_on_support(x, self.scale, self.shape)
     }
 }
 

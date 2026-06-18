@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 /// The Lomax (Pareto type II) distribution with shape `α > 0` and scale `λ > 0`,
 /// support `[0, ∞)` — a Pareto shifted to start at 0, and the heavy-tailed
@@ -53,7 +54,7 @@ impl Continuous for Lomax {
         if x < 0.0 {
             return f64::NEG_INFINITY;
         }
-        (self.shape / self.scale).ln() - (self.shape + 1.0) * (1.0 + x / self.scale).ln()
+        lazy::lomax_log_pdf_on_support(x, self.shape, self.scale)
     }
 }
 

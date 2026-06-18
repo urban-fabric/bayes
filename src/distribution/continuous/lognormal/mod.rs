@@ -6,6 +6,7 @@ use rand::distr::Distribution;
 use super::normal::Normal;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LogNormal {
@@ -39,17 +40,14 @@ impl Continuous for LogNormal {
         if x <= 0.0 {
             return 0.0;
         }
-        let (mu, sigma) = (self.mu(), self.sigma());
-        let z = (x.ln() - mu) / sigma;
-        (-0.5 * z * z).exp() / (x * sigma * TAU.sqrt())
+        self.ln_pdf(x).exp()
     }
     fn ln_pdf(&self, x: f64) -> f64 {
         if x <= 0.0 {
             return f64::NEG_INFINITY;
         }
         let (mu, sigma) = (self.mu(), self.sigma());
-        let z = (x.ln() - mu) / sigma;
-        -0.5 * z * z - (x * sigma * TAU.sqrt()).ln()
+        lazy::lognormal_log_pdf_on_support(x, mu, sigma)
     }
 }
 

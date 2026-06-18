@@ -21,12 +21,14 @@ hausdorff = { git = "ssh://git@github.com/urban-fabric/hausdorff.git", branch = 
 rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"
-# The euclid::numeric traits: bayes writes its closed forms ONCE, generic over the
-# concrete real scalar `Real`, so the same formula is the f64 reference and
-# instantiates at any other concrete real (f32, a decimal). It lifts its literal
-# constants via Real::from_f64, so it binds the concrete tier
-# (plans/sci-comp/supercomputer.md §3).
+# The euclid::numeric traits: bayes writes scalar-generic closed forms over
+# concrete `Real`, and lazy kernels over `LazyReal`/`LazyComplex`; scalar
+# constants are lifted by Euclid, while special-function normalizers remain
+# caller supplied.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
+
+[patch."ssh://git@github.com/urban-fabric/euclid.git"]
+euclid = { path = "../euclid-lazy-real-constants" }
 
 [lints.rust]
 unsafe_code = "warn"

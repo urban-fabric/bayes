@@ -7,6 +7,7 @@ use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::{beta_reg, ln_beta};
 use crate::function::gamma::digamma;
+use crate::lazy;
 
 /// The beta distribution on `(0, 1)` with shape parameters `α, β > 0`. Density
 /// `f(x) = x^{α-1}(1-x)^{β-1} / B(α, β)`.
@@ -56,8 +57,7 @@ impl Continuous for Beta {
         if x <= 0.0 || x >= 1.0 {
             return f64::NEG_INFINITY;
         }
-        (self.alpha - 1.0) * x.ln() + (self.beta - 1.0) * (1.0 - x).ln()
-            - ln_beta(self.alpha, self.beta)
+        lazy::beta_log_pdf_on_unit(x, self.alpha, self.beta, ln_beta(self.alpha, self.beta))
     }
 }
 

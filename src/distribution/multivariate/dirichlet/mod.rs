@@ -8,6 +8,7 @@ use crate::distribution::continuous::Beta;
 use crate::distribution::continuous::gamma::sample_standard_gamma;
 use crate::error::BayesError;
 use crate::function::{digamma, ln_factorial, ln_gamma, ln_multivariate_beta};
+use crate::lazy;
 
 /// The Dirichlet distribution over the `k`-simplex (vectors of non-negative
 /// components summing to 1), with concentration parameters `α₁, …, α_k > 0`.
@@ -342,15 +343,8 @@ impl MultivariateContinuous for Dirichlet {
         {
             return f64::NEG_INFINITY;
         }
-        let ln_norm =
-            ln_gamma(self.alpha_sum()) - self.alpha.iter().map(|&a| ln_gamma(a)).sum::<f64>();
-        ln_norm
-            + self
-                .alpha
-                .iter()
-                .zip(x)
-                .map(|(&a, &xi)| (a - 1.0) * xi.ln())
-                .sum::<f64>()
+        lazy::dirichlet_log_pdf_on_simplex(x, &self.alpha, self.ln_multivariate_beta())
+            .unwrap_or(f64::NEG_INFINITY)
     }
 }
 

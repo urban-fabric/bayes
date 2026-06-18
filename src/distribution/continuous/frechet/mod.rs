@@ -4,6 +4,7 @@ use rand::{Rng, RngExt};
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::gamma::gamma;
+use crate::lazy;
 
 /// The Fréchet (type-II generalized extreme value) distribution with shape
 /// `α > 0` and scale `s > 0`, support `(0, ∞)`. CDF `F(x) = exp(−(x/s)^{−α})`; the
@@ -53,8 +54,7 @@ impl Continuous for Frechet {
         if x <= 0.0 {
             return f64::NEG_INFINITY;
         }
-        let zinv = self.scale / x;
-        (self.shape / self.scale).ln() + (self.shape + 1.0) * zinv.ln() - zinv.powf(self.shape)
+        lazy::frechet_log_pdf_on_support(x, self.scale, self.shape)
     }
 }
 

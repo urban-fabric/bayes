@@ -5,6 +5,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 /// The Cauchy (Lorentz) distribution with location `x₀` and scale `γ > 0`. It has
 /// **no finite mean or variance** — the canonical example of [`Moments`] returning
@@ -57,6 +58,9 @@ impl Continuous for Cauchy {
     fn pdf(&self, x: f64) -> f64 {
         let z = (x - self.location) / self.scale;
         1.0 / (PI * self.scale * (1.0 + z * z))
+    }
+    fn ln_pdf(&self, x: f64) -> f64 {
+        lazy::cauchy_log_pdf(x, self.location, self.scale)
     }
 }
 

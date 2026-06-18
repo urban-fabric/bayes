@@ -6,6 +6,7 @@ use crate::distribution::numeric::inverse_cdf_bisect;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::{beta_reg, ln_beta};
+use crate::lazy;
 
 /// The F (Fisher–Snedecor) distribution with numerator/denominator degrees of
 /// freedom `d1, d2 > 0`, support `(0, ∞)` — the ratio of two scaled χ².
@@ -61,10 +62,7 @@ impl Continuous for FisherSnedecor {
             return f64::NEG_INFINITY;
         }
         let (a, b) = (self.d1 / 2.0, self.d2 / 2.0);
-        a * (self.d1 * x).ln() + b * self.d2.ln()
-            - (a + b) * (self.d1 * x + self.d2).ln()
-            - x.ln()
-            - ln_beta(a, b)
+        lazy::fisher_snedecor_log_pdf_on_support(x, self.d1, self.d2, a, b, ln_beta(a, b))
     }
 }
 

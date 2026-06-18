@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Discrete, DiscreteCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DiscreteUniform {
@@ -47,6 +48,13 @@ impl Discrete<i64> for DiscreteUniform {
             1.0 / self.n()
         } else {
             0.0
+        }
+    }
+    fn ln_pmf(&self, k: i64) -> f64 {
+        if k >= self.lo && k < self.hi {
+            lazy::discrete_uniform_log_pmf_on_support(self.n())
+        } else {
+            f64::NEG_INFINITY
         }
     }
 }

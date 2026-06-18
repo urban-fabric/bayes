@@ -7,6 +7,7 @@ use super::normal::standard_normal_polar;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::erf::{erf, erf_inv};
+use crate::lazy;
 
 /// The half-normal distribution with scale `σ > 0`, support `[0, ∞)` — the
 /// distribution of `|Z|` for `Z ~ N(0, σ²)`.
@@ -48,8 +49,14 @@ impl Continuous for HalfNormal {
         if x < 0.0 {
             return 0.0;
         }
-        let z = x / self.scale;
-        SQRT_2 / (self.scale * PI.sqrt()) * (-0.5 * z * z).exp()
+        self.ln_pdf(x).exp()
+    }
+    fn ln_pdf(&self, x: f64) -> f64 {
+        if x < 0.0 {
+            f64::NEG_INFINITY
+        } else {
+            lazy::half_normal_log_pdf_on_support(x, self.scale)
+        }
     }
 }
 

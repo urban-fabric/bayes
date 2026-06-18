@@ -10,6 +10,7 @@ use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::beta_reg;
 use crate::function::gamma::{digamma, ln_gamma};
+use crate::lazy;
 
 /// Student's t-distribution with `ν > 0` degrees of freedom and an optional
 /// **location** `μ` and **scale** `σ > 0`: `X = μ + σ·T`, where `T` is the standard
@@ -123,12 +124,8 @@ impl Continuous for StudentT {
     }
     fn ln_pdf(&self, x: f64) -> f64 {
         let nu = self.freedom;
-        let z = (x - self.location) / self.scale;
-        ln_gamma((nu + 1.0) / 2.0)
-            - ln_gamma(nu / 2.0)
-            - 0.5 * (nu * PI).ln()
-            - (nu + 1.0) / 2.0 * (1.0 + z * z / nu).ln()
-            - self.scale.ln()
+        let log_normalizer = 0.5 * (nu * PI).ln() + ln_gamma(nu / 2.0) - ln_gamma((nu + 1.0) / 2.0);
+        lazy::student_t_log_pdf(x, self.location, self.scale, nu, log_normalizer)
     }
 }
 

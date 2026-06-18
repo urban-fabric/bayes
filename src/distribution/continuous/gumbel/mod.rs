@@ -5,6 +5,7 @@ use rand::{Rng, RngExt};
 
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
+use crate::lazy;
 
 /// Euler–Mascheroni constant.
 const EULER_GAMMA: f64 = 0.577_215_664_901_532_9;
@@ -56,8 +57,10 @@ impl Distribution<f64> for Gumbel {
 
 impl Continuous for Gumbel {
     fn pdf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        (1.0 / self.scale) * (-(z + (-z).exp())).exp()
+        self.ln_pdf(x).exp()
+    }
+    fn ln_pdf(&self, x: f64) -> f64 {
+        lazy::gumbel_log_pdf(x, self.location, self.scale)
     }
 }
 

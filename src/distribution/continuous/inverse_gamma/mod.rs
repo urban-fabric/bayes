@@ -6,6 +6,7 @@ use crate::distribution::numeric::inverse_cdf_bisect;
 use crate::distribution::{Continuous, ContinuousCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::gamma::{digamma, gamma_ur, ln_gamma};
+use crate::lazy;
 
 /// The inverse-gamma distribution with shape `α > 0` and scale `β > 0`, support
 /// `(0, ∞)` — the distribution of `1/X` for `X ~ Gamma(α, rate β)`. A common
@@ -59,10 +60,7 @@ impl Continuous for InverseGamma {
         if x <= 0.0 {
             return f64::NEG_INFINITY;
         }
-        self.shape * self.scale.ln()
-            - ln_gamma(self.shape)
-            - (self.shape + 1.0) * x.ln()
-            - self.scale / x
+        lazy::inverse_gamma_log_pdf_on_support(x, self.shape, self.scale, ln_gamma(self.shape))
     }
 }
 

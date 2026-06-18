@@ -171,6 +171,16 @@ same traits.
 These functions are dependency-light and `f64`-first. More general numeric
 abstractions should wait for a concrete consumer.
 
+## Lazy Numeric Layer
+
+`lazy` owns closed-form probability kernels over `euclid::numeric::LazyReal`
+and `LazyComplex`. These are unchecked/on-support formulas for downstream lazy
+expression systems: no support branching, parameter validation, sampling, CDFs,
+quantiles, or eager special-function work is hidden inside the entry points.
+Scalar constants are lifted through Euclid's lazy scalar substrate; callers
+provide precomputed special-function normalizers. The existing distribution
+spine remains `f64`-first and source-compatible.
+
 ## Statistics Layer
 
 `statistics/` is organized by statistical task. Most module files are private

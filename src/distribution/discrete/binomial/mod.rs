@@ -5,6 +5,7 @@ use crate::distribution::{Discrete, DiscreteCdf, Moments, Support};
 use crate::error::BayesError;
 use crate::function::beta::beta_reg;
 use crate::function::factorial::ln_binomial;
+use crate::lazy;
 
 /// The binomial distribution: the number of successes in `n` independent trials,
 /// each with success probability `p ∈ [0, 1]`. Support `{0, …, n}`.
@@ -47,9 +48,15 @@ impl Discrete<u64> for Binomial {
         if k > self.n {
             return f64::NEG_INFINITY;
         }
+        if self.p <= 0.0 {
+            return if k == 0 { 0.0 } else { f64::NEG_INFINITY };
+        }
+        if self.p >= 1.0 {
+            return if k == self.n { 0.0 } else { f64::NEG_INFINITY };
+        }
         let kf = k as f64;
         let nf = self.n as f64;
-        ln_binomial(self.n, k) + kf * self.p.ln() + (nf - kf) * (1.0 - self.p).ln()
+        lazy::binomial_log_pmf(kf, nf - kf, self.p, ln_binomial(self.n, k))
     }
 }
 

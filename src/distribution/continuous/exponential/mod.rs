@@ -4,6 +4,7 @@ use rand::{Rng, RngExt};
 use crate::distribution::{Continuous, ContinuousCdf, Estimate, Moments, Support};
 use crate::error::BayesError;
 use crate::function::stable::ln_1m_exp;
+use crate::lazy;
 
 /// The exponential distribution with rate `λ > 0` (mean `1/λ`), support `[0, ∞)`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -51,7 +52,7 @@ impl Continuous for Exponential {
         if x < 0.0 {
             f64::NEG_INFINITY
         } else {
-            self.rate.ln() - self.rate * x
+            lazy::exponential_log_pdf_on_support(x, self.rate)
         }
     }
 }
@@ -86,7 +87,11 @@ impl ContinuousCdf for Exponential {
     }
     /// `ln P(X > x) = −λx` exactly — no underflow, unlike `ln(1 − cdf)`.
     fn ln_sf(&self, x: f64) -> f64 {
-        if x <= 0.0 { 0.0 } else { -self.rate * x }
+        if x <= 0.0 {
+            0.0
+        } else {
+            lazy::exponential_log_survival_on_support(x, self.rate)
+        }
     }
 }
 

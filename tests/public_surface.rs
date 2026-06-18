@@ -37,6 +37,21 @@ fn exponential_log_survival_is_exact() {
 }
 
 #[test]
+fn lazy_numeric_kernels_are_public() {
+    let n = Normal::new(1.0, 2.0).unwrap();
+    close(
+        bayes::lazy::normal_log_pdf(0.25_f64, 1.0, 2.0),
+        n.ln_pdf(0.25),
+        1e-12,
+    );
+    close(
+        bayes::lazy::bernoulli_logit_log_pmf(1.0_f64, 2.0),
+        2.0 - (1.0 + 2.0_f64.exp()).ln(),
+        1e-12,
+    );
+}
+
+#[test]
 fn inverse_survival_round_trips() {
     let g = Gamma::new(2.5, 1.3).unwrap();
     for &p in &[0.01, 0.1, 0.5, 0.9] {
