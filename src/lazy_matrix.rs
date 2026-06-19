@@ -5,7 +5,7 @@
 //! [`LazyMatrix`]/[`LazyVector`]. The kernels never form an inverse or touch a scalar
 //! element: they ask the matrix contract for the *mathematical quantities* it owns
 //! (`mahalanobis_squared`, `logdet_spd`), so the same source runs on the `f64`
-//! reference (`ramanujan`) and on a tensor backend (`lebesgue`/XLA).
+//! reference (`ramanujan`) and on a tensor backend such as `maxwell` (XLA).
 
 use euclid::array::{LazyMatrix, LazyVector};
 use euclid::numeric::LazyReal;
