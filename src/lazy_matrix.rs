@@ -7,7 +7,7 @@
 //! (`mahalanobis_squared`, `logdet_spd`), so the same source runs on the `f64`
 //! reference (`ramanujan`) and on a tensor backend such as `maxwell` (XLA).
 
-use euclid::array::{LazyMatrix, LazyVector};
+use euclid::array::{LazyMatrix, LazyVector, PreparedSpd, SpdFactor};
 use euclid::numeric::LazyReal;
 
 /// Multivariate-normal log-density `ln N(x | µ, Σ) = −½·(δᵀΣ⁻¹δ + d·ln(2π) + ln|Σ|)`,
@@ -180,6 +180,114 @@ pub fn gaussian_process_log_marginal_likelihood<M: LazyMatrix<Scalar: LazyReal>>
     -M::Scalar::half() * (mahalanobis + n * M::Scalar::ln_tau() + log_det)
 }
 
+/// **Prepared** GP log marginal likelihood — identical math to
+/// [`gaussian_process_log_marginal_likelihood`], but over a pre-factored kernel
+/// ([`SpdFactor`]). The O(n³) Cholesky is hoisted out of the per-call path: factor `K` once,
+/// then every evaluation is just a triangular solve + a cached log-determinant. One source,
+/// fast on both the eager backend (cached factor) and XLA (factor fed as a graph input).
+pub fn gaussian_process_log_marginal_likelihood_prepared<M: PreparedSpd<Scalar: LazyReal>>(
+    y: M::Vector,
+    kernel: &M::Factor,
+) -> M::Scalar {
+    let n = M::Scalar::scalar(y.len() as f64);
+    let solved = kernel.solve_vec(y.clone());
+    let mahalanobis = y.dot(&solved);
+    let log_det = kernel.logdet();
+    -M::Scalar::half() * (mahalanobis + n * M::Scalar::ln_tau() + log_det)
+}
+
+/// **Prepared** multivariate-normal log-density — [`multivariate_normal_log_pdf`] over a
+/// pre-factored covariance ([`SpdFactor`]); the per-call Cholesky is hoisted out.
+pub fn multivariate_normal_log_pdf_prepared<M: PreparedSpd<Scalar: LazyReal>>(
+    x: M::Vector,
+    mean: M::Vector,
+    covariance: &M::Factor,
+) -> M::Scalar {
+    let delta = x.sub(mean);
+    let dim = M::Scalar::scalar(delta.len() as f64);
+    let solved = covariance.solve_vec(delta.clone());
+    let mahalanobis = delta.dot(&solved);
+    let log_det = covariance.logdet();
+    -M::Scalar::half() * (mahalanobis + dim * M::Scalar::ln_tau() + log_det)
+}
+
+/// **Prepared** multivariate Student-t log-density — [`multivariate_student_t_log_pdf`] over a
+/// pre-factored scale ([`SpdFactor`]); only `δᴴΣ⁻¹δ` and `ln|Σ|` come from the factor.
+pub fn multivariate_student_t_log_pdf_prepared<M: PreparedSpd<Scalar: LazyReal>>(
+    x: M::Vector,
+    location: M::Vector,
+    scale: &M::Factor,
+    freedom: M::Scalar,
+) -> M::Scalar {
+    let delta = x.sub(location);
+    let dim = M::Scalar::scalar(delta.len() as f64);
+    let solved = scale.solve_vec(delta.clone());
+    let mahalanobis = delta.dot(&solved);
+    let log_det = scale.logdet();
+    let half = M::Scalar::half();
+    let nu_plus_d = freedom.clone() + dim.clone();
+    (nu_plus_d.clone() * half.clone()).ln_gamma() - (freedom.clone() * half.clone()).ln_gamma()
+        - half.clone() * (dim * (freedom.clone() * M::Scalar::pi()).ln() + log_det)
+        - half * nu_plus_d * (M::Scalar::one() + mahalanobis / freedom).ln()
+}
+
+/// **Prepared** Wishart log-density — [`wishart_log_pdf`] with the *scale* `V` pre-factored
+/// ([`SpdFactor`]): `tr(V⁻¹X)` and `ln|V|` reuse the factor, so evaluating at many `X` for a
+/// fixed `(ν, V)` only factors each `X` (for `ln|X|`), not `V`.
+pub fn wishart_log_pdf_prepared<M: PreparedSpd<Scalar: LazyReal>>(
+    x: M,
+    scale: &M::Factor,
+    freedom: M::Scalar,
+) -> M::Scalar {
+    let d = x.shape().0;
+    let dim = M::Scalar::scalar(d as f64);
+    let half = M::Scalar::half();
+    let half_freedom = freedom.clone() * half.clone();
+
+    let log_det_x = x.clone().logdet_spd();
+    let trace = scale.solve(x).trace();
+    let log_det_scale = scale.logdet();
+    let ln_mv_gamma = crate::lazy::ln_multivariate_gamma(d, half_freedom.clone());
+
+    let ln_normalizer = half_freedom.clone() * dim.clone() * M::Scalar::ln_2()
+        + half_freedom * log_det_scale
+        + ln_mv_gamma;
+    half.clone() * (freedom - dim - M::Scalar::one()) * log_det_x - half * trace - ln_normalizer
+}
+
+/// **Prepared** GP posterior predictive mean `µ* = K*ᵀ K⁻¹ y` over a pre-factored train kernel.
+pub fn gaussian_process_posterior_mean_prepared<M: PreparedSpd<Scalar: LazyReal>>(
+    train_factor: &M::Factor,
+    cross_covariance: M,
+    observations: M::Vector,
+) -> M::Vector {
+    let alpha = train_factor.solve_vec(observations);
+    cross_covariance.adjoint().matvec(alpha)
+}
+
+/// **Prepared** GP posterior predictive covariance `Σ* = K** − K*ᵀ K⁻¹ K*` over a pre-factored
+/// train kernel (the factor supplies `K⁻¹K*` with no re-factorization).
+pub fn gaussian_process_posterior_covariance_prepared<M: PreparedSpd<Scalar: LazyReal>>(
+    train_factor: &M::Factor,
+    cross_covariance: M,
+    test_kernel: M,
+) -> M {
+    let solved = train_factor.solve(cross_covariance.clone());
+    let reduction = cross_covariance.adjoint().matmul(solved);
+    test_kernel.add(reduction.scale(-M::Scalar::one()))
+}
+
+/// The **whitened** (decorrelated, unit-variance) residual `z = L⁻¹(x − µ)` for `Σ = L Lᴴ` —
+/// the standardized residual. `‖z‖²` is the squared Mahalanobis distance, so this is the vector
+/// behind `mahalanobis`; useful for residual diagnostics and inverting a Cholesky sample.
+pub fn gaussian_whitened_residual<M: PreparedSpd<Scalar: LazyReal>>(
+    x: M::Vector,
+    mean: M::Vector,
+    covariance: &M::Factor,
+) -> M::Vector {
+    covariance.whiten_vec(x.sub(mean))
+}
+
 /// Multivariate Student-t log-density (location `µ`, scale `Σ`, degrees `ν`):
 /// `lnΓ((ν+d)/2) − lnΓ(ν/2) − ½(d·ln(νπ) + ln|Σ|) − ½(ν+d)·ln(1 + δᵀΣ⁻¹δ / ν)`.
 pub fn multivariate_student_t_log_pdf<M: LazyMatrix<Scalar: LazyReal>>(
@@ -230,6 +338,208 @@ pub fn pooled_covariance<M: LazyMatrix<Scalar: LazyReal>>(
         total = total + degrees[i].clone();
     }
     Some(pooled.scale(M::Scalar::one() / total))
+}
+
+/// Cross-entropy `H(p, q) = ½[d·ln(2π) + ln|Σq| + tr(Σq⁻¹Σp) + (µp−µq)ᵀΣq⁻¹(µp−µq)]`
+/// between two Gaussians — the expected negative log-density of `q` under `p`
+/// (`H(p,q) = KL(p‖q) + H(p)`). No inverse is formed.
+pub fn multivariate_normal_cross_entropy<M: LazyMatrix<Scalar: LazyReal>>(
+    mean_p: M::Vector,
+    cov_p: M,
+    mean_q: M::Vector,
+    cov_q: M,
+) -> M::Scalar {
+    let delta = mean_p.sub(mean_q);
+    let dim = M::Scalar::scalar(cov_q.shape().0 as f64);
+    let trace = cov_q.clone().solve_spd(cov_p).trace();
+    let mahalanobis = cov_q.mahalanobis_squared(&delta);
+    let log_det = cov_q.logdet_spd();
+    M::Scalar::half() * (dim * M::Scalar::ln_tau() + log_det + trace + mahalanobis)
+}
+
+/// Bhattacharyya distance between two Gaussians:
+/// `⅛·(µ1−µ0)ᵀΣ⁻¹(µ1−µ0) + ½·ln( |Σ| / √(|Σ0|·|Σ1|) )`, `Σ = ½(Σ0+Σ1)`.
+pub fn gaussian_bhattacharyya_distance<M: LazyMatrix<Scalar: LazyReal>>(
+    mean_0: M::Vector,
+    cov_0: M,
+    mean_1: M::Vector,
+    cov_1: M,
+) -> M::Scalar {
+    let delta = mean_1.sub(mean_0);
+    let half = M::Scalar::half();
+    let average = cov_0.clone().add(cov_1.clone()).scale(half.clone());
+    let mahalanobis = average.mahalanobis_squared(&delta);
+    let log_det_avg = average.logdet_spd();
+    let log_det_0 = cov_0.logdet_spd();
+    let log_det_1 = cov_1.logdet_spd();
+    M::Scalar::scalar(0.125) * mahalanobis
+        + half.clone() * (log_det_avg - half * (log_det_0 + log_det_1))
+}
+
+/// Multivariate-normal log-likelihood of `count` i.i.d. observations summarized by the
+/// mean-centered scatter `S = Σᵢ(xᵢ−µ)(xᵢ−µ)ᵀ` under covariance `Σ`:
+/// `−½·(n·d·ln(2π) + n·ln|Σ| + tr(Σ⁻¹S))`.
+pub fn multivariate_normal_log_likelihood<M: LazyMatrix<Scalar: LazyReal>>(
+    scatter: M,
+    covariance: M,
+    count: M::Scalar,
+) -> M::Scalar {
+    let dim = M::Scalar::scalar(covariance.shape().0 as f64);
+    let trace = covariance.clone().solve_spd(scatter).trace();
+    let log_det = covariance.logdet_spd();
+    -M::Scalar::half() * (count.clone() * dim * M::Scalar::ln_tau() + count * log_det + trace)
+}
+
+/// Gaussian-process posterior predictive covariance `Σ* = K** − K*ᵀK⁻¹K*` for train kernel
+/// `K`, train–test cross-covariance `K*`, and test prior covariance `K**`. No inverse is formed
+/// (`K⁻¹K*` is `K.solve_spd(K*)`).
+pub fn gaussian_process_posterior_covariance<M: LazyMatrix<Scalar: LazyReal>>(
+    train_kernel: M,
+    cross_covariance: M,
+    test_kernel: M,
+) -> M {
+    let solved = train_kernel.solve_spd(cross_covariance.clone());
+    let reduction = cross_covariance.adjoint().matmul(solved);
+    test_kernel.add(reduction.scale(-M::Scalar::one()))
+}
+
+/// Wishart mean `E[X] = ν·V` (scale `V`, degrees `ν`).
+pub fn wishart_mean<M: LazyMatrix<Scalar: LazyReal>>(scale: M, freedom: M::Scalar) -> M {
+    scale.scale(freedom)
+}
+
+/// Inverse-Wishart mean `E[Σ] = V / (ν − d − 1)` (scale `V`, degrees `ν`), defined for `ν > d+1`.
+pub fn inverse_wishart_mean<M: LazyMatrix<Scalar: LazyReal>>(scale: M, freedom: M::Scalar) -> M {
+    let dim = M::Scalar::scalar(scale.shape().0 as f64);
+    let denominator = freedom - dim - M::Scalar::one();
+    scale.scale(M::Scalar::one() / denominator)
+}
+
+/// Gaussian information fusion — the covariance of the product of two Gaussians,
+/// `Σ = (Σa⁻¹ + Σb⁻¹)⁻¹`, the precision-weighted combination of two estimates.
+pub fn gaussian_precision_fusion<M: LazyMatrix<Scalar: LazyReal>>(cov_a: M, cov_b: M) -> M {
+    let n = cov_a.shape().0;
+    let precision_a = cov_a.solve_spd(M::identity(n));
+    let precision_b = cov_b.solve_spd(M::identity(n));
+    precision_a.add(precision_b).solve_spd(M::identity(n))
+}
+
+/// Squared Hellinger distance between two Gaussians, `H² = 1 − exp(−D_B)`, where `D_B` is the
+/// [`gaussian_bhattacharyya_distance`]. In `[0, 1]`.
+pub fn gaussian_hellinger_squared<M: LazyMatrix<Scalar: LazyReal>>(
+    mean_0: M::Vector,
+    cov_0: M,
+    mean_1: M::Vector,
+    cov_1: M,
+) -> M::Scalar {
+    let bhattacharyya = gaussian_bhattacharyya_distance::<M>(mean_0, cov_0, mean_1, cov_1);
+    M::Scalar::one() - (-bhattacharyya).exp()
+}
+
+/// Mahalanobis distance `√(δᴴ Σ⁻¹ δ)` — the (non-squared) Gaussian distance of `δ` under `Σ`.
+pub fn mahalanobis_distance<M: LazyMatrix<Scalar: LazyReal>>(
+    covariance: M,
+    delta: M::Vector,
+) -> M::Scalar {
+    covariance.mahalanobis_squared(&delta).sqrt()
+}
+
+/// Wishart expected log-determinant `E[ln|X|] = ln|V| + d·ln2 + Σᵢ ψ((ν+1−i)/2)` (scale `V`,
+/// degrees `ν`) — the `ln|·|` from the matrix contract, the digamma sum pure scalar analysis.
+pub fn wishart_expected_log_det<M: LazyMatrix<Scalar: LazyReal>>(
+    scale: M,
+    freedom: M::Scalar,
+) -> M::Scalar {
+    let d = scale.shape().0;
+    let dim = M::Scalar::scalar(d as f64);
+    let log_det = scale.logdet_spd();
+    log_det + dim * M::Scalar::ln_2() + digamma_wishart_sum(d, freedom)
+}
+
+/// Wishart mode `(ν − d − 1)·V` (scale `V`, degrees `ν`), defined for `ν ≥ d + 1`.
+pub fn wishart_mode<M: LazyMatrix<Scalar: LazyReal>>(scale: M, freedom: M::Scalar) -> M {
+    let dim = M::Scalar::scalar(scale.shape().0 as f64);
+    scale.scale(freedom - dim - M::Scalar::one())
+}
+
+/// Inverse-Wishart mode `V / (ν + d + 1)` (scale `V`, degrees `ν`).
+pub fn inverse_wishart_mode<M: LazyMatrix<Scalar: LazyReal>>(scale: M, freedom: M::Scalar) -> M {
+    let dim = M::Scalar::scalar(scale.shape().0 as f64);
+    scale.scale(M::Scalar::one() / (freedom + dim + M::Scalar::one()))
+}
+
+/// Conditional covariance of a partitioned Gaussian (Schur complement):
+/// `Σ_{a|b} = Σaa − Σab·Σbb⁻¹·Σba`, `Σba = Σabᴴ`. No inverse is formed.
+pub fn multivariate_normal_conditional_covariance<M: LazyMatrix<Scalar: LazyReal>>(
+    cov_aa: M,
+    cov_ab: M,
+    cov_bb: M,
+) -> M {
+    let cross_solved = cov_bb.solve_spd(cov_ab.clone().adjoint());
+    let reduction = cov_ab.matmul(cross_solved);
+    cov_aa.add(reduction.scale(-M::Scalar::one()))
+}
+
+/// Marginal variances of a Gaussian — the diagonal of the covariance `Σ`.
+pub fn multivariate_normal_marginal_variance<M: LazyMatrix<Scalar: LazyReal>>(
+    covariance: M,
+) -> M::Vector {
+    covariance.diagonal()
+}
+
+/// Linear predictor `X·β` — the mean of a linear-Gaussian / linear-regression model.
+pub fn linear_predictor<M: LazyMatrix<Scalar: LazyReal>>(
+    design: M,
+    coefficients: M::Vector,
+) -> M::Vector {
+    design.matvec(coefficients)
+}
+
+/// Gaussian natural (canonical) parameter `η = Σ⁻¹µ`.
+pub fn gaussian_natural_parameter<M: LazyMatrix<Scalar: LazyReal>>(
+    covariance: M,
+    mean: M::Vector,
+) -> M::Vector {
+    covariance.solve_spd_vec(mean)
+}
+
+/// Gaussian-process posterior predictive mean `µ* = K*ᵀ K⁻¹ y` for train kernel `K`,
+/// train–test cross-covariance `K*`, and observations `y`. No inverse is formed
+/// (`K⁻¹y` is `K.solve_spd_vec(y)`).
+pub fn gaussian_process_posterior_mean<M: LazyMatrix<Scalar: LazyReal>>(
+    train_kernel: M,
+    cross_covariance: M,
+    observations: M::Vector,
+) -> M::Vector {
+    let alpha = train_kernel.solve_spd_vec(observations);
+    cross_covariance.adjoint().matvec(alpha)
+}
+
+/// Conditional mean of a partitioned Gaussian: `µ_{a|b} = µa + Σab·Σbb⁻¹·(x_b − µb)`.
+pub fn multivariate_normal_conditional_mean<M: LazyMatrix<Scalar: LazyReal>>(
+    mean_a: M::Vector,
+    mean_b: M::Vector,
+    cov_ab: M,
+    cov_bb: M,
+    observation_b: M::Vector,
+) -> M::Vector {
+    let residual = observation_b.sub(mean_b);
+    let weighted = cov_bb.solve_spd_vec(residual);
+    mean_a.add(cov_ab.matvec(weighted))
+}
+
+/// Mean of the product of two Gaussians (information fusion):
+/// `µ = (Σa⁻¹+Σb⁻¹)⁻¹·(Σa⁻¹µa + Σb⁻¹µb)` — the precision-weighted combination of two means.
+pub fn gaussian_fused_mean<M: LazyMatrix<Scalar: LazyReal>>(
+    mean_a: M::Vector,
+    cov_a: M,
+    mean_b: M::Vector,
+    cov_b: M,
+) -> M::Vector {
+    let eta_a = cov_a.clone().solve_spd_vec(mean_a);
+    let eta_b = cov_b.clone().solve_spd_vec(mean_b);
+    let fused_covariance = gaussian_precision_fusion::<M>(cov_a, cov_b);
+    fused_covariance.matvec(eta_a.add(eta_b))
 }
 
 #[cfg(test)]
@@ -420,6 +730,28 @@ mod tests {
                 }
             }
             RefMatrix { n, data: out }
+        }
+        fn solve_spd_vec(self, rhs: RefVector) -> RefVector {
+            // Σ⁻¹ b via Cholesky + forward/back substitution on a single vector.
+            let n = self.n;
+            let l = self.chol();
+            let mut y = vec![0.0; n];
+            for i in 0..n {
+                let mut s = rhs.0[i];
+                for k in 0..i {
+                    s -= l[i * n + k] * y[k];
+                }
+                y[i] = s / l[i * n + i];
+            }
+            let mut x = vec![0.0; n];
+            for i in (0..n).rev() {
+                let mut s = y[i];
+                for k in (i + 1)..n {
+                    s -= l[k * n + i] * x[k];
+                }
+                x[i] = s / l[i * n + i];
+            }
+            RefVector(x)
         }
         fn logdet_spd(self) -> f64 {
             let l = self.chol();
