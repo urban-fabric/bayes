@@ -13,7 +13,7 @@ use euclid::numeric::LazyReal;
 /// Multivariate-normal log-density `ln N(x | µ, Σ) = −½·(δᵀΣ⁻¹δ + d·ln(2π) + ln|Σ|)`,
 /// `δ = x − µ`. The Mahalanobis term and log-determinant come from the matrix
 /// contract (a stable Cholesky on either backend); no inverse is formed.
-pub fn multivariate_normal_log_pdf<M: LazyMatrix>(
+pub fn multivariate_normal_log_pdf<M: LazyMatrix<Scalar: LazyReal>>(
     x: M::Vector,
     mean: M::Vector,
     covariance: M,
@@ -26,7 +26,7 @@ pub fn multivariate_normal_log_pdf<M: LazyMatrix>(
 }
 
 /// Multivariate-normal entropy `½·(d·ln(2π) + ln|Σ| + d)`.
-pub fn multivariate_normal_entropy<M: LazyMatrix>(covariance: M) -> M::Scalar {
+pub fn multivariate_normal_entropy<M: LazyMatrix<Scalar: LazyReal>>(covariance: M) -> M::Scalar {
     let dim = M::Scalar::scalar(covariance.shape().0 as f64);
     let log_det = covariance.logdet_spd();
     M::Scalar::half() * (dim.clone() * M::Scalar::ln_tau() + log_det + dim)
@@ -36,7 +36,7 @@ pub fn multivariate_normal_entropy<M: LazyMatrix>(covariance: M) -> M::Scalar {
 ///
 /// `tr(Σ₁⁻¹Σ₀)` is `(Σ₁.solve_spd(Σ₀)).trace()`; the quadratic is
 /// `Σ₁.mahalanobis_squared(µ₁−µ₀)`. No inverse is formed.
-pub fn multivariate_normal_kl<M: LazyMatrix>(
+pub fn multivariate_normal_kl<M: LazyMatrix<Scalar: LazyReal>>(
     mean_self: M::Vector,
     cov_self: M,
     mean_other: M::Vector,
@@ -52,7 +52,11 @@ pub fn multivariate_normal_kl<M: LazyMatrix>(
 
 /// Wishart log-density at SPD `X`, scale `V`, degrees `ν`:
 /// `½(ν−d−1)·ln|X| − ½·tr(V⁻¹X) − [½νd·ln2 + ½ν·ln|V| + ln Γ_d(ν/2)]`.
-pub fn wishart_log_pdf<M: LazyMatrix>(x: M, scale: M, freedom: M::Scalar) -> M::Scalar {
+pub fn wishart_log_pdf<M: LazyMatrix<Scalar: LazyReal>>(
+    x: M,
+    scale: M,
+    freedom: M::Scalar,
+) -> M::Scalar {
     let d = x.shape().0;
     let dim = M::Scalar::scalar(d as f64);
     let half = M::Scalar::half();
@@ -71,7 +75,11 @@ pub fn wishart_log_pdf<M: LazyMatrix>(x: M, scale: M, freedom: M::Scalar) -> M::
 
 /// Inverse-Wishart log-density at SPD `Σ`, scale `V`, degrees `ν`:
 /// `[½ν·ln|V| − ½νd·ln2 − ln Γ_d(ν/2)] − ½(ν+d+1)·ln|Σ| − ½·tr(V·Σ⁻¹)`.
-pub fn inverse_wishart_log_pdf<M: LazyMatrix>(sigma: M, scale: M, freedom: M::Scalar) -> M::Scalar {
+pub fn inverse_wishart_log_pdf<M: LazyMatrix<Scalar: LazyReal>>(
+    sigma: M,
+    scale: M,
+    freedom: M::Scalar,
+) -> M::Scalar {
     let d = sigma.shape().0;
     let dim = M::Scalar::scalar(d as f64);
     let half = M::Scalar::half();
@@ -103,7 +111,7 @@ fn digamma_wishart_sum<S: LazyReal>(dimension: usize, freedom: S) -> S {
 /// `−½(ν−d−1)·E[ln|X|] + ½νd + lnZ`, with `E[ln|X|] = ln|V| + d·ln2 + Σ ψ((ν+1−i)/2)`
 /// and `lnZ = ½νd·ln2 + ½ν·ln|V| + ln Γ_d(ν/2)`. The log-determinant comes from the
 /// matrix contract; the digamma sum and `ln Γ_d` are pure scalar analysis.
-pub fn wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
+pub fn wishart_entropy<M: LazyMatrix<Scalar: LazyReal>>(scale: M, freedom: M::Scalar) -> M::Scalar {
     let d = scale.shape().0;
     let dim = M::Scalar::scalar(d as f64);
     let half = M::Scalar::half();
@@ -123,7 +131,10 @@ pub fn wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar
 /// Inverse-Wishart differential entropy (scale `V`, degrees `ν`):
 /// `−lnZ + ½(ν+d+1)·E[ln|Σ|] + ½νd`, with `E[ln|Σ|] = ln|V| − d·ln2 − Σ ψ((ν+1−i)/2)`
 /// and `lnZ = ½ν·ln|V| − ½νd·ln2 − ln Γ_d(ν/2)`.
-pub fn inverse_wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
+pub fn inverse_wishart_entropy<M: LazyMatrix<Scalar: LazyReal>>(
+    scale: M,
+    freedom: M::Scalar,
+) -> M::Scalar {
     let d = scale.shape().0;
     let dim = M::Scalar::scalar(d as f64);
     let half = M::Scalar::half();
@@ -142,7 +153,10 @@ pub fn inverse_wishart_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M
 
 /// Multivariate Student-t entropy (scale `Σ`, degrees `ν`):
 /// `lnΓ(ν/2) − lnΓ((ν+d)/2) + ½(d·ln(νπ) + ln|Σ|) + (ν+d)/2·(ψ((ν+d)/2) − ψ(ν/2))`.
-pub fn multivariate_student_t_entropy<M: LazyMatrix>(scale: M, freedom: M::Scalar) -> M::Scalar {
+pub fn multivariate_student_t_entropy<M: LazyMatrix<Scalar: LazyReal>>(
+    scale: M,
+    freedom: M::Scalar,
+) -> M::Scalar {
     let dim = M::Scalar::scalar(scale.shape().0 as f64);
     let log_det = scale.logdet_spd();
     let half = M::Scalar::half();
@@ -156,7 +170,7 @@ pub fn multivariate_student_t_entropy<M: LazyMatrix>(scale: M, freedom: M::Scala
 /// Gaussian-process log marginal likelihood `−½(yᵀK⁻¹y + ln|K| + n·ln 2π)` — the
 /// log-evidence of observations `y` under a zero-mean GP with kernel matrix `K`.
 /// (Structurally the multivariate-normal log-density at zero mean.)
-pub fn gaussian_process_log_marginal_likelihood<M: LazyMatrix>(
+pub fn gaussian_process_log_marginal_likelihood<M: LazyMatrix<Scalar: LazyReal>>(
     y: M::Vector,
     kernel: M,
 ) -> M::Scalar {
@@ -168,7 +182,7 @@ pub fn gaussian_process_log_marginal_likelihood<M: LazyMatrix>(
 
 /// Multivariate Student-t log-density (location `µ`, scale `Σ`, degrees `ν`):
 /// `lnΓ((ν+d)/2) − lnΓ(ν/2) − ½(d·ln(νπ) + ln|Σ|) − ½(ν+d)·ln(1 + δᵀΣ⁻¹δ / ν)`.
-pub fn multivariate_student_t_log_pdf<M: LazyMatrix>(
+pub fn multivariate_student_t_log_pdf<M: LazyMatrix<Scalar: LazyReal>>(
     x: M::Vector,
     location: M::Vector,
     scale: M,
@@ -190,7 +204,7 @@ pub fn multivariate_student_t_log_pdf<M: LazyMatrix>(
 /// Hotelling's `T² = n·(x̄ − µ₀)ᵀ S⁻¹ (x̄ − µ₀)` — the sample mean's squared
 /// Mahalanobis distance from `µ₀` under the sample covariance `S`, scaled by `n`.
 /// No inverse is formed; the quadratic comes from the matrix contract.
-pub fn hotelling_t_squared<M: LazyMatrix>(
+pub fn hotelling_t_squared<M: LazyMatrix<Scalar: LazyReal>>(
     count: M::Scalar,
     mean: M::Vector,
     reference: M::Vector,
@@ -202,7 +216,10 @@ pub fn hotelling_t_squared<M: LazyMatrix>(
 /// Pooled (within-group) covariance `Σᵢ dfᵢ·Sᵢ / Σᵢ dfᵢ`, the degrees-of-freedom
 /// weighted average of the per-group covariances `Sᵢ` (typically `dfᵢ = nᵢ − 1`).
 /// `None` for fewer than two groups or a length mismatch.
-pub fn pooled_covariance<M: LazyMatrix>(covariances: &[M], degrees: &[M::Scalar]) -> Option<M> {
+pub fn pooled_covariance<M: LazyMatrix<Scalar: LazyReal>>(
+    covariances: &[M],
+    degrees: &[M::Scalar],
+) -> Option<M> {
     if covariances.len() != degrees.len() || covariances.len() < 2 {
         return None;
     }
@@ -224,7 +241,7 @@ mod tests {
         MultivariateNormal, MultivariateStudentT, Wishart,
     };
     use crate::statistics::mahalanobis_squared;
-    use ramanujan::DenseMatrix;
+    use ramanujan::{DenseMatrix, DenseVector};
 
     fn close(a: f64, b: f64, tol: f64) {
         assert!(
@@ -435,6 +452,30 @@ mod tests {
             ref_matrix(3, &rows),
         );
         close(got, mvn.ln_pdf(&x), 1e-10);
+    }
+
+    #[test]
+    fn lazy_matrix_mvn_log_pdf_runs_on_ramanujan_densematrix() {
+        // The point of the contract: `ramanujan::DenseMatrix` satisfies `LazyMatrix`, so
+        // the *same* generic kernel runs on the jacobi-backed f64 reference and agrees
+        // with both the naive `RefMatrix` and the concrete `MultivariateNormal`.
+        let rows: [&[f64]; 3] = [&[2.0, 0.3, 0.1], &[0.3, 1.5, -0.2], &[0.1, -0.2, 1.0]];
+        let mean = [0.5, -1.0, 0.2];
+        let x = [1.2, -0.3, 0.7];
+
+        let on_dense = multivariate_normal_log_pdf::<DenseMatrix>(
+            DenseVector::new(x.to_vec()),
+            DenseVector::new(mean.to_vec()),
+            dense(3, &rows),
+        );
+        let on_ref = multivariate_normal_log_pdf(
+            RefVector(x.to_vec()),
+            RefVector(mean.to_vec()),
+            ref_matrix(3, &rows),
+        );
+        let mvn = MultivariateNormal::new(mean.to_vec(), dense(3, &rows)).unwrap();
+        close(on_dense, on_ref, 1e-10);
+        close(on_dense, mvn.ln_pdf(&x), 1e-10);
     }
 
     #[test]
