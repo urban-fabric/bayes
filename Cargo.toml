@@ -27,6 +27,13 @@ thiserror = "2.0"
 # caller supplied.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 
+[dev-dependencies]
+# The XLA backend, used only to verify that bayes' lazy closed forms run on a
+# compiled tensor backend (diffed against the eager ramanujan/f64 reference).
+# Dev-only: bayes itself stays backend-agnostic (it depends only on the euclid
+# contracts). Path dep to the local sibling for offline multi-repo dev.
+maxwell = { path = "../maxwell" }
+
 [lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"
@@ -46,3 +53,13 @@ debug = "line-tables-only"
 lto = "thin"
 codegen-units = 1
 debug = true
+
+# TEMPORARY (offline dev, multi-repo LazyScalar rollout): build against the local
+# euclid/jacobi/ramanujan siblings so the scalar-generic array contracts (real+complex)
+# are visible. Reconcile to git revs before landing.
+[patch."ssh://git@github.com/urban-fabric/euclid.git"]
+euclid = { path = "../euclid" }
+[patch."ssh://git@github.com/urban-fabric/jacobi.git"]
+jacobi = { path = "../jacobi" }
+[patch."ssh://git@github.com/urban-fabric/ramanujan.git"]
+ramanujan = { path = "../ramanujan" }
