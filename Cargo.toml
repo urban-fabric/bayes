@@ -20,9 +20,14 @@ thiserror = "2.0"
 # constants are lifted by Euclid, while special-function normalizers remain
 # caller supplied.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
+# Generic linear algebra over euclid's LazyMatrix (spd_inverse / gram / least_squares /
+# quadratic_form), euclid-only content lifted out of ramanujan. bayes composes these in
+# its matrix-tier kernels (GMRF precision, Laplace covariance, regression normal
+# equations) so the multivariate densities stay write-once over any LazyMatrix backend.
+frobenius = { git = "ssh://git@github.com/urban-fabric/frobenius.git", branch = "main" }
 
-# bayes is the euclid-only half of the probability stack — scalar closed forms and
-# lazy kernels, no dense linear algebra. The matrix-coupled multivariate stack
+# bayes carries the euclid-only scalar closed forms + lazy kernels, plus (via frobenius)
+# generic LazyMatrix algebra. The matrix-coupled *eager* multivariate stack
 # (the `ramanujan` DenseMatrix / `hausdorff` S² content) lives in the sibling
 # crate `ito`, which depends on bayes (the arrow is ito → bayes, never the
 # reverse). Verification that bayes' write-once closed forms run on a backend
@@ -55,3 +60,5 @@ debug = true
 # Reconcile to git revs before landing.
 [patch."ssh://git@github.com/urban-fabric/euclid.git"]
 euclid = { path = "../euclid" }
+[patch."ssh://git@github.com/urban-fabric/frobenius.git"]
+frobenius = { path = "../frobenius" }
