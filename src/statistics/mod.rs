@@ -6,9 +6,8 @@
 //! * `effect` — standardized mean effects, ANOVA effect sizes, odds/risk effects.
 //! * `weighted` — weight normalization (raw or log-domain), ESS diagnostics, weighted
 //!   mean/variance/covariance/correlation, and quantiles.
-//! * `multivariate` — sample mean/covariance/correlation matrices, matrix
-//!   admissibility predicates, and Mahalanobis / Hotelling statistics.
-//! * `regression` — ordinary least squares (simple and multiple) with diagnostics.
+//! * `regression` — ordinary least squares (simple linear) with diagnostics; the
+//!   matrix-design multiple regression lives in the sibling crate `ito`.
 //! * `resampling` — bootstrap and jackknife with percentile intervals.
 //! * [`hypothesis`] — z / t / Welch / F / χ² / Mann–Whitney / KS / Jarque–Bera /
 //!   ANOVA / Wilcoxon / Fisher's exact / binomial / McNemar, each returning a
@@ -23,8 +22,8 @@
 //! * `inequalities` — proof-backed moment certifiers: Cauchy–Schwarz consistency and
 //!   the Jensen gap.
 //! * `empirical` — empirical CDF ([`Ecdf`]) and [`histogram`]; `kde` — Gaussian KDE.
-//! * streaming accumulators — [`RunningStats`], [`RunningCovariance`], and the
-//!   [`TDigest`] quantile sketch (all single-pass and mergeable).
+//! * streaming accumulators — [`RunningStats`] and the [`TDigest`] quantile sketch
+//!   (single-pass and mergeable); the paired `RunningCovariance` lives in `ito`.
 //!
 //! Summary/order stats are available both as free functions and as the
 //! [`SampleStats`] extension trait on `[f64]`, so `bayes::statistics::mean(data)`
@@ -38,7 +37,6 @@ mod estimation;
 pub mod hypothesis;
 mod inequalities;
 mod kde;
-mod multivariate;
 mod online;
 mod order;
 mod regression;
@@ -70,19 +68,12 @@ pub use estimation::{
 pub use hypothesis::TestResult;
 pub use inequalities::{cauchy_schwarz_moment_holds, jensen_gap_lower_bound};
 pub use kde::KernelDensity;
-pub use multivariate::{
-    MATRIX_ADMISSIBILITY_TOLERANCE, correlation_matrix, covariance_matrix,
-    covariance_of_linear_combinations, hotelling_t_squared, is_correlation_matrix_admissible,
-    is_correlation_matrix_admissible_with_tolerance, is_covariance_matrix_admissible,
-    is_covariance_matrix_admissible_with_tolerance, mahalanobis_squared, mean_vector,
-    pooled_covariance_matrix, variance_of_linear_combination,
-};
-pub use online::{RunningCovariance, RunningStats};
+pub use online::RunningStats;
 pub use order::{
     five_number_summary, iqr, median, median_abs_deviation, percentile, quantile, tukey_fences,
     tukey_outlier_flags,
 };
-pub use regression::{LinearRegression, fit_least_squares};
+pub use regression::LinearRegression;
 pub use resampling::{bootstrap, jackknife, percentile_interval};
 pub use summary::{
     coefficient_of_variation, correlation, covariance, geometric_mean, gini_mean_difference,

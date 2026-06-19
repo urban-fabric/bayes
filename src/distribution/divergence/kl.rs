@@ -7,14 +7,13 @@
 use super::families::{EULER_GAMMA, gamma_kl, gaussian_kl, weibull_kl};
 use super::{discrete_kl, kl_term};
 use crate::distribution::{
-    Bernoulli, Beta, Binomial, Categorical, Cauchy, ChiSquared, Dirichlet, DiscreteUniform,
-    Exponential, Frechet, Gamma, Geometric, Gumbel, HalfNormal, InverseGamma, Laplace, LogNormal,
-    Moments, Multinomial, NegativeBinomial, Normal, Pareto, Poisson, Rayleigh, Uniform, VonMises,
-    Wald, Weibull,
+    Bernoulli, Beta, Binomial, Categorical, Cauchy, ChiSquared, DiscreteUniform, Exponential,
+    Frechet, Gamma, Geometric, Gumbel, HalfNormal, InverseGamma, Laplace, LogNormal, Moments,
+    NegativeBinomial, Normal, Pareto, Poisson, Rayleigh, Uniform, VonMises, Wald, Weibull,
 };
 use crate::function::bessel::{i1_over_i0, ln_i0};
 use crate::function::beta::ln_beta;
-use crate::function::gamma::{digamma, gamma, ln_gamma};
+use crate::function::gamma::{digamma, gamma};
 
 /// Closed-form Kullback–Leibler divergence `D_KL(self ‖ other)`, in nats.
 ///
@@ -99,35 +98,6 @@ impl KlDivergence for Geometric {
 impl KlDivergence for Categorical {
     fn kl_divergence(&self, other: &Self) -> f64 {
         discrete_kl(self.probabilities(), other.probabilities())
-    }
-}
-
-impl KlDivergence for Multinomial {
-    fn kl_divergence(&self, other: &Self) -> f64 {
-        // With the same trial count, the joint KL is `n ×` the per-trial
-        // (categorical) KL; different `n` means different support.
-        if self.trials() != other.trials() {
-            return f64::INFINITY;
-        }
-        self.trials() as f64 * discrete_kl(self.probabilities(), other.probabilities())
-    }
-}
-
-impl KlDivergence for Dirichlet {
-    fn kl_divergence(&self, other: &Self) -> f64 {
-        let (a, b) = (self.alpha(), other.alpha());
-        if a.len() != b.len() {
-            return f64::INFINITY;
-        }
-        let a0: f64 = a.iter().sum();
-        let b0: f64 = b.iter().sum();
-        // ln[B(β)/B(α)] = [ln Γ(α₀) − Σ ln Γ(αᵢ)] + [Σ ln Γ(βᵢ) − ln Γ(β₀)].
-        let mut kl = ln_gamma(a0) - ln_gamma(b0);
-        let psi_a0 = digamma(a0);
-        for (&ai, &bi) in a.iter().zip(b) {
-            kl += ln_gamma(bi) - ln_gamma(ai) + (ai - bi) * (digamma(ai) - psi_a0);
-        }
-        kl
     }
 }
 

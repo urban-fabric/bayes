@@ -17,7 +17,11 @@
 //! distribution definition. Iterative inference (MCMC / variational) is **not** here
 //! — it belongs to a higher layer that consumes these as priors and likelihoods.
 //!
-//! The models are grouped by prior family (`beta`, `gamma`, `normal`, `dirichlet`).
+//! The scalar prior families (`beta`, `gamma`) live here; the matrix-coupled
+//! conjugates (`normal`, `dirichlet`, `multivariate_normal`) — the ones whose
+//! posteriors are multivariate-Normal / Wishart / Dirichlet, all carrying
+//! `ramanujan` matrices — live in the sibling crate `ito`, reusing the
+//! [`Conjugate`] trait and the [`natural`] hyperparameter monoid defined here.
 //!
 //! ```
 //! use bayes::{Beta, BetaBernoulli, Conjugate, Moments};
@@ -28,18 +32,12 @@
 //! ```
 
 mod beta;
-mod dirichlet;
 mod gamma;
-mod multivariate_normal;
 mod natural;
-mod normal;
 
 pub use beta::{BetaBernoulli, BetaBinomialModel};
-pub use dirichlet::{DirichletCategorical, DirichletMultinomial};
 pub use gamma::{GammaExponential, GammaPoisson};
-pub use multivariate_normal::{NormalInverseWishart, NormalWishart};
 pub use natural::{Counts, NaturalParams, NigNatural, Pair};
-pub use normal::{NormalGamma, NormalInverseGamma, NormalKnownVariance, precision_weighted_mean};
 
 /// A conjugate prior/likelihood pair whose posterior is computable in closed
 /// form by the **one** algebraic move every conjugate family shares: add the
@@ -121,12 +119,13 @@ pub trait Conjugate {
 mod tests {
     //! The two corollaries every family inherits from the riemann umbrella law
     //! (`Bayes/ExponentialFamily`): **online = batch** (`posterior_online_eq_batch`)
-    //! and **order-independence** (`posterior_perm`). Exercised here on a family
-    //! whose natural coordinates are trivial (Beta–Bernoulli) and one whose are a
-    //! genuine change of variables (Normal–Inverse-Gamma).
+    //! and **order-independence** (`posterior_perm`). Exercised here on the
+    //! Beta–Bernoulli family, whose natural coordinates are trivial. The
+    //! matrix-coupled families (Normal–Inverse-Gamma, Dirichlet–Categorical) carry
+    //! their analogous corollary checks in the sibling crate `ito`.
 
     use super::*;
-    use crate::distribution::{Beta, Dirichlet};
+    use crate::distribution::Beta;
 
     fn close(a: f64, b: f64, tol: f64) {
         assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
@@ -160,37 +159,5 @@ mod tests {
         let permuted = model.posterior(&shuffled);
         close(permuted.alpha(), batch.alpha(), 1e-12);
         close(permuted.beta(), batch.beta(), 1e-12);
-    }
-
-    #[test]
-    fn normal_inverse_gamma_online_equals_batch() {
-        // NIG's natural coordinates are a real change of variables, so this is
-        // the load-bearing check that the accumulation is correct there.
-        let model = NormalInverseGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
-        let d1 = [1.0, 2.0];
-        let d2 = [3.0, 4.0, 5.0];
-        let all: Vec<f64> = d1.iter().chain(d2.iter()).copied().collect();
-
-        let batch = model.posterior(&all);
-        let online = model.posterior_from_natural(streamed(&model, &d1, &d2));
-        close(batch.mu(), online.mu(), 1e-12);
-        close(batch.lambda(), online.lambda(), 1e-12);
-        close(batch.alpha(), online.alpha(), 1e-12);
-        close(batch.beta(), online.beta(), 1e-12);
-
-        // Empty data leaves the prior unchanged (`posterior_nil`).
-        let prior_again = model.posterior(&[]);
-        close(prior_again.mu(), model.mu(), 1e-12);
-        close(prior_again.beta(), model.beta(), 1e-12);
-    }
-
-    #[test]
-    fn dirichlet_categorical_ignores_out_of_support_labels() {
-        // The statistic confines each increment to the prior's K categories, so
-        // labels ≥ K are dropped (matching the closed form) rather than growing
-        // the concentration vector.
-        let model = DirichletCategorical::new(Dirichlet::new(vec![1.0, 1.0, 1.0]).unwrap());
-        let post = model.posterior(&[0u64, 1, 2, 7, 99]);
-        assert_eq!(post.alpha(), &[2.0, 2.0, 2.0]);
     }
 }

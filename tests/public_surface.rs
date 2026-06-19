@@ -2,16 +2,17 @@
 //! the public crate API.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
+// The multivariate-matrix, matrix-conjugate, and S² directional families (and the dense-
+// matrix sample-statistic admissibility predicates) moved to the sibling crate `ito`; their
+// public-surface tests moved with them (see ito's test suite). What remains here is bayes'
+// euclid-only surface: scalar families, scalar conjugate models, divergences, empirical
+// distributions, t-digest, and the lazy kernels.
 use bayes::{
-    Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, BinghamPotential, Conjugate,
-    Constraint, Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt,
-    ContinuousFn, Dirichlet, DirichletCategorical, DirichletMultinomialDistribution, Discrete,
+    Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Conjugate, Constraint,
+    Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt, ContinuousFn, Discrete,
     DiscreteDistributionExt, DiscreteFn, Ecdf, Exponential, ExponentialFamily, Gamma,
-    GammaExponential, GammaPoisson, InverseWishart, KentPotential, KlDivergence, MarkovChain,
-    MeanVar, Mixture, Moments, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
-    MultivariateStudentT, Normal, NormalGamma, NormalInverseGamma, NormalInverseWishart,
-    NormalKnownVariance, NormalWishart, OrderStatistic, Poisson, StudentT, SufficientStatistic,
-    Uniform, Wishart, histogram, is_correlation_matrix_admissible, is_covariance_matrix_admissible,
+    GammaExponential, GammaPoisson, MeanVar, Mixture, Moments, Normal, OrderStatistic, Poisson,
+    SufficientStatistic, Uniform, histogram,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -218,29 +219,12 @@ fn beta_binomial_and_gamma_poisson_predictives() {
     close(gamma_sum.shape(), 7.0, 1e-12);
 }
 
+// The Normal-known-variance, Normal-Inverse-Gamma / Normal-Gamma, and Dirichlet-categorical
+// conjugate-flow public-surface tests moved to ito (their predictive observations and count
+// models are matrix-typed); see ito's test suite. `Normal::linear_combination_independent`
+// (scalar) stays exercised below.
 #[test]
-fn normal_normal_known_variance_posterior() {
-    let model = NormalKnownVariance::new(Normal::new(0.0, 10.0).unwrap(), 1.0);
-    let data = [4.9, 5.1, 5.0, 4.8, 5.2];
-    let post = model.posterior(&data);
-    close(post.mean().unwrap(), 5.0, 0.02);
-    assert!(post.variance().unwrap() < 1.0);
-    let future_mean = model.posterior_predictive_mean(&data, 4).unwrap();
-    close(future_mean.mean().unwrap(), post.mean().unwrap(), 1e-12);
-    let future_sum = model.posterior_predictive_sum(&data, 4).unwrap();
-    close(
-        future_sum.mean().unwrap(),
-        4.0 * post.mean().unwrap(),
-        1e-12,
-    );
-    let future_observations = model.posterior_predictive_observations(&data, 4).unwrap();
-    close(
-        future_observations.covariance_matrix().get(0, 1),
-        post.variance().unwrap(),
-        1e-12,
-    );
-    assert!(model.ln_marginal_likelihood(&data).is_finite());
-
+fn normal_linear_combination_is_public() {
     let combo = Normal::linear_combination_independent(
         &[
             (2.0, Normal::new(1.0, 2.0).unwrap()),
@@ -251,144 +235,6 @@ fn normal_normal_known_variance_posterior() {
     .unwrap();
     close(combo.mean().unwrap(), 9.0, 1e-12);
     close(combo.variance().unwrap(), 32.0, 1e-12);
-}
-
-#[test]
-fn normal_inverse_gamma_full_conjugate_flow() {
-    let nig = NormalInverseGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
-    let data = [1.0, 2.0, 3.0];
-    let post = nig.posterior(&data);
-    close(post.mu(), 1.5, 1e-12);
-    close(post.alpha(), 3.5, 1e-12);
-    let pred: StudentT = nig.posterior_predictive(&data);
-    close(pred.freedom(), 7.0, 1e-12);
-    close(pred.location(), 1.5, 1e-12);
-    close(pred.affine(2.0, -1.0).unwrap().location(), 2.0, 1e-12);
-    let future_mean = nig.posterior_predictive_mean(&data, 4).unwrap();
-    close(future_mean.scale(), 0.5_f64.sqrt(), 1e-12);
-    let future_sum = nig.posterior_predictive_sum(&data, 4).unwrap();
-    close(future_sum.location(), 6.0, 1e-12);
-    let future_observations = nig.posterior_predictive_observations(&data, 4).unwrap();
-    close(future_observations.scale_matrix().get(0, 1), 0.25, 1e-12);
-    assert!(post.mean_marginal().scale() < pred.scale());
-    assert!(post.variance_marginal().mean().is_some());
-    assert!(nig.ln_marginal_likelihood(&data).is_finite());
-
-    let ng = NormalGamma::new(0.0, 1.0, 2.0, 1.0).unwrap();
-    let precision_post = ng.posterior(&data);
-    close(precision_post.mu(), post.mu(), 1e-12);
-    close(
-        precision_post.precision_marginal().mean().unwrap(),
-        1.0,
-        1e-12,
-    );
-    assert!(precision_post.mean_conditional(2.0).unwrap().pdf(1.5) > 0.0);
-    close(
-        ng.posterior_predictive_sum(&data, 4).unwrap().location(),
-        6.0,
-        1e-12,
-    );
-    close(
-        ng.ln_marginal_likelihood(&data),
-        nig.ln_marginal_likelihood(&data),
-        1e-12,
-    );
-}
-
-#[test]
-fn dirichlet_categorical_conjugate_flow() {
-    let model = DirichletCategorical::new(Dirichlet::new(vec![1.0, 1.0, 1.0]).unwrap());
-    let post = model.posterior(&[0u64, 0, 1, 2, 0]);
-    assert_eq!(post.alpha(), &[4.0, 2.0, 2.0]);
-    let pred = model.posterior_predictive(&[0u64, 0, 1, 2, 0]);
-    close(pred.probabilities()[0], 0.5, 1e-12);
-    close(model.ln_predictive(0).exp(), 1.0 / 3.0, 1e-12);
-    close(
-        model.ln_posterior_predictive(&[0u64, 0, 1, 2, 0], 0).exp(),
-        0.5,
-        1e-12,
-    );
-    close(
-        model.posterior_predictive_count_mean(&[0u64, 0, 1, 2, 0], 4)[0],
-        2.0,
-        1e-12,
-    );
-    assert!(
-        model
-            .ln_marginal_likelihood(&[0u64, 0, 1, 2, 0])
-            .is_finite()
-    );
-    close(
-        model.ln_sequential_predictive(&[0u64, 0, 1, 2, 0]),
-        model.ln_marginal_likelihood(&[0u64, 0, 1, 2, 0]),
-        1e-12,
-    );
-    assert!(
-        model
-            .ln_posterior_predictive_likelihood(&[0u64, 0, 1, 2, 0], &[0u64, 1])
-            .is_finite()
-    );
-
-    let simplex = Dirichlet::new(vec![2.0, 3.0, 5.0, 7.0]).unwrap();
-    close(
-        simplex.ln_normalizer(),
-        -simplex.ln_multivariate_beta(),
-        1e-12,
-    );
-    assert!(simplex.expected_log_probability(0).unwrap().is_finite());
-    assert!(
-        simplex
-            .expected_log_likelihood_counts(&[1, 2, 0, 0])
-            .is_finite()
-    );
-    let counted_simplex = simplex.add_counts(&[1, 0, 0, 2]).unwrap();
-    assert_eq!(counted_simplex.alpha(), &[3.0, 3.0, 5.0, 9.0]);
-    close(
-        simplex.cross_entropy(&simplex),
-        simplex.entropy().unwrap(),
-        1e-12,
-    );
-    let shifted_simplex = Dirichlet::new(vec![3.0, 4.0, 6.0, 8.0]).unwrap();
-    assert!(simplex.expected_log_density(&shifted_simplex).is_finite());
-    assert!(simplex.kl_divergence(&shifted_simplex) >= 0.0);
-    let component = simplex.component_marginal(2).unwrap();
-    close(component.alpha(), 5.0, 1e-12);
-    close(component.beta(), 12.0, 1e-12);
-    let selected_sum = simplex.sum_marginal(&[0, 2]).unwrap();
-    close(selected_sum.alpha(), 7.0, 1e-12);
-    let lumped = simplex.lump(&[vec![0, 2], vec![1], vec![3]]).unwrap();
-    assert_eq!(lumped.alpha(), &[7.0, 3.0, 7.0]);
-    let conditional = simplex.conditional_on_subset(&[3, 1, 0]).unwrap();
-    assert_eq!(conditional.alpha(), &[7.0, 3.0, 2.0]);
-
-    let count_pred = model.posterior_predictive_counts(&[0u64, 0, 1, 2, 0], 4);
-    close(count_pred.mean_vector()[0], 2.0, 1e-12);
-    assert!(count_pred.pmf(&[2, 1, 1]) > 0.0);
-
-    let dm = DirichletMultinomialDistribution::new(4, vec![2.0, 3.0, 5.0]).unwrap();
-    close(dm.mean_vector()[2], 2.0, 1e-12);
-    assert!(dm.pmf(&[1, 1, 2]) > 0.0);
-
-    let count_model = bayes::DirichletMultinomial::new(Dirichlet::new(vec![1.0, 1.0]).unwrap());
-    let count_data = [vec![3u64, 1], vec![2, 2]];
-    close(count_model.ln_predictive(&[1, 0]).exp(), 0.5, 1e-12);
-    close(
-        count_model
-            .ln_posterior_predictive(&count_data, &[1, 0])
-            .exp(),
-        0.6,
-        1e-12,
-    );
-    close(
-        count_model.ln_sequential_predictive(&count_data),
-        count_model.ln_marginal_likelihood(&count_data),
-        1e-12,
-    );
-    assert!(
-        count_model
-            .ln_posterior_predictive_likelihood(&count_data, &[vec![3, 2]])
-            .is_finite()
-    );
 }
 
 #[test]
@@ -438,10 +284,9 @@ fn variance_decomposition_is_public_and_exactly_partitions_spread() {
 #[test]
 fn probability_vectors_scores_and_constraints_are_public() {
     use bayes::{
-        brier_score, is_probability_vector, is_row_stochastic, is_row_stochastic_matrix, log_loss,
-        log_score, normalize_probability_rows, normalize_probability_weights,
-        ranked_probability_score, spherical_score, validate_probability_vector,
-        validate_row_stochastic,
+        brier_score, is_probability_vector, is_row_stochastic, log_loss, log_score,
+        normalize_probability_rows, normalize_probability_weights, ranked_probability_score,
+        spherical_score, validate_probability_vector, validate_row_stochastic,
     };
 
     let p = normalize_probability_weights(&[2.0, 5.0, 3.0]);
@@ -460,9 +305,8 @@ fn probability_vectors_scores_and_constraints_are_public() {
     let rows = normalize_probability_rows(&[vec![2.0, 8.0], vec![3.0, 3.0]]);
     assert!(is_row_stochastic(&rows));
     validate_row_stochastic(&rows).unwrap();
-    assert!(is_row_stochastic_matrix(
-        &ramanujan::DenseMatrix::from_rows(&[vec![0.2, 0.8], vec![0.5, 0.5],])
-    ));
+    // The dense-matrix row-stochastic validator (`is_row_stochastic_matrix`) moved to ito;
+    // its public-surface assertion lives there.
 
     let c = Constraint::UnitInterval;
     let y = 1000.0;
@@ -475,333 +319,6 @@ fn probability_vectors_scores_and_constraints_are_public() {
         0.0,
         1e-9,
     );
-}
-
-#[test]
-fn finite_markov_chain_step_distributions_are_public() {
-    let mc = MarkovChain::new(ramanujan::DenseMatrix::from_rows(&[
-        vec![0.2, 0.8],
-        vec![0.6, 0.4],
-    ]))
-    .unwrap();
-
-    close(mc.transition_probability(0, 1, 2), 0.48, 1e-12);
-    let dist = mc.distribution_after(&[1.0, 0.0], 2);
-    close(dist[0], 0.52, 1e-12);
-    close(dist[1], 0.48, 1e-12);
-    assert_eq!(mc.state_distribution(1, 0), vec![0.0, 1.0]);
-
-    close(mc.first_return_probability(0, 2), 0.48, 1e-12);
-    let recurrence = mc.mean_recurrence_times();
-    close(recurrence[0], 7.0 / 3.0, 1e-12);
-    close(recurrence[1], 7.0 / 4.0, 1e-12);
-    assert!(mc.is_reversible());
-    let reversed = mc.time_reversed_stationary().unwrap();
-    close(reversed.transition().get(0, 1), 0.8, 1e-12);
-
-    let absorbing = MarkovChain::new(ramanujan::DenseMatrix::from_rows(&[
-        vec![0.5, 0.5, 0.0],
-        vec![0.0, 1.0, 0.0],
-        vec![0.2, 0.3, 0.5],
-    ]))
-    .unwrap();
-    assert_eq!(absorbing.absorbing_states(), vec![1]);
-    assert_eq!(absorbing.recurrent_states(), vec![1]);
-    assert_eq!(absorbing.transient_states(), vec![0, 2]);
-    close(absorbing.hitting_probabilities(&[1])[2], 1.0, 1e-12);
-    close(absorbing.expected_hitting_times(&[1])[2], 2.8, 1e-12);
-    close(absorbing.absorption_probabilities().get(0, 0), 1.0, 1e-12);
-    close(absorbing.hitting_time_variances(&[1])[2], 3.76, 1e-12);
-    close(absorbing.absorption_time_variances()[2], 3.76, 1e-12);
-    let fundamental = absorbing.fundamental_matrix();
-    close(fundamental.get(0, 0), 2.0, 1e-12);
-    close(fundamental.get(1, 0), 0.8, 1e-12);
-    close(
-        absorbing.expected_transient_visit_counts().get(1, 1),
-        2.0,
-        1e-12,
-    );
-}
-
-#[test]
-fn covariance_and_correlation_admissibility_are_public() {
-    let cov = ramanujan::DenseMatrix::from_rows(&[vec![1.0, 2.0], vec![2.0, 4.0]]);
-    assert!(is_covariance_matrix_admissible(&cov));
-    let bad_cov = ramanujan::DenseMatrix::from_rows(&[vec![1.0, 2.0], vec![2.0, 1.0]]);
-    assert!(!is_covariance_matrix_admissible(&bad_cov));
-
-    let corr = ramanujan::DenseMatrix::from_rows(&[vec![1.0, -0.5], vec![-0.5, 1.0]]);
-    assert!(is_correlation_matrix_admissible(&corr));
-    let bad_corr = ramanujan::DenseMatrix::from_rows(&[vec![1.0, 1.2], vec![1.2, 1.0]]);
-    assert!(!is_correlation_matrix_admissible(&bad_corr));
-}
-
-#[test]
-fn multivariate_normal_closed_form_operations_are_public() {
-    let mvn = MultivariateNormal::new(
-        vec![0.0, 0.0],
-        ramanujan::DenseMatrix::from_rows(&[vec![4.0, 2.0], vec![2.0, 9.0]]),
-    )
-    .unwrap();
-
-    let marginal = mvn.marginal(&[1]).unwrap();
-    close(marginal.mean()[0], 0.0, 1e-12);
-    close(marginal.covariance_matrix().get(0, 0), 9.0, 1e-12);
-
-    let conditional = mvn.condition(&[0], &[2.0]).unwrap();
-    close(conditional.mean()[0], 1.0, 1e-10);
-    close(conditional.covariance_matrix().get(0, 0), 8.0, 1e-10);
-
-    let affine = mvn
-        .affine_transform(
-            &ramanujan::DenseMatrix::from_rows(&[vec![1.0, 1.0]]),
-            &[0.5],
-        )
-        .unwrap();
-    close(affine.mean()[0], 0.5, 1e-12);
-    close(affine.covariance_matrix().get(0, 0), 17.0, 1e-12);
-
-    let other =
-        MultivariateNormal::new(vec![1.0, 0.0], ramanujan::DenseMatrix::identity(2)).unwrap();
-    assert!(mvn.ln_product_integral(&other).is_finite());
-    assert!(mvn.precision_fusion(&other).is_ok());
-    assert!(
-        mvn.ln_likelihood(&[vec![0.0, 0.0], vec![1.0, 1.0]])
-            .is_finite()
-    );
-}
-
-#[test]
-fn multivariate_student_t_closed_form_operations_are_public() {
-    let t = MultivariateStudentT::new(
-        5.0,
-        vec![0.0, 0.0],
-        ramanujan::DenseMatrix::from_rows(&[vec![4.0, 2.0], vec![2.0, 9.0]]),
-    )
-    .unwrap();
-
-    let marginal = t.marginal(&[1]).unwrap();
-    close(marginal.location()[0], 0.0, 1e-12);
-    close(marginal.scale_matrix().get(0, 0), 9.0, 1e-12);
-
-    let conditional = t.condition(&[0], &[4.0]).unwrap();
-    close(conditional.freedom(), 6.0, 1e-12);
-    close(conditional.location()[0], 2.0, 1e-10);
-    close(t.squared_mahalanobis(&[4.0, 2.0]), 4.0, 1e-10);
-
-    let affine = t
-        .affine_transform(
-            &ramanujan::DenseMatrix::from_rows(&[vec![1.0, 1.0]]),
-            &[0.5],
-        )
-        .unwrap();
-    close(affine.location()[0], 0.5, 1e-12);
-    close(affine.scale_matrix().get(0, 0), 17.0, 1e-12);
-    assert!(affine.ln_pdf(&[0.0]).is_finite());
-    assert!(t.entropy().unwrap().is_finite());
-    close(
-        t.ln_likelihood(&[vec![0.0, 0.0], vec![1.0, -1.0]]),
-        t.ln_pdf(&[0.0, 0.0]) + t.ln_pdf(&[1.0, -1.0]),
-        1e-12,
-    );
-}
-
-#[test]
-fn matrix_variate_conjugacy_and_directional_potentials_are_public() {
-    let scale = ramanujan::DenseMatrix::identity(2);
-    let prior = NormalInverseWishart::new(vec![0.0, 0.0], 1.0, 4.0, scale).unwrap();
-    let data = vec![vec![1.0, 2.0], vec![3.0, 4.0]];
-    let post = prior.posterior(&data).unwrap();
-    close(post.mean()[0], 4.0 / 3.0, 1e-12);
-    assert!(prior.ln_marginal_likelihood(&data).is_finite());
-    let pred = post.predictive();
-    close(pred.freedom(), 5.0, 1e-12);
-    assert!(pred.ln_pdf(&[1.5, 2.5]).is_finite());
-    close(
-        post.ln_predictive(&[1.5, 2.5]),
-        pred.ln_pdf(&[1.5, 2.5]),
-        1e-12,
-    );
-    close(
-        prior.ln_posterior_predictive(&data, &[1.5, 2.5]),
-        pred.ln_pdf(&[1.5, 2.5]),
-        1e-12,
-    );
-    close(
-        prior.ln_sequential_predictive(&data),
-        prior.ln_marginal_likelihood(&data),
-        1e-10,
-    );
-    assert!(
-        prior
-            .ln_posterior_predictive_likelihood(&data, &[vec![1.5, 2.5]])
-            .is_finite()
-    );
-
-    let precision_prior = NormalWishart::new(
-        vec![0.0, 0.0],
-        1.0,
-        4.0,
-        ramanujan::DenseMatrix::identity(2),
-    )
-    .unwrap();
-    let precision_post = precision_prior.posterior(&data).unwrap();
-    close(
-        precision_post.precision_scale_matrix().get(0, 0),
-        0.6,
-        1e-12,
-    );
-    assert!(precision_prior.precision_marginal().entropy().is_finite());
-    assert!(
-        precision_prior
-            .mean_conditional(&ramanujan::DenseMatrix::identity(2))
-            .unwrap()
-            .ln_pdf(&[0.0, 0.0])
-            .is_finite()
-    );
-    assert!(
-        precision_prior
-            .posterior_predictive(&data)
-            .unwrap()
-            .ln_pdf(&[1.5, 2.5])
-            .is_finite()
-    );
-    assert!(
-        precision_prior
-            .ln_posterior_predictive(&data, &[1.5, 2.5])
-            .is_finite()
-    );
-    close(
-        precision_prior.ln_marginal_likelihood(&data),
-        prior.ln_marginal_likelihood(&data),
-        1e-10,
-    );
-    close(
-        precision_prior.ln_sequential_predictive(&data),
-        precision_prior.ln_marginal_likelihood(&data),
-        1e-10,
-    );
-
-    let mv_t = MultivariateStudentT::new(
-        6.0,
-        vec![0.0],
-        ramanujan::DenseMatrix::from_rows(&[vec![4.0]]),
-    )
-    .unwrap();
-    close(mv_t.covariance().get(0, 0), 6.0, 1e-12);
-
-    let wishart = Wishart::new(6.0, ramanujan::DenseMatrix::identity(2)).unwrap();
-    assert!(
-        wishart
-            .ln_pdf_matrix(&ramanujan::DenseMatrix::identity(2))
-            .is_finite()
-    );
-    assert!(wishart.entropy().is_finite());
-    assert!(wishart.expected_log_determinant().is_finite());
-    close(wishart.mean_matrix().get(0, 0), 6.0, 1e-12);
-    close(wishart.variance_matrix().get(0, 0), 12.0, 1e-12);
-    let congruence = ramanujan::DenseMatrix::from_rows(&[vec![2.0, 0.0], vec![0.0, 3.0]]);
-    let mapped_wishart = wishart.scale_by_congruence(&congruence).unwrap();
-    close(mapped_wishart.scale_matrix().get(0, 0), 4.0, 1e-12);
-    close(mapped_wishart.scale_matrix().get(1, 1), 9.0, 1e-12);
-    close(wishart.kl_divergence(&wishart), 0.0, 1e-10);
-    close(
-        wishart
-            .inverse_distribution()
-            .inverse_distribution()
-            .scale_matrix()
-            .get(0, 0),
-        1.0,
-        1e-10,
-    );
-    let inverse_wishart = InverseWishart::new(6.0, ramanujan::DenseMatrix::identity(2)).unwrap();
-    assert!(
-        inverse_wishart
-            .ln_pdf_matrix(&ramanujan::DenseMatrix::identity(2))
-            .is_finite()
-    );
-    assert!(inverse_wishart.entropy().is_finite());
-    close(
-        inverse_wishart.mean_matrix().unwrap().get(0, 0),
-        1.0 / 3.0,
-        1e-12,
-    );
-    close(
-        inverse_wishart.variance_matrix().unwrap().get(0, 0),
-        2.0 / 9.0,
-        1e-12,
-    );
-    let mapped_inverse_wishart = inverse_wishart.scale_by_congruence(&congruence).unwrap();
-    close(mapped_inverse_wishart.scale_matrix().get(0, 0), 4.0, 1e-12);
-    close(mapped_inverse_wishart.scale_matrix().get(1, 1), 9.0, 1e-12);
-    close(inverse_wishart.kl_divergence(&inverse_wishart), 0.0, 1e-10);
-    close(
-        inverse_wishart.expected_inverse_matrix().get(0, 0),
-        6.0,
-        1e-10,
-    );
-
-    let kent =
-        KentPotential::new([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], 4.0, 1.0).unwrap();
-    close(kent.ln_unnormalized_density(&[1.0, 0.0, 0.0]), 4.0, 1e-12);
-    close(
-        kent.ln_density_difference(&[1.0, 0.0, 0.0], &[0.0, 1.0, 0.0]),
-        3.0,
-        1e-12,
-    );
-    close(
-        kent.tangent_gradient(&[0.0, 1.0, 0.0]).unwrap()[0],
-        4.0,
-        1e-12,
-    );
-    let kent_vmf =
-        KentPotential::new([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], 4.0, 0.0).unwrap();
-    assert!(
-        kent_vmf
-            .ln_pdf_closed_form(&[1.0, 0.0, 0.0])
-            .unwrap()
-            .is_finite()
-    );
-
-    let bingham = BinghamPotential::new(ramanujan::DenseMatrix::from_rows(&[
-        vec![2.0, 0.0],
-        vec![0.0, -1.0],
-    ]))
-    .unwrap();
-    close(bingham.ln_unnormalized_density(&[1.0, 0.0]), 2.0, 1e-12);
-    close(
-        bingham.ln_unnormalized_density(&[1.0, 0.0]),
-        bingham.ln_unnormalized_density(&[-1.0, 0.0]),
-        1e-12,
-    );
-    close(
-        bingham
-            .shifted_by_identity(5.0)
-            .unwrap()
-            .ln_density_difference(&[1.0, 0.0], &[0.0, 1.0]),
-        bingham.ln_density_difference(&[1.0, 0.0], &[0.0, 1.0]),
-        1e-12,
-    );
-    close(bingham.trace_centered().trace(), 0.0, 1e-12);
-    assert!(bingham.pdf_closed_form(&[1.0, 0.0]).unwrap().is_finite());
-    close(bingham.max_eigenvalue(), 2.0, 1e-12);
-    assert_eq!(bingham.mode_axes().len(), 1);
-    assert!(
-        bingham
-            .second_moment_matrix_closed_form()
-            .unwrap()
-            .get(0, 0)
-            > 0.5
-    );
-    assert!(bingham.entropy_closed_form().unwrap().is_finite());
-
-    let axial = BinghamPotential::from_rank_one(&[1.0, 0.0, 0.0], 3.0, 1.5).unwrap();
-    let rank_one = axial.rank_one_form().unwrap();
-    close(rank_one.concentration(), 3.0, 1e-12);
-    let watson =
-        bayes::WatsonS2::<hausdorff::space::sphere::UnitVector>::from_bingham_potential(&axial)
-            .unwrap();
-    close(watson.concentration(), 3.0, 1e-12);
 }
 
 #[test]
@@ -855,60 +372,24 @@ fn public_distribution_surface_round_trips() {
 }
 
 #[test]
-fn von_mises_directional_public_surface() {
+fn von_mises_circular_public_surface() {
+    // The S² directional families (von Mises-Fisher / spherical-uniform / Watson) moved to
+    // ito; their public-surface assertions live in ito's test suite. The circular von Mises
+    // and the `i0` Bessel function stay in bayes.
     use bayes::VonMises;
-    use hausdorff::space::sphere::UnitVector;
 
     let vm = VonMises::new(0.0, 4.0).unwrap();
     assert!(vm.pdf(0.0) > vm.pdf(std::f64::consts::PI));
     let cv = vm.circular_variance();
     assert!((0.0..=1.0).contains(&cv) && cv < 0.5);
     close(bayes::function::i0(0.0), 1.0, 1e-12);
-
-    let p = bayes::VonMisesFisher::new(UnitVector::from_coords(&[1.0, 0.0, 0.0]), 3.0).unwrap();
-    let q = bayes::VonMisesFisher::new(UnitVector::from_coords(&[0.0, 1.0, 0.0]), 4.0).unwrap();
-    assert!(p.kl_divergence(&q) > 0.0);
-    assert!(p.entropy().unwrap().is_finite());
-    let fused = p.product_fusion(&q).unwrap();
-    close(fused.concentration(), 5.0, 1e-12);
-    assert!(p.ln_product_integral(&q).is_finite());
-
-    let uniform = bayes::SphericalUniform::new(UnitVector::from_coords(&[1.0, 0.0, 0.0])).unwrap();
-    close(
-        uniform.pdf(&[0.0, 1.0, 0.0]),
-        1.0 / (4.0 * std::f64::consts::PI),
-        1e-12,
-    );
-    close(
-        uniform.entropy().unwrap(),
-        (4.0 * std::f64::consts::PI).ln(),
-        1e-12,
-    );
-
-    let watson = bayes::WatsonS2::new(UnitVector::from_coords(&[1.0, 0.0, 0.0]), 3.0).unwrap();
-    assert!(watson.is_bipolar());
-    assert!(watson.pdf(&[1.0, 0.0, 0.0]) > watson.pdf(&[0.0, 1.0, 0.0]));
-    assert!(watson.entropy().unwrap().is_finite());
-    assert!(
-        watson
-            .as_bingham_potential()
-            .unwrap()
-            .is_antipodally_symmetric()
-    );
 }
 
 #[test]
-fn streaming_covariance_and_tdigest_public_surface() {
-    use bayes::{RunningCovariance, TDigest};
-
-    let mut rc = RunningCovariance::new();
-    for i in 0..100 {
-        let x = i as f64;
-        rc.push(x, 3.0 * x + 2.0);
-    }
-    close(rc.slope(), 3.0, 1e-9);
-    close(rc.intercept(), 2.0, 1e-9);
-    close(rc.correlation(), 1.0, 1e-9);
+fn streaming_tdigest_public_surface() {
+    // `RunningCovariance` (the paired-observation matrix accumulator) moved to ito; its
+    // streaming-covariance surface assertion lives there. `TDigest` stays in bayes.
+    use bayes::TDigest;
 
     let d: TDigest = (0..2000).map(|i| i as f64 / 1999.0).collect();
     assert!((d.quantile(0.5) - 0.5).abs() < 0.02);

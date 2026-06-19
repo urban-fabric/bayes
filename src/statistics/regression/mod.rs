@@ -1,9 +1,8 @@
 //! Ordinary least squares: **simple linear regression** ([`LinearRegression`] —
-//! fit `y ≈ slope·x + intercept`, with `R²`) and **multiple regression over an
-//! explicit design matrix** ([`fit_least_squares`]).
+//! fit `y ≈ slope·x + intercept`, with `R²`). Multiple regression over an explicit
+//! design matrix (`fit_least_squares`) is matrix-coupled and lives in the sibling
+//! crate `ito`.
 
-mod least_squares;
 mod linear;
 
-pub use least_squares::fit_least_squares;
 pub use linear::LinearRegression;

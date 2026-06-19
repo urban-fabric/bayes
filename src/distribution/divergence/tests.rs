@@ -1,8 +1,7 @@
 use super::*;
 use crate::distribution::{
-    Bernoulli, Beta, Categorical, Cauchy, Continuous, Dirichlet, Discrete, Exponential, Gamma,
-    Geometric, Laplace, LogNormal, Moments, Multinomial, Normal, Pareto, Poisson, Rayleigh,
-    Weibull,
+    Bernoulli, Beta, Categorical, Cauchy, Continuous, Discrete, Exponential, Gamma, Geometric,
+    Laplace, LogNormal, Moments, Normal, Pareto, Poisson, Rayleigh, Weibull,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -546,7 +545,9 @@ fn laplace_and_geometric_kl_known_values() {
 }
 
 #[test]
-fn categorical_multinomial_dirichlet_kl() {
+fn categorical_kl() {
+    // The Multinomial / Dirichlet KL closed forms (which build on this categorical
+    // KL) move with their distributions to the sibling crate `ito`.
     let p = Categorical::new(&[0.5, 0.5]).unwrap();
     let q = Categorical::new(&[0.25, 0.75]).unwrap();
     close(p.kl_divergence(&q), 0.5 * (4.0_f64 / 3.0).ln(), 1e-12);
@@ -555,22 +556,6 @@ fn categorical_multinomial_dirichlet_kl() {
         p.kl_divergence(&Categorical::new(&[0.3, 0.3, 0.4]).unwrap())
             .is_infinite()
     );
-
-    // Multinomial KL is `n ×` the categorical KL for matched trial counts.
-    let m = Multinomial::new(10, &[0.5, 0.5]).unwrap();
-    let mq = Multinomial::new(10, &[0.25, 0.75]).unwrap();
-    close(m.kl_divergence(&mq), 10.0 * p.kl_divergence(&q), 1e-12);
-    assert!(
-        m.kl_divergence(&Multinomial::new(7, &[0.5, 0.5]).unwrap())
-            .is_infinite()
-    );
-
-    // Dirichlet: nonneg, self-zero, asymmetric.
-    let da = Dirichlet::new(vec![2.0, 3.0, 4.0]).unwrap();
-    let db = Dirichlet::new(vec![1.0, 1.0, 1.0]).unwrap();
-    close(da.kl_divergence(&da), 0.0, 1e-12);
-    assert!(da.kl_divergence(&db) > 0.0);
-    assert_ne!(da.kl_divergence(&db), db.kl_divergence(&da));
 }
 
 #[test]

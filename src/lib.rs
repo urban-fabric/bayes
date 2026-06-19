@@ -24,32 +24,25 @@ pub use primitives::{
 
 pub use distribution::{
     Affine, Alpha, Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Bijector,
-    BinghamPotential, BinghamRankOne, BinghamSpectrum, Binomial, Categorical, Cauchy, Channel,
-    ChiSquared, ChiSquaredDivergence, ChiSquaredGen, Conjugate, Constrained, Constraint,
-    Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt,
-    ContinuousFn, CountSum, Custom, Dirichlet, DirichletCategorical, DirichletMultinomial,
-    DirichletMultinomialDistribution, Discrete, DiscreteCdf, DiscreteDistributionExt, DiscreteFn,
-    DiscreteMass, DiscreteUniform, Divergence, Estimate, Exp, Exponential, ExponentialFamily,
-    FGenerator, FisherSnedecor, Frechet, Gamma, GammaExponential, GammaPoisson, Geometric, Gumbel,
-    HalfNormal, HellingerDistance, Hypergeometric, InverseGamma, InverseWishart, Jeffreys,
-    JensenShannon, KentPotential, Kl, KlDivergence, Laplace, LogNormal, Logistic, Lomax, MeanVar,
-    Mixture, Moments, Multinomial, MultivariateContinuous, MultivariateMoments, MultivariateNormal,
-    MultivariateStudentT, NaturalParams, NegativeBinomial, Normal, NormalGamma, NormalInverseGamma,
-    NormalInverseWishart, NormalKnownVariance, NormalWishart, OrderStatistic,
-    PROBABILITY_TOLERANCE, Pareto, Poisson, Rayleigh, RenyiDivergence, ReverseKl, Sigmoid,
-    SphericalUniform, SquaredHellinger, StudentT, SufficientStatistic, Support, TotalVariation,
+    Binomial, Categorical, Cauchy, Channel, ChiSquared, ChiSquaredDivergence, ChiSquaredGen,
+    Conjugate, Constrained, Constraint, Continuous, ContinuousCdf, ContinuousCdfExt,
+    ContinuousDensity, ContinuousDistributionExt, ContinuousFn, CountSum, Custom, Discrete,
+    DiscreteCdf, DiscreteDistributionExt, DiscreteFn, DiscreteMass, DiscreteUniform, Divergence,
+    Estimate, Exp, Exponential, ExponentialFamily, FGenerator, FisherSnedecor, Frechet, Gamma,
+    GammaExponential, GammaPoisson, Geometric, Gumbel, HalfNormal, HellingerDistance,
+    Hypergeometric, InverseGamma, Jeffreys, JensenShannon, Kl, KlDivergence, Laplace, LogNormal,
+    Logistic, Lomax, MeanVar, Mixture, Moments, NaturalParams, NegativeBinomial, Normal,
+    OrderStatistic, PROBABILITY_TOLERANCE, Pareto, Poisson, Rayleigh, RenyiDivergence, ReverseKl,
+    Sigmoid, SquaredHellinger, StudentT, SufficientStatistic, Support, TotalVariation,
     TotalVariationGen, Transformed, Trials, Triangular, Truncated, Uniform, Uniform2D, VonMises,
-    VonMisesFisher, Wald, WatsonS2, Weibull, Wishart, bhattacharyya_coefficient, brier_score,
-    conditional_entropy, cross_entropy, f_divergence, is_entropy_admissible, is_probability_vector,
-    is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_matrix,
-    is_row_stochastic_matrix_with_tolerance, is_row_stochastic_with_tolerance, jensen_shannon,
-    joint_entropy, log_loss, log_score, max_entropy, mutual_information,
+    Wald, Weibull, bhattacharyya_coefficient, brier_score, conditional_entropy, cross_entropy,
+    f_divergence, is_entropy_admissible, is_probability_vector,
+    is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_with_tolerance,
+    jensen_shannon, joint_entropy, log_loss, log_score, max_entropy, mutual_information,
     normalize_probability_rows, normalize_probability_weights, normalized_entropy,
-    normalized_mutual_information, precision_weighted_mean, probability_sum,
-    ranked_probability_score, shannon_entropy, spherical_score, validate_probability_vector,
-    validate_row_stochastic, validate_row_stochastic_matrix,
-    validate_row_stochastic_matrix_with_tolerance, validate_row_stochastic_with_tolerance,
-    variation_of_information,
+    normalized_mutual_information, probability_sum, ranked_probability_score, shannon_entropy,
+    spherical_score, validate_probability_vector, validate_row_stochastic,
+    validate_row_stochastic_with_tolerance, variation_of_information,
 };
 pub use error::{BayesError, StatsError};
 
@@ -57,16 +50,12 @@ pub use error::{BayesError, StatsError};
 /// robust/weighted summaries, effect sizes, OLS diagnostics, confidence intervals,
 /// resampling, KDE, streaming stats, and test result types.
 pub use statistics::{
-    ConfidenceInterval, Ecdf, Histogram, KernelDensity, LinearRegression,
-    MATRIX_ADMISSIBILITY_TOLERANCE, RunningCovariance, RunningStats, SampleStats, TDigest,
-    TestResult, VarianceDecomposition, coefficient_of_variation, cohen_d, correlation_matrix,
-    covariance_matrix, effective_sample_size, eta_squared, fit_least_squares, gini_mean_difference,
-    glass_delta, hedges_g, histogram, hotelling_t_squared, is_correlation_matrix_admissible,
-    is_correlation_matrix_admissible_with_tolerance, is_covariance_matrix_admissible,
-    is_covariance_matrix_admissible_with_tolerance, is_effective_sample_size_admissible,
-    mahalanobis_squared, mcdiarmid_bound, mean_abs_deviation, mean_difference_welch_interval,
-    mean_t_interval, mean_vector, mean_z_interval, normalized_log_weights, normalized_weights,
-    odds_ratio, omega_squared, poisson_rate_interval, pooled_covariance_matrix, pooled_std_dev,
+    ConfidenceInterval, Ecdf, Histogram, KernelDensity, LinearRegression, RunningStats,
+    SampleStats, TDigest, TestResult, VarianceDecomposition, coefficient_of_variation, cohen_d,
+    effective_sample_size, eta_squared, gini_mean_difference, glass_delta, hedges_g, histogram,
+    is_effective_sample_size_admissible, mcdiarmid_bound, mean_abs_deviation,
+    mean_difference_welch_interval, mean_t_interval, mean_z_interval, normalized_log_weights,
+    normalized_weights, odds_ratio, omega_squared, poisson_rate_interval, pooled_std_dev,
     proportion_agresti_coull, proportion_clopper_pearson, proportion_difference_wald,
     proportion_jeffreys, proportion_wald, proportion_wilson, risk_difference, risk_ratio,
     std_dev_chi_square_interval, trimmed_mean, tukey_fences, tukey_outlier_flags,
@@ -75,11 +64,12 @@ pub use statistics::{
     weighted_std_dev, weighted_variance, winsorized_mean, z_scores,
 };
 
-/// Probabilistic processes: Gaussian processes, random walks, Poisson processes,
-/// Markov chains.
+/// Probabilistic processes: random walks, Poisson processes, and the covariance
+/// kernels used by Gaussian processes. (`GaussianProcess` and `MarkovChain` are
+/// matrix-coupled and live in the sibling crate `ito`.)
 pub use process::{
-    GaussianProcess, GaussianRandomWalk, GpPosterior, Kernel, Linear, MarkovChain, Matern,
-    MaternNu, Periodic, PoissonProcess, Rbf, inhomogeneous_arrivals, wiener_path,
+    GaussianRandomWalk, Kernel, Linear, Matern, MaternNu, Periodic, PoissonProcess, Rbf,
+    inhomogeneous_arrivals, wiener_path,
 };
 
 /// The sampling contract every distribution implements (`rng.sample(&dist)`).

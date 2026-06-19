@@ -2056,26 +2056,26 @@ pub fn negative_binomial_skewness<T: LazyReal>(successes: T, p: T) -> T {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // The scalar/lazy kernels are exercised end-to-end here against bayes' own concrete
+    // distributions (euclid-only families). The multivariate-matrix, conjugate-matrix,
+    // and S² directional families moved to the sibling crate `ito`; the cross-checks that
+    // these same kernels agree with `ito::MultivariateNormal` / `ito::VonMisesFisher` /
+    // `ito::Dirichlet` (etc.) live in ito's integration test
+    // `tests/bayes_kernels_on_eager.rs`.
     use crate::distribution::{
         Bernoulli, Beta, BetaBernoulli, BetaBinomialModel, Binomial, Categorical, Cauchy,
-        ChiSquared, ChiSquaredDivergence, Continuous, ContinuousCdf, Dirichlet,
-        DirichletCategorical, DirichletMultinomialDistribution, Discrete, DiscreteCdf,
+        ChiSquared, ChiSquaredDivergence, Continuous, ContinuousCdf, Discrete, DiscreteCdf,
         DiscreteUniform, Exponential, FisherSnedecor, Frechet, Gamma, GammaExponential,
         GammaPoisson, Geometric, Gumbel, HalfNormal, HellingerDistance, Hypergeometric,
-        InverseGamma, KlDivergence, Laplace, LogNormal, Logistic, Lomax, Moments, Multinomial,
-        MultivariateContinuous, MultivariateMoments, MultivariateNormal, MultivariateStudentT,
-        NegativeBinomial, Normal, NormalGamma, NormalInverseGamma, NormalKnownVariance,
-        OrderStatistic, Pareto, Poisson, Rayleigh, RenyiDivergence, StudentT, TotalVariation,
-        Triangular, Uniform, VonMises, VonMisesFisher, Wald, WatsonS2, Weibull,
+        InverseGamma, KlDivergence, Laplace, LogNormal, Logistic, Lomax, Moments,
+        NegativeBinomial, Normal, OrderStatistic, Pareto, Poisson, Rayleigh, RenyiDivergence,
+        StudentT, TotalVariation, Triangular, Uniform, VonMises, Wald, Weibull,
     };
-    use crate::function::bessel::{ln_i0, ln_iv};
+    use crate::function::bessel::ln_i0;
     use crate::function::beta::ln_beta;
     use crate::function::factorial::{ln_binomial, ln_factorial};
     use crate::function::gamma::ln_gamma;
     use crate::function::multivariate::ln_multivariate_beta;
-    use hausdorff::GeoPoint;
-    use hausdorff::space::s2::S2Point;
-    use ramanujan::DenseMatrix;
 
     fn close(a: f64, b: f64, tol: f64) {
         assert!(
@@ -2204,12 +2204,20 @@ mod tests {
             Normal::new(0.0, 1.0).unwrap().ln_pdf(0.0) + Normal::new(1.0, 2.0).unwrap().ln_pdf(2.0);
         close(got, expected, 1e-12);
 
-        let dirichlet = Dirichlet::new(vec![2.0, 3.0, 5.0]).unwrap();
+        // The Dirichlet-on-simplex cross-check (against the concrete distribution) moved to
+        // ito; here we cross-check the kernel against the bayes-local `ln_multivariate_beta`
+        // normalizer it consumes — `ln f = (α−1)·ln x − ln B(α)`.
+        let alpha = [2.0, 3.0, 5.0];
         let x = [0.2, 0.3, 0.5];
         let got =
-            dirichlet_log_pdf_on_simplex(&x, dirichlet.alpha(), dirichlet.ln_multivariate_beta())
-                .unwrap();
-        close(got, dirichlet.ln_pdf(&x), 1e-12);
+            dirichlet_log_pdf_on_simplex(&x, &alpha, ln_multivariate_beta(&alpha)).unwrap();
+        let expected = alpha
+            .iter()
+            .zip(&x)
+            .map(|(&a, &xi)| (a - 1.0) * xi.ln())
+            .sum::<f64>()
+            - ln_multivariate_beta(&alpha);
+        close(got, expected, 1e-12);
     }
 
     #[test]
@@ -2327,17 +2335,9 @@ mod tests {
             1e-12,
         );
 
-        // Normal known-variance marginal likelihood from sufficient statistics.
-        let nkv = NormalKnownVariance::new(Normal::new(0.5, 2.0).unwrap(), 1.3);
-        let obs = [0.2, -0.4, 1.1, 0.7];
-        let count = obs.len() as f64;
-        let sum: f64 = obs.iter().sum();
-        let sum_sq: f64 = obs.iter().map(|x| x * x).sum();
-        close(
-            normal_known_variance_log_marginal_likelihood(count, sum, sum_sq, 0.5, 2.0, 1.3),
-            nkv.ln_marginal_likelihood(&obs),
-            1e-12,
-        );
+        // Normal known-variance / Normal-Inverse-Gamma / Normal-Gamma cross-checks against
+        // their concrete conjugate models moved to ito (the matrix-conjugate crate); the
+        // marginal-likelihood kernels themselves stay here and are exercised there.
 
         // Gamma-Poisson marginal likelihood over count sufficient statistics.
         let counts = [2u64, 0, 3, 1];
@@ -2372,25 +2372,24 @@ mod tests {
             1e-12,
         );
 
-        // Dirichlet-categorical marginal likelihood from category counts.
-        let dc = DirichletCategorical::new(Dirichlet::new(vec![1.0, 2.0, 0.5]).unwrap());
-        let labels = [0u64, 1, 1, 2, 0, 1];
+        // Dirichlet-categorical marginal likelihood from category counts — cross-checked
+        // against the explicit `ln B(α + counts) − ln B(α)` (the concrete
+        // `DirichletCategorical` cross-check moved to ito).
+        let alpha = [1.0, 2.0, 0.5];
         let category_counts = [2.0, 3.0, 1.0];
+        let posterior: Vec<f64> = alpha
+            .iter()
+            .zip(&category_counts)
+            .map(|(&a, &c)| a + c)
+            .collect();
         close(
-            dirichlet_categorical_log_marginal_likelihood(&[1.0, 2.0, 0.5], &category_counts)
-                .unwrap(),
-            dc.ln_marginal_likelihood(&labels),
+            dirichlet_categorical_log_marginal_likelihood(&alpha, &category_counts).unwrap(),
+            ln_multivariate_beta(&posterior) - ln_multivariate_beta(&alpha),
             1e-12,
         );
 
-        // Normal-Inverse-Gamma marginal likelihood (mean + variance integrated out);
-        // the Normal-Gamma precision twin shares the identical closed form.
-        let nig = NormalInverseGamma::new(0.5, 2.0, 3.0, 1.5).unwrap();
-        let ng = NormalGamma::new(0.5, 2.0, 3.0, 1.5).unwrap();
-        let lazy_nig =
-            normal_inverse_gamma_log_marginal_likelihood(count, sum, sum_sq, 0.5, 2.0, 3.0, 1.5);
-        close(lazy_nig, nig.ln_marginal_likelihood(&obs), 1e-12);
-        close(lazy_nig, ng.ln_marginal_likelihood(&obs), 1e-12);
+        // The Normal-Inverse-Gamma / Normal-Gamma marginal-likelihood cross-check (against
+        // the concrete conjugate models) moved to ito.
 
         // Multivariate Beta normalizer (the Dirichlet log-normalizer).
         let mvbeta_alpha = [1.5, 2.0, 0.7];
@@ -2552,21 +2551,29 @@ mod tests {
     }
 
     #[test]
-    fn lazy_real_dirichlet_vector_kernels_match_distribution() {
+    fn lazy_real_dirichlet_vector_kernels_match_explicit_closed_form() {
+        // The concrete-distribution cross-check moved to ito; here the Dirichlet KL and
+        // entropy kernels are checked against their explicit closed forms built from the
+        // bayes-local `ln_multivariate_beta` / `digamma` (no concrete distribution).
+        use crate::function::gamma::digamma;
         let alpha = [2.0, 3.0, 5.0];
         let beta = [1.5, 2.0, 4.0];
-        let da = Dirichlet::new(alpha.to_vec()).unwrap();
-        let db = Dirichlet::new(beta.to_vec()).unwrap();
-        close(
-            dirichlet_kl(&alpha, &beta).unwrap(),
-            da.kl_divergence(&db),
-            1e-12,
-        );
-        close(
-            dirichlet_entropy(&alpha).unwrap(),
-            da.entropy().unwrap(),
-            1e-12,
-        );
+        let a0: f64 = alpha.iter().sum();
+
+        // D(α ‖ β) = ln B(β) − ln B(α) + Σ (αᵢ − βᵢ)·(ψ(αᵢ) − ψ(α₀)).
+        let expected_kl = ln_multivariate_beta(&beta) - ln_multivariate_beta(&alpha)
+            + alpha
+                .iter()
+                .zip(&beta)
+                .map(|(&a, &b)| (a - b) * (digamma(a) - digamma(a0)))
+                .sum::<f64>();
+        close(dirichlet_kl(&alpha, &beta).unwrap(), expected_kl, 1e-12);
+
+        // H(α) = ln B(α) + (α₀ − K)·ψ(α₀) − Σ (αᵢ − 1)·ψ(αᵢ).
+        let k = alpha.len() as f64;
+        let expected_entropy = ln_multivariate_beta(&alpha) + (a0 - k) * digamma(a0)
+            - alpha.iter().map(|&a| (a - 1.0) * digamma(a)).sum::<f64>();
+        close(dirichlet_entropy(&alpha).unwrap(), expected_entropy, 1e-12);
     }
 
     #[test]
@@ -3326,21 +3333,31 @@ mod tests {
     }
 
     #[test]
-    fn lazy_real_count_vector_kernels_match_distribution_log_masses() {
+    fn lazy_real_count_vector_kernels_match_explicit_closed_form() {
+        // The Multinomial / Dirichlet-multinomial cross-checks against the concrete
+        // distributions moved to ito; here the count-vector kernels are checked against
+        // their explicit closed forms (the multinomial coefficient is supplied by the
+        // bayes-local `ln_factorial`, the Dirichlet-multinomial normalizer by
+        // `ln_multivariate_beta`).
         let probabilities = [0.2, 0.5, 0.3];
         let counts = [2u64, 5, 3];
         let n: u64 = counts.iter().sum();
         let ln_coefficient = ln_factorial(n) - counts.iter().map(|&k| ln_factorial(k)).sum::<f64>();
         let counts_real: Vec<f64> = counts.iter().map(|&k| k as f64).collect();
 
-        let multinomial = Multinomial::new(n, &probabilities).unwrap();
+        // Multinomial: ln C + Σ kᵢ·ln pᵢ.
         let log_probabilities: Vec<f64> = probabilities.iter().map(|p| p.ln()).collect();
         let got = multinomial_log_pmf(&counts_real, &log_probabilities, ln_coefficient).unwrap();
-        close(got, multinomial.ln_pmf(&counts), 1e-12);
+        let expected_multinomial = ln_coefficient
+            + counts_real
+                .iter()
+                .zip(&log_probabilities)
+                .map(|(&k, &lp)| k * lp)
+                .sum::<f64>();
+        close(got, expected_multinomial, 1e-12);
 
+        // Dirichlet-multinomial: ln C + ln B(α + counts) − ln B(α).
         let alpha = [1.5, 2.0, 0.7];
-        let dirichlet_multinomial =
-            DirichletMultinomialDistribution::new(n, alpha.to_vec()).unwrap();
         let posterior: Vec<f64> = alpha
             .iter()
             .zip(&counts)
@@ -3351,149 +3368,53 @@ mod tests {
             ln_multivariate_beta(&posterior),
             ln_multivariate_beta(&alpha),
         );
-        close(got, dirichlet_multinomial.ln_pmf(&counts), 1e-12);
+        close(
+            got,
+            ln_coefficient + ln_multivariate_beta(&posterior) - ln_multivariate_beta(&alpha),
+            1e-12,
+        );
     }
 
     #[test]
-    fn lazy_real_multivariate_gaussian_kernels_match_distribution_log_densities() {
+    fn lazy_real_multivariate_gaussian_kernels_match_explicit_closed_form() {
+        // The cross-checks against the concrete `MultivariateNormal` / `MultivariateStudentT`
+        // moved to ito; here the scalar multivariate kernels are checked against their own
+        // closed forms with a diagonal covariance (separable determinant / Mahalanobis term).
         use core::f64::consts::{PI, TAU};
         let mean = [0.5, -1.0];
         let variance = [2.0, 0.75];
         let x = [1.2, -0.3];
 
-        // A diagonal covariance keeps the determinant and Mahalanobis term
-        // separable, so the kernel inputs are hand-computable independently.
-        let cov = DenseMatrix::from_fn(2, 2, |i, j| if i == j { variance[i] } else { 0.0 });
-        let mvn = MultivariateNormal::new(mean.to_vec(), cov).unwrap();
         let mahalanobis_sq: f64 = (0..2)
             .map(|i| (x[i] - mean[i]) * (x[i] - mean[i]) / variance[i])
             .sum();
         let ln_det_2pi = 2.0 * TAU.ln() + variance.iter().map(|v| v.ln()).sum::<f64>();
         close(
             multivariate_normal_log_pdf(mahalanobis_sq, ln_det_2pi),
-            mvn.ln_pdf(&x),
+            -0.5 * (mahalanobis_sq + ln_det_2pi),
             1e-12,
         );
 
-        // Diagonal-scale Student-t reuses the distribution's public Mahalanobis
-        // term; a diagonal scale has log-determinant equal to the log sum.
-        let scale = DenseMatrix::from_fn(2, 2, |i, j| if i == j { variance[i] } else { 0.0 });
         let freedom = 6.0;
         let dimension = 2.0;
-        let mvt = MultivariateStudentT::new(freedom, mean.to_vec(), scale).unwrap();
         let ln_det_scale = variance.iter().map(|v| v.ln()).sum::<f64>();
         let log_normalizer = ln_gamma((freedom + dimension) / 2.0)
             - ln_gamma(freedom / 2.0)
             - 0.5 * (dimension * (freedom * PI).ln() + ln_det_scale);
         close(
-            multivariate_student_t_log_pdf(
-                mvt.squared_mahalanobis(&x),
-                freedom,
-                dimension,
-                log_normalizer,
-            ),
-            mvt.ln_pdf(&x),
+            multivariate_student_t_log_pdf(mahalanobis_sq, freedom, dimension, log_normalizer),
+            log_normalizer
+                - 0.5 * (freedom + dimension) * (1.0 + mahalanobis_sq / freedom).ln(),
             1e-12,
         );
     }
 
     #[test]
-    fn lazy_real_directional_kernels_match_distribution_log_densities() {
-        fn pt(lat: f64, lon: f64) -> S2Point {
-            S2Point::from_geo_point(GeoPoint::from_lat_lon(lat, lon))
-        }
-        let mu = pt(35.0, -80.0);
-        let x = pt(12.0, 34.0);
-
-        // von Mises-Fisher on S² (ambient dimension 3, so ν = d/2 − 1 = 1/2).
-        let kappa = 4.0;
-        let vmf = VonMisesFisher::new(mu, kappa).unwrap();
-        let ln_normalizer =
-            0.5 * kappa.ln() - 1.5 * core::f64::consts::TAU.ln() - ln_iv(0.5, kappa);
-        close(
-            von_mises_fisher_log_pdf(mu.dot(x), kappa, ln_normalizer),
-            vmf.ln_pdf_point(&x),
-            1e-12,
-        );
-
-        // Watson on S²: the distribution exposes its log-partition directly.
-        let watson = WatsonS2::new(mu, 2.5).unwrap();
-        close(
-            watson_log_pdf(mu.dot(x), watson.concentration(), watson.ln_partition()),
-            watson.ln_pdf_point(&x),
-            1e-12,
-        );
-    }
-
-    #[test]
-    fn lazy_real_directional_entropy_kernels_match_distribution() {
-        // Circular von Mises, fully on the i0e/i1e surface (κ ≤ 15 keeps parity).
+    fn lazy_real_directional_entropy_kernel_matches_distribution() {
+        // The S² directional families (von Mises-Fisher / Watson) moved to ito; their lazy
+        // kernel cross-checks live in ito's `tests/bayes_kernels_on_eager.rs`. The circular
+        // von Mises stays in bayes, so its entropy kernel is exercised here.
         let vm = VonMises::new(0.3, 2.0).unwrap();
         close(von_mises_entropy(2.0), vm.entropy().unwrap(), 1e-12);
-
-        fn pt(lat: f64, lon: f64) -> S2Point {
-            S2Point::from_geo_point(GeoPoint::from_lat_lon(lat, lon))
-        }
-        let mu = pt(35.0, -80.0);
-
-        // von Mises-Fisher on S² (p = 3): caller supplies ln C_p(κ) and R.
-        let kappa = 4.0;
-        let vmf = VonMisesFisher::new(mu, kappa).unwrap();
-        let ln_normalizer =
-            0.5 * kappa.ln() - 1.5 * core::f64::consts::TAU.ln() - ln_iv(0.5, kappa);
-        close(
-            von_mises_fisher_entropy(ln_normalizer, kappa, vmf.mean_resultant_length()),
-            vmf.entropy_closed_form(),
-            1e-12,
-        );
-
-        // Watson on S²: caller supplies the log partition and axial second moment.
-        let watson = WatsonS2::new(mu, 2.5).unwrap();
-        close(
-            watson_entropy(
-                watson.ln_partition(),
-                watson.concentration(),
-                watson.axial_second_moment(),
-            ),
-            watson.entropy_closed_form(),
-            1e-12,
-        );
-
-        // Directional cross-entropies: caller supplies q's normalizer and p's geometry.
-        let mu_q = pt(10.0, 50.0);
-        let kappa_q = 2.5;
-        let vmf_q = VonMisesFisher::new(mu_q, kappa_q).unwrap();
-        let ln_normalizer_q =
-            0.5 * kappa_q.ln() - 1.5 * core::f64::consts::TAU.ln() - ln_iv(0.5, kappa_q);
-        close(
-            von_mises_fisher_cross_entropy(
-                ln_normalizer_q,
-                kappa_q,
-                vmf.mean_resultant_length(),
-                mu.dot(mu_q),
-            ),
-            vmf.cross_entropy(&vmf_q),
-            1e-12,
-        );
-
-        let watson_q = WatsonS2::new(mu_q, 1.5).unwrap();
-        close(
-            watson_cross_entropy(
-                watson_q.ln_partition(),
-                watson_q.concentration(),
-                watson.second_moment_along_axis(watson_q.axis()),
-            ),
-            watson.cross_entropy(&watson_q),
-            1e-12,
-        );
-
-        // Watson log unnormalized-density difference (the partition cancels).
-        let dx = pt(12.0, 34.0);
-        let dy = pt(-20.0, 100.0);
-        close(
-            watson_ln_density_difference(watson.concentration(), mu.dot(dx), mu.dot(dy)),
-            watson.ln_pdf_point(&dx) - watson.ln_pdf_point(&dy),
-            1e-12,
-        );
     }
 }

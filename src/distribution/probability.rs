@@ -6,7 +6,6 @@
 //! category.
 
 use crate::error::BayesError;
-use ramanujan::DenseMatrix;
 
 /// Default tolerance for probability-vector sum checks.
 pub const PROBABILITY_TOLERANCE: f64 = 1e-9;
@@ -101,43 +100,6 @@ pub fn validate_row_stochastic_with_tolerance(
             });
         }
         validate_probability_row(row, tolerance)?;
-    }
-    Ok(())
-}
-
-/// Whether `matrix` is row-stochastic: non-empty and every row is a probability
-/// vector.
-pub fn is_row_stochastic_matrix(matrix: &DenseMatrix) -> bool {
-    is_row_stochastic_matrix_with_tolerance(matrix, PROBABILITY_TOLERANCE)
-}
-
-/// Whether `matrix` is row-stochastic with a caller-specified sum tolerance.
-pub fn is_row_stochastic_matrix_with_tolerance(matrix: &DenseMatrix, tolerance: f64) -> bool {
-    validate_row_stochastic_matrix_with_tolerance(matrix, tolerance).is_ok()
-}
-
-/// Validate a row-stochastic dense matrix.
-pub fn validate_row_stochastic_matrix(matrix: &DenseMatrix) -> Result<(), BayesError> {
-    validate_row_stochastic_matrix_with_tolerance(matrix, PROBABILITY_TOLERANCE)
-}
-
-/// Validate a row-stochastic dense matrix with a caller-specified sum tolerance.
-pub fn validate_row_stochastic_matrix_with_tolerance(
-    matrix: &DenseMatrix,
-    tolerance: f64,
-) -> Result<(), BayesError> {
-    if !tolerance.is_finite() || tolerance < 0.0 {
-        return Err(BayesError::Malformed {
-            what: "probability tolerance must be finite and non-negative",
-        });
-    }
-    if matrix.rows() == 0 || matrix.cols() == 0 {
-        return Err(BayesError::Malformed {
-            what: "row-stochastic matrix needs at least one row and one column",
-        });
-    }
-    for i in 0..matrix.rows() {
-        validate_probability_row(matrix.row(i), tolerance)?;
     }
     Ok(())
 }
@@ -290,18 +252,6 @@ mod tests {
         assert!(is_row_stochastic(&normalized));
         close(normalized[0][1], 0.8, 1e-12);
         assert!(normalize_probability_rows(&[vec![0.0, 0.0]]).is_empty());
-    }
-
-    #[test]
-    fn validates_dense_row_stochastic_matrices() {
-        let matrix = DenseMatrix::from_rows(&[vec![0.2, 0.8], vec![0.5, 0.5]]);
-        assert!(is_row_stochastic_matrix(&matrix));
-        assert!(validate_row_stochastic_matrix(&matrix).is_ok());
-        assert!(!is_row_stochastic_matrix(&DenseMatrix::from_rows(&[
-            vec![0.2, 0.9],
-            vec![0.5, 0.5],
-        ])));
-        assert!(!is_row_stochastic_matrix(&DenseMatrix::zeros(0, 0)));
     }
 
     #[test]

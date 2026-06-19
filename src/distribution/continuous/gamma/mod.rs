@@ -63,7 +63,7 @@ impl Gamma {
 }
 
 /// Marsaglia–Tsang sampler for a standard gamma (rate 1), any `shape > 0`.
-pub(crate) fn sample_standard_gamma<R: Rng + ?Sized>(rng: &mut R, shape: f64) -> f64 {
+pub fn sample_standard_gamma<R: Rng + ?Sized>(rng: &mut R, shape: f64) -> f64 {
     if shape < 1.0 {
         let g = sample_standard_gamma(rng, shape + 1.0);
         return g * rng.random::<f64>().powf(1.0 / shape);

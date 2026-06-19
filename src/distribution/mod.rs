@@ -17,16 +17,13 @@ pub mod discrete;
 mod divergence;
 pub mod exponential_family;
 pub mod functional;
-pub mod multivariate;
 mod numeric;
 mod probability;
 pub mod transformed;
 
 pub use combinator::{Mixture, OrderStatistic, Truncated};
 pub use conjugate::{
-    BetaBernoulli, BetaBinomialModel, Conjugate, DirichletCategorical, DirichletMultinomial,
-    GammaExponential, GammaPoisson, NaturalParams, NormalGamma, NormalInverseGamma,
-    NormalInverseWishart, NormalKnownVariance, NormalWishart, precision_weighted_mean,
+    BetaBernoulli, BetaBinomialModel, Conjugate, GammaExponential, GammaPoisson, NaturalParams,
 };
 pub use constraint::{Constrained, Constraint};
 pub use continuous::{
@@ -51,19 +48,12 @@ pub use functional::{
     ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt, ContinuousFn,
     DiscreteDistributionExt, DiscreteFn, DiscreteMass,
 };
-pub use multivariate::{
-    BinghamPotential, BinghamRankOne, BinghamSpectrum, Dirichlet, DirichletMultinomialDistribution,
-    InverseWishart, KentPotential, Multinomial, MultivariateContinuous, MultivariateMoments,
-    MultivariateNormal, MultivariateStudentT, SphericalUniform, VonMisesFisher, WatsonS2, Wishart,
-};
 pub use probability::{
     PROBABILITY_TOLERANCE, brier_score, is_probability_vector,
-    is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_matrix,
-    is_row_stochastic_matrix_with_tolerance, is_row_stochastic_with_tolerance, log_loss, log_score,
-    normalize_probability_rows, normalize_probability_weights, probability_sum,
+    is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_with_tolerance,
+    log_loss, log_score, normalize_probability_rows, normalize_probability_weights, probability_sum,
     ranked_probability_score, spherical_score, validate_probability_vector,
-    validate_row_stochastic, validate_row_stochastic_matrix,
-    validate_row_stochastic_matrix_with_tolerance, validate_row_stochastic_with_tolerance,
+    validate_row_stochastic, validate_row_stochastic_with_tolerance,
 };
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};
 

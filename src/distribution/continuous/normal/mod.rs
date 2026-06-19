@@ -41,8 +41,9 @@ impl Normal {
 
     /// The distribution's parameters `(μ, σ)`. Moments are read through the
     /// [`Moments`] trait (`mean()`/`std_dev()` → `Option<f64>`); this is the
-    /// infallible internal accessor for the raw parameters.
-    pub(crate) fn params(&self) -> (f64, f64) {
+    /// infallible accessor for the raw parameters (consumed by the matrix-coupled
+    /// conjugate models in the sibling crate `ito`).
+    pub fn params(&self) -> (f64, f64) {
         (self.mean, self.std_dev)
     }
 
@@ -118,7 +119,7 @@ impl Distribution<f64> for Normal {
     }
 }
 
-pub(crate) fn standard_normal_polar<R: Rng + ?Sized>(rng: &mut R) -> f64 {
+pub fn standard_normal_polar<R: Rng + ?Sized>(rng: &mut R) -> f64 {
     loop {
         let u: f64 = 2.0 * rng.random::<f64>() - 1.0;
         let v: f64 = 2.0 * rng.random::<f64>() - 1.0;

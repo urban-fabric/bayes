@@ -12,12 +12,6 @@ description = "Closed-form probability and statistics for Rust: distributions, s
 path = "src/lib.rs"
 
 [dependencies]
-# Dense linear algebra (Cholesky / LU factorizations and their solves) plus the
-# DenseMatrix type used by the multivariate / Gaussian-process routines.
-ramanujan = { git = "ssh://git@github.com/urban-fabric/ramanujan.git", branch = "main" }
-# Spherical geometry: the S² space (`S2Point`, tangent frames) that directional
-# distributions (von Mises–Fisher) are defined over — the manifold as a typed space.
-hausdorff = { git = "ssh://git@github.com/urban-fabric/hausdorff.git", branch = "main" }
 rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"
@@ -27,12 +21,14 @@ thiserror = "2.0"
 # caller supplied.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 
-[dev-dependencies]
-# The XLA backend, used only to verify that bayes' lazy closed forms run on a
-# compiled tensor backend (diffed against the eager ramanujan/f64 reference).
-# Dev-only: bayes itself stays backend-agnostic (it depends only on the euclid
-# contracts). Path dep to the local sibling for offline multi-repo dev.
-maxwell = { path = "../maxwell" }
+# bayes is the euclid-only half of the probability stack — scalar closed forms and
+# lazy kernels, no dense linear algebra. The matrix-coupled multivariate stack
+# (the `ramanujan` DenseMatrix / `hausdorff` S² content) lives in the sibling
+# crate `ito`, which depends on bayes (the arrow is ito → bayes, never the
+# reverse). Verification that bayes' write-once closed forms run on a backend
+# lives in the *backend* crate, not here: see maxwell's `bayes_density` /
+# `bayes_differentiable` tests (XLA) and dirac's `density_on_polars` test
+# (columnar). The dependency arrow stays backend → content.
 
 [lints.rust]
 unsafe_code = "warn"
@@ -55,11 +51,7 @@ codegen-units = 1
 debug = true
 
 # TEMPORARY (offline dev, multi-repo LazyScalar rollout): build against the local
-# euclid/jacobi/ramanujan siblings so the scalar-generic array contracts (real+complex)
-# are visible. Reconcile to git revs before landing.
+# euclid sibling so the scalar-generic array contracts (real+complex) are visible.
+# Reconcile to git revs before landing.
 [patch."ssh://git@github.com/urban-fabric/euclid.git"]
 euclid = { path = "../euclid" }
-[patch."ssh://git@github.com/urban-fabric/jacobi.git"]
-jacobi = { path = "../jacobi" }
-[patch."ssh://git@github.com/urban-fabric/ramanujan.git"]
-ramanujan = { path = "../ramanujan" }
