@@ -32,6 +32,7 @@ pub trait Kernel {
 }
 
 /// Squared-exponential (RBF) kernel; `θ = [length_scale, variance]`.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Rbf;
 impl Kernel for Rbf {
     fn hyper_count(&self) -> usize {
@@ -42,7 +43,20 @@ impl Kernel for Rbf {
     }
 }
 
+/// Exponential (Matérn ν = ½) kernel; `θ = [length_scale, variance]`.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Exponential;
+impl Kernel for Exponential {
+    fn hyper_count(&self) -> usize {
+        2
+    }
+    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T {
+        theta[1].clone() * lazy::exponential_correlation(distance, theta[0].clone())
+    }
+}
+
 /// Matérn-5/2 kernel; `θ = [length_scale, variance]`.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Matern52;
 impl Kernel for Matern52 {
     fn hyper_count(&self) -> usize {
@@ -54,6 +68,7 @@ impl Kernel for Matern52 {
 }
 
 /// Matérn-3/2 kernel; `θ = [length_scale, variance]`.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Matern32;
 impl Kernel for Matern32 {
     fn hyper_count(&self) -> usize {
@@ -65,6 +80,7 @@ impl Kernel for Matern32 {
 }
 
 /// Sum of two kernels — `θ` is the children's `θ` concatenated.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Sum<A, B>(pub A, pub B);
 impl<A: Kernel, B: Kernel> Kernel for Sum<A, B> {
     fn hyper_count(&self) -> usize {
@@ -77,6 +93,7 @@ impl<A: Kernel, B: Kernel> Kernel for Sum<A, B> {
 }
 
 /// Product of two kernels — `θ` is the children's `θ` concatenated.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Product<A, B>(pub A, pub B);
 impl<A: Kernel, B: Kernel> Kernel for Product<A, B> {
     fn hyper_count(&self) -> usize {
