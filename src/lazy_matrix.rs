@@ -7,8 +7,9 @@
 //! (`mahalanobis_squared`, `logdet_spd`), so the same source runs on the `f64`
 //! reference (`ramanujan`) and on a tensor backend such as `maxwell` (XLA).
 
-use euclid::array::{LazyMatrix, LazyVector, PreparedSpd, SpdFactor};
+use euclid::array::{LazyMatrix, LazyVector};
 use euclid::numeric::LazyReal;
+use frobenius::{PreparedSpd, SpdFactor};
 
 /// Multivariate-normal log-density `ln N(x | µ, Σ) = −½·(δᵀΣ⁻¹δ + d·ln(2π) + ln|Σ|)`,
 /// `δ = x − µ`. The Mahalanobis term and log-determinant come from the matrix
@@ -226,7 +227,8 @@ pub fn multivariate_student_t_log_pdf_prepared<M: PreparedSpd<Scalar: LazyReal>>
     let log_det = scale.logdet();
     let half = M::Scalar::half();
     let nu_plus_d = freedom.clone() + dim.clone();
-    (nu_plus_d.clone() * half.clone()).ln_gamma() - (freedom.clone() * half.clone()).ln_gamma()
+    (nu_plus_d.clone() * half.clone()).ln_gamma()
+        - (freedom.clone() * half.clone()).ln_gamma()
         - half.clone() * (dim * (freedom.clone() * M::Scalar::pi()).ln() + log_det)
         - half * nu_plus_d * (M::Scalar::one() + mahalanobis / freedom).ln()
 }
@@ -637,12 +639,17 @@ mod tests {
         fn identity(n: usize) -> Self {
             RefMatrix {
                 n,
-                data: (0..n * n).map(|idx| if idx / n == idx % n { 1.0 } else { 0.0 }).collect(),
+                data: (0..n * n)
+                    .map(|idx| if idx / n == idx % n { 1.0 } else { 0.0 })
+                    .collect(),
             }
         }
         fn zeros(rows: usize, cols: usize) -> Self {
             debug_assert_eq!(rows, cols, "RefMatrix reference mock is square");
-            RefMatrix { n: rows, data: vec![0.0; rows * cols] }
+            RefMatrix {
+                n: rows,
+                data: vec![0.0; rows * cols],
+            }
         }
         fn adjoint(self) -> Self {
             self.transpose() // real matrices: conjugate transpose = transpose
@@ -793,12 +800,7 @@ mod tests {
         match n {
             2 => {
                 let det = m(0, 0) * m(1, 1) - m(0, 1) * m(1, 0);
-                vec![
-                    m(1, 1) / det,
-                    -m(0, 1) / det,
-                    -m(1, 0) / det,
-                    m(0, 0) / det,
-                ]
+                vec![m(1, 1) / det, -m(0, 1) / det, -m(1, 0) / det, m(0, 0) / det]
             }
             3 => {
                 let det = m(0, 0) * (m(1, 1) * m(2, 2) - m(1, 2) * m(2, 1))
@@ -840,7 +842,11 @@ mod tests {
     fn quadratic(n: usize, rows: &[&[f64]], delta: &[f64]) -> f64 {
         let inv = inverse(n, rows);
         (0..n)
-            .map(|i| (0..n).map(|j| delta[i] * inv[i * n + j] * delta[j]).sum::<f64>())
+            .map(|i| {
+                (0..n)
+                    .map(|j| delta[i] * inv[i * n + j] * delta[j])
+                    .sum::<f64>()
+            })
             .sum()
     }
 
@@ -914,7 +920,11 @@ mod tests {
         // tr(V⁻¹X).
         let inv_v = inverse(2, &scale);
         let trace = (0..2)
-            .map(|i| (0..2).map(|k| inv_v[i * 2 + k] * observation[k][i]).sum::<f64>())
+            .map(|i| {
+                (0..2)
+                    .map(|k| inv_v[i * 2 + k] * observation[k][i])
+                    .sum::<f64>()
+            })
             .sum::<f64>();
         let log_det_x = determinant(2, &observation).ln();
         let log_det_v = determinant(2, &scale).ln();
@@ -943,7 +953,11 @@ mod tests {
         // tr(VΣ⁻¹).
         let inv_sigma = inverse(2, &sigma);
         let trace = (0..2)
-            .map(|i| (0..2).map(|k| scale[i][k] * inv_sigma[k * 2 + i]).sum::<f64>())
+            .map(|i| {
+                (0..2)
+                    .map(|k| scale[i][k] * inv_sigma[k * 2 + i])
+                    .sum::<f64>()
+            })
             .sum::<f64>();
         let log_det_sigma = determinant(2, &sigma).ln();
         let log_det_v = determinant(2, &scale).ln();
@@ -953,8 +967,7 @@ mod tests {
             + crate::function::gamma::ln_gamma(half_nu - 0.5);
         let ln_normalizer =
             half_nu * log_det_v - half_nu * d * core::f64::consts::LN_2 - ln_mv_gamma;
-        let expected =
-            ln_normalizer - 0.5 * (freedom + d + 1.0) * log_det_sigma - 0.5 * trace;
+        let expected = ln_normalizer - 0.5 * (freedom + d + 1.0) * log_det_sigma - 0.5 * trace;
         close(
             inverse_wishart_log_pdf(ref_matrix(2, &sigma), ref_matrix(2, &scale), freedom),
             expected,

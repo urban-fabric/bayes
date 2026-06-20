@@ -51,8 +51,8 @@ pub use functional::{
 pub use probability::{
     PROBABILITY_TOLERANCE, brier_score, is_probability_vector,
     is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_with_tolerance,
-    log_loss, log_score, normalize_probability_rows, normalize_probability_weights, probability_sum,
-    ranked_probability_score, spherical_score, validate_probability_vector,
+    log_loss, log_score, normalize_probability_rows, normalize_probability_weights,
+    probability_sum, ranked_probability_score, spherical_score, validate_probability_vector,
     validate_row_stochastic, validate_row_stochastic_with_tolerance,
 };
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};

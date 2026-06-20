@@ -5,8 +5,8 @@
 //!   Terriberry running moments).
 //!
 //! `merge`s two accumulators exactly, so a stream can be split across workers and
-//! recombined. The paired-observation `RunningCovariance` (covariance / correlation /
-//! OLS slope) lives in the matrix-coupled sibling crate `ito`.
+//! recombined. The paired-observation `RunningCovariance` lives in
+//! [`super::RunningCovariance`].
 
 mod running_stats;
 

@@ -154,7 +154,10 @@ mod kernel_tests {
     // ρ(0) = 1, ρ decreasing in d, ρ ≤ 1, ρ → 0 at large separation — on the f64 reference.
     fn assert_shape(rho: impl Fn(f64, f64) -> f64, name: &str) {
         assert!((rho(0.0, 1000.0) - 1.0).abs() < 1e-12, "{name}: ρ(0) != 1");
-        assert!(rho(500.0, 1000.0) > rho(1500.0, 1000.0), "{name}: not decreasing");
+        assert!(
+            rho(500.0, 1000.0) > rho(1500.0, 1000.0),
+            "{name}: not decreasing"
+        );
         assert!(rho(100.0, 1000.0) <= 1.0, "{name}: ρ > 1");
         assert!(rho(1.0e7, 1000.0) < 1e-6, "{name}: tail not → 0");
     }
@@ -164,7 +167,10 @@ mod kernel_tests {
         assert_shape(exponential_correlation::<f64>, "exponential");
         assert_shape(matern_32_correlation::<f64>, "matern32");
         assert_shape(matern_52_correlation::<f64>, "matern52");
-        assert_shape(squared_exponential_correlation::<f64>, "squared_exponential");
+        assert_shape(
+            squared_exponential_correlation::<f64>,
+            "squared_exponential",
+        );
     }
 
     #[test]
@@ -2215,9 +2221,9 @@ mod tests {
         ChiSquared, ChiSquaredDivergence, Continuous, ContinuousCdf, Discrete, DiscreteCdf,
         DiscreteUniform, Exponential, FisherSnedecor, Frechet, Gamma, GammaExponential,
         GammaPoisson, Geometric, Gumbel, HalfNormal, HellingerDistance, Hypergeometric,
-        InverseGamma, KlDivergence, Laplace, LogNormal, Logistic, Lomax, Moments,
-        NegativeBinomial, Normal, OrderStatistic, Pareto, Poisson, Rayleigh, RenyiDivergence,
-        StudentT, TotalVariation, Triangular, Uniform, VonMises, Wald, Weibull,
+        InverseGamma, KlDivergence, Laplace, LogNormal, Logistic, Lomax, Moments, NegativeBinomial,
+        Normal, OrderStatistic, Pareto, Poisson, Rayleigh, RenyiDivergence, StudentT,
+        TotalVariation, Triangular, Uniform, VonMises, Wald, Weibull,
     };
     use crate::function::bessel::ln_i0;
     use crate::function::beta::ln_beta;
@@ -2357,8 +2363,7 @@ mod tests {
         // normalizer it consumes — `ln f = (α−1)·ln x − ln B(α)`.
         let alpha = [2.0, 3.0, 5.0];
         let x = [0.2, 0.3, 0.5];
-        let got =
-            dirichlet_log_pdf_on_simplex(&x, &alpha, ln_multivariate_beta(&alpha)).unwrap();
+        let got = dirichlet_log_pdf_on_simplex(&x, &alpha, ln_multivariate_beta(&alpha)).unwrap();
         let expected = alpha
             .iter()
             .zip(&x)
@@ -3551,8 +3556,7 @@ mod tests {
             - 0.5 * (dimension * (freedom * PI).ln() + ln_det_scale);
         close(
             multivariate_student_t_log_pdf(mahalanobis_sq, freedom, dimension, log_normalizer),
-            log_normalizer
-                - 0.5 * (freedom + dimension) * (1.0 + mahalanobis_sq / freedom).ln(),
+            log_normalizer - 0.5 * (freedom + dimension) * (1.0 + mahalanobis_sq / freedom).ln(),
             1e-12,
         );
     }

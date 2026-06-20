@@ -22,8 +22,10 @@
 //! * `inequalities` — proof-backed moment certifiers: Cauchy–Schwarz consistency and
 //!   the Jensen gap.
 //! * `empirical` — empirical CDF ([`Ecdf`]) and [`histogram`]; `kde` — Gaussian KDE.
-//! * streaming accumulators — [`RunningStats`] and the [`TDigest`] quantile sketch
-//!   (single-pass and mergeable); the paired `RunningCovariance` lives in `ito`.
+//! * `multivariate` — finite rectangular sample validation, vector means, small vector
+//!   helpers, and paired-observation covariance/correlation.
+//! * streaming accumulators — [`RunningStats`], [`RunningCovariance`], and the [`TDigest`]
+//!   quantile sketch (single-pass and mergeable).
 //!
 //! Summary/order stats are available both as free functions and as the
 //! [`SampleStats`] extension trait on `[f64]`, so `bayes::statistics::mean(data)`
@@ -37,6 +39,7 @@ mod estimation;
 pub mod hypothesis;
 mod inequalities;
 mod kde;
+mod multivariate;
 mod online;
 mod order;
 mod regression;
@@ -68,6 +71,7 @@ pub use estimation::{
 pub use hypothesis::TestResult;
 pub use inequalities::{cauchy_schwarz_moment_holds, jensen_gap_lower_bound};
 pub use kde::KernelDensity;
+pub use multivariate::{RunningCovariance, dot, mean_vector, norm2, sample_shape};
 pub use online::RunningStats;
 pub use order::{
     five_number_summary, iqr, median, median_abs_deviation, percentile, quantile, tukey_fences,

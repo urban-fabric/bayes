@@ -387,9 +387,7 @@ fn von_mises_circular_public_surface() {
 
 #[test]
 fn streaming_tdigest_public_surface() {
-    // `RunningCovariance` (the paired-observation matrix accumulator) moved to ito; its
-    // streaming-covariance surface assertion lives there. `TDigest` stays in bayes.
-    use bayes::TDigest;
+    use bayes::{RunningCovariance, TDigest};
 
     let d: TDigest = (0..2000).map(|i| i as f64 / 1999.0).collect();
     assert!((d.quantile(0.5) - 0.5).abs() < 0.02);
@@ -398,6 +396,10 @@ fn streaming_tdigest_public_surface() {
     a.merge(&b);
     assert_eq!(a.count(), 2000);
     assert!((a.quantile(0.9) - 0.9).abs() < 0.03);
+
+    let rc: RunningCovariance = [(0.0, 1.0), (1.0, 3.0), (2.0, 5.0)].into_iter().collect();
+    close(rc.slope(), 2.0, 1e-12);
+    close(rc.intercept(), 1.0, 1e-12);
 }
 
 #[test]

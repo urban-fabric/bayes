@@ -14,6 +14,7 @@ pub mod function;
 pub mod gp;
 pub mod lazy;
 pub mod lazy_matrix;
+pub mod multivariate;
 pub mod primitives;
 pub mod process;
 pub mod statistics;
@@ -46,23 +47,28 @@ pub use distribution::{
     validate_row_stochastic_with_tolerance, variation_of_information,
 };
 pub use error::{BayesError, StatsError};
+pub use multivariate::{
+    LazyMultivariateContinuous, LazyMultivariateMoments, MultivariateContinuous,
+    MultivariateMoments,
+};
 
 /// Sample statistics over data (`data.mean()`, `data.median()`, …), including
 /// robust/weighted summaries, effect sizes, OLS diagnostics, confidence intervals,
 /// resampling, KDE, streaming stats, and test result types.
 pub use statistics::{
-    ConfidenceInterval, Ecdf, Histogram, KernelDensity, LinearRegression, RunningStats,
-    SampleStats, TDigest, TestResult, VarianceDecomposition, coefficient_of_variation, cohen_d,
-    effective_sample_size, eta_squared, gini_mean_difference, glass_delta, hedges_g, histogram,
-    is_effective_sample_size_admissible, mcdiarmid_bound, mean_abs_deviation,
-    mean_difference_welch_interval, mean_t_interval, mean_z_interval, normalized_log_weights,
-    normalized_weights, odds_ratio, omega_squared, poisson_rate_interval, pooled_std_dev,
-    proportion_agresti_coull, proportion_clopper_pearson, proportion_difference_wald,
-    proportion_jeffreys, proportion_wald, proportion_wilson, risk_difference, risk_ratio,
-    std_dev_chi_square_interval, trimmed_mean, tukey_fences, tukey_outlier_flags,
-    variance_chi_square_interval, variance_decomposition, weight_sum, weighted_correlation,
-    weighted_covariance, weighted_mean, weighted_population_variance, weighted_quantile,
-    weighted_std_dev, weighted_variance, winsorized_mean, z_scores,
+    ConfidenceInterval, Ecdf, Histogram, KernelDensity, LinearRegression, RunningCovariance,
+    RunningStats, SampleStats, TDigest, TestResult, VarianceDecomposition,
+    coefficient_of_variation, cohen_d, dot, effective_sample_size, eta_squared,
+    gini_mean_difference, glass_delta, hedges_g, histogram, is_effective_sample_size_admissible,
+    mcdiarmid_bound, mean_abs_deviation, mean_difference_welch_interval, mean_t_interval,
+    mean_vector, mean_z_interval, norm2, normalized_log_weights, normalized_weights, odds_ratio,
+    omega_squared, poisson_rate_interval, pooled_std_dev, proportion_agresti_coull,
+    proportion_clopper_pearson, proportion_difference_wald, proportion_jeffreys, proportion_wald,
+    proportion_wilson, risk_difference, risk_ratio, sample_shape, std_dev_chi_square_interval,
+    trimmed_mean, tukey_fences, tukey_outlier_flags, variance_chi_square_interval,
+    variance_decomposition, weight_sum, weighted_correlation, weighted_covariance, weighted_mean,
+    weighted_population_variance, weighted_quantile, weighted_std_dev, weighted_variance,
+    winsorized_mean, z_scores,
 };
 
 /// Probabilistic processes: random walks, Poisson processes, and the covariance
