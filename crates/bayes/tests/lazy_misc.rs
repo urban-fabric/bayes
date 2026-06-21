@@ -82,7 +82,7 @@ fn lazy_real_directional_entropy_kernel_matches_distribution() {
     // kernel cross-checks live in ito's `tests/bayes_kernels_on_eager.rs`. The circular
     // von Mises stays in bayes, so its entropy kernel is exercised here.
     let vm = VonMises::new(0.3, 2.0).unwrap();
-    close(von_mises_entropy(2.0), vm.entropy().unwrap(), 1e-12);
+    close(von_mises_entropy(2.0), vm.entropy(), 1e-12);
 }
 
 // Relocated from `bayes-kernels` `primitives` unit tests: the generic normal

@@ -12,47 +12,47 @@
 //!   (`ε²·P(|S̄ − μ| ≥ ε) ≤ σ²/n`, Bienaymé variance scaling);
 //! - the bounded-support variance cap — `variance_le_sq_half_range` (Popoviciu).
 
+use euclid::{LazyBool, LazyReal};
+
 use super::{ConfidenceInterval, alpha, invalid, valid_level};
 use crate::{mean, variance};
 
 /// **Markov's inequality**: an upper bound on `P(X ≥ a)` for a nonnegative `X` with
 /// mean `mean`, namely `min(E[X]/a, 1)` (`a > 0`). Backed by riemann
 /// `Bayes/Inequalities.markov`. Returns `NaN` on invalid input (`a ≤ 0`, `mean < 0`).
-pub fn markov_bound(mean: f64, a: f64) -> f64 {
-    if a <= 0.0 || mean < 0.0 {
-        return f64::NAN;
-    }
-    (mean / a).min(1.0)
+pub fn markov_bound<T: LazyReal>(mean: T, a: T) -> T {
+    let valid = a.gt(&T::zero()).and(&mean.ge(&T::zero()));
+    T::select(&valid, (mean / a).min(T::one()), T::nan())
 }
 
 /// **Chebyshev's inequality** (two-sided): an upper bound on `P(|X − μ| ≥ t)`, namely
 /// `min(σ²/t², 1)` (`t > 0`). Needs only the variance — no distribution. Backed by
 /// riemann `Bayes/Inequalities.chebyshev`.
-pub fn chebyshev_bound(variance: f64, t: f64) -> f64 {
-    if variance < 0.0 || t <= 0.0 {
-        return f64::NAN;
-    }
-    (variance / (t * t)).min(1.0)
+pub fn chebyshev_bound<T: LazyReal>(variance: T, t: T) -> T {
+    let valid = variance.ge(&T::zero()).and(&t.gt(&T::zero()));
+    T::select(&valid, (variance / (t.clone() * t)).min(T::one()), T::nan())
 }
 
 /// **Cantelli's inequality** (one-sided): an upper bound on `P(X − μ ≥ t)`, namely
 /// `σ²/(σ² + t²)` (`t > 0`) — sharper than the two-sided Chebyshev bound `σ²/t²`.
 /// Backed by riemann `Bayes/Inequalities.cantelli`.
-pub fn cantelli_bound(variance: f64, t: f64) -> f64 {
-    if variance < 0.0 || t <= 0.0 {
-        return f64::NAN;
-    }
-    variance / (variance + t * t)
+pub fn cantelli_bound<T: LazyReal>(variance: T, t: T) -> T {
+    let valid = variance.ge(&T::zero()).and(&t.gt(&T::zero()));
+    T::select(
+        &valid,
+        variance.clone() / (variance + t.clone() * t),
+        T::nan(),
+    )
 }
 
 /// **Hoeffding tail** (single observation): for one value bounded in `[a, b]`, an upper
 /// bound on `P(X − μ ≥ t)`, namely `exp(−2t²/(b−a)²)` (`t ≥ 0`). Backed by riemann
 /// `Bayes/Inequalities.hoeffding_tail`.
-pub fn hoeffding_bound(a: f64, b: f64, t: f64) -> f64 {
-    if b <= a || t < 0.0 {
-        return f64::NAN;
-    }
-    (-2.0 * t * t / ((b - a) * (b - a))).exp()
+pub fn hoeffding_bound<T: LazyReal>(a: T, b: T, t: T) -> T {
+    let valid = b.gt(&a).and(&t.ge(&T::zero()));
+    let range = b - a;
+    let formula = (-T::two() * t.clone() * t / (range.clone() * range)).exp();
+    T::select(&valid, formula, T::nan())
 }
 
 /// **McDiarmid's bounded-differences inequality**: for an independent product input and
@@ -60,11 +60,12 @@ pub fn hoeffding_bound(a: f64, b: f64, t: f64) -> f64 {
 /// `P(F − E[F] ≥ t)` by `exp(−2t² / Σ c_j²)` (`t ≥ 0`, `Σ c_j² > 0`). This is the
 /// independent-product generalization behind Hoeffding-style sample-mean bounds. Backed by
 /// riemann `Bayes/ProductConcentration.mcdiarmid_tail_of_bounded_differences`.
-pub fn mcdiarmid_bound(sum_squared_differences: f64, t: f64) -> f64 {
-    if sum_squared_differences <= 0.0 || t < 0.0 {
-        return f64::NAN;
-    }
-    (-2.0 * t * t / sum_squared_differences).exp()
+pub fn mcdiarmid_bound<T: LazyReal>(sum_squared_differences: T, t: T) -> T {
+    let valid = sum_squared_differences
+        .gt(&T::zero())
+        .and(&t.ge(&T::zero()));
+    let formula = (-T::two() * t.clone() * t / sum_squared_differences).exp();
+    T::select(&valid, formula, T::nan())
 }
 
 /// **Chernoff's method** — the generic exponential-Markov tail: for any tilt `s > 0`,
@@ -75,11 +76,10 @@ pub fn mcdiarmid_bound(sum_squared_differences: f64, t: f64) -> f64 {
 /// [`bernstein_bound`] the sub-gamma one; the caller minimizes over `s` for the tightest
 /// bound. Backed by riemann `Bayes/Inequalities.chernoff_bound`. Returns `NaN` on invalid
 /// input (`s ≤ 0`, `mgf < 0`).
-pub fn chernoff_bound(mgf: f64, s: f64, t: f64) -> f64 {
-    if s <= 0.0 || mgf < 0.0 {
-        return f64::NAN;
-    }
-    ((-s * t).exp() * mgf).min(1.0)
+pub fn chernoff_bound<T: LazyReal>(mgf: T, s: T, t: T) -> T {
+    let valid = s.gt(&T::zero()).and(&mgf.ge(&T::zero()));
+    let formula = ((-s * t).exp() * mgf).min(T::one());
+    T::select(&valid, formula, T::nan())
 }
 
 /// **Bernstein's inequality** — the variance-aware exponential tail. For a variable whose
@@ -92,11 +92,13 @@ pub fn chernoff_bound(mgf: f64, s: f64, t: f64) -> f64 {
 /// `v = E[X²]` (riemann `bennett_mgf`). Backed by riemann
 /// `Bayes/Inequalities.bernstein_tail` (the Chernoff optimization at `s = t/(v + b·t)`).
 /// Returns `NaN` on invalid input (`v ≤ 0`, `b ≤ 0`, `t < 0`).
-pub fn bernstein_bound(variance_proxy: f64, scale: f64, t: f64) -> f64 {
-    if variance_proxy <= 0.0 || scale <= 0.0 || t < 0.0 {
-        return f64::NAN;
-    }
-    (-t * t / (2.0 * (variance_proxy + scale * t))).exp()
+pub fn bernstein_bound<T: LazyReal>(variance_proxy: T, scale: T, t: T) -> T {
+    let valid = variance_proxy
+        .gt(&T::zero())
+        .and(&scale.gt(&T::zero()))
+        .and(&t.ge(&T::zero()));
+    let formula = (-t.clone() * t.clone() / (T::two() * (variance_proxy + scale * t))).exp();
+    T::select(&valid, formula, T::nan())
 }
 
 /// **The Paley–Zygmund inequality** — anti-concentration, a *lower* bound on a tail and the
@@ -108,11 +110,15 @@ pub fn bernstein_bound(variance_proxy: f64, scale: f64, t: f64) -> f64 {
 /// quantity is positive / bounded away from zero with constant probability. Backed by
 /// riemann `Bayes/Inequalities.paley_zygmund`. Returns `NaN` on invalid input (`mean < 0`,
 /// `mean_square ≤ 0`, `θ ∉ [0, 1]`).
-pub fn paley_zygmund_bound(mean: f64, mean_square: f64, theta: f64) -> f64 {
-    if mean < 0.0 || mean_square <= 0.0 || !(0.0..=1.0).contains(&theta) {
-        return f64::NAN;
-    }
-    ((1.0 - theta).powi(2) * mean * mean / mean_square).min(1.0)
+pub fn paley_zygmund_bound<T: LazyReal>(mean: T, mean_square: T, theta: T) -> T {
+    let valid = mean
+        .ge(&T::zero())
+        .and(&mean_square.gt(&T::zero()))
+        .and(&theta.ge(&T::zero()).and(&theta.le(&T::one())));
+    let one_minus_theta = T::one() - theta;
+    let formula = (one_minus_theta.clone() * one_minus_theta * mean.clone() * mean / mean_square)
+        .min(T::one());
+    T::select(&valid, formula, T::nan())
 }
 
 /// **Popoviciu's variance bound**: the largest possible variance of a variable bounded
@@ -229,8 +235,8 @@ mod tests {
         close(chernoff_bound(mgf, s, t), hoeffding_bound(a, b, t), 1e-12);
         // it is a probability: an over-large mgf/over-small s clamps to 1.
         assert_eq!(chernoff_bound(2.0, 0.1, 0.0), 1.0);
-        assert!(chernoff_bound(-1.0, 1.0, 1.0).is_nan());
-        assert!(chernoff_bound(1.0, 0.0, 1.0).is_nan());
+        assert!(chernoff_bound(-1.0_f64, 1.0, 1.0).is_nan());
+        assert!(chernoff_bound(1.0_f64, 0.0, 1.0).is_nan());
     }
 
     #[test]
@@ -259,9 +265,9 @@ mod tests {
         // a small-variance variable in [−1, 1] (v ≪ c²): Bernstein beats Hoeffding near 0.
         // Hoeffding sees only the range (b−a)=2; Bernstein sees the true variance v=0.04.
         assert!(bernstein_bound(0.04, 1.0, 0.2) < hoeffding_bound(-1.0, 1.0, 0.2));
-        assert!(bernstein_bound(0.0, 1.0, 1.0).is_nan());
-        assert!(bernstein_bound(1.0, 0.0, 1.0).is_nan());
-        assert!(bernstein_bound(1.0, 1.0, -0.1).is_nan());
+        assert!(bernstein_bound(0.0_f64, 1.0, 1.0).is_nan());
+        assert!(bernstein_bound(1.0_f64, 0.0, 1.0).is_nan());
+        assert!(bernstein_bound(1.0_f64, 1.0, -0.1).is_nan());
     }
 
     #[test]
@@ -273,17 +279,17 @@ mod tests {
         close(paley_zygmund_bound(1.0, 2.0, 1.0), 0.0, 1e-12);
         // a degenerate constant X≡1 (E[X²]=E[X]²) at θ=0 gives the certain tail P=1.
         close(paley_zygmund_bound(1.0, 1.0, 0.0), 1.0, 1e-12);
-        assert!(paley_zygmund_bound(-1.0, 2.0, 0.5).is_nan());
-        assert!(paley_zygmund_bound(1.0, 0.0, 0.5).is_nan());
-        assert!(paley_zygmund_bound(1.0, 2.0, 1.5).is_nan());
+        assert!(paley_zygmund_bound(-1.0_f64, 2.0, 0.5).is_nan());
+        assert!(paley_zygmund_bound(1.0_f64, 0.0, 0.5).is_nan());
+        assert!(paley_zygmund_bound(1.0_f64, 2.0, 1.5).is_nan());
     }
 
     #[test]
     fn invalid_inputs_are_nan() {
-        assert!(chebyshev_bound(4.0, 0.0).is_nan());
-        assert!(markov_bound(-1.0, 2.0).is_nan());
-        assert!(hoeffding_bound(1.0, 1.0, 0.5).is_nan());
-        assert!(mcdiarmid_bound(-1.0, 0.5).is_nan());
+        assert!(chebyshev_bound(4.0_f64, 0.0).is_nan());
+        assert!(markov_bound(-1.0_f64, 2.0).is_nan());
+        assert!(hoeffding_bound(1.0_f64, 1.0, 0.5).is_nan());
+        assert!(mcdiarmid_bound(-1.0_f64, 0.5).is_nan());
         assert!(max_variance_for_range(2.0, 1.0).is_nan());
     }
 

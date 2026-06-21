@@ -281,23 +281,23 @@ fn cross_entropy_decomposes_and_handles_missing_entropy() {
     let p = Normal::new(0.0, 1.0).unwrap();
     let q = Normal::new(1.0, 1.0).unwrap();
     close(
-        p.cross_entropy(&q).unwrap(),
-        p.entropy().unwrap() + p.kl_divergence(&q),
+        p.cross_entropy(&q),
+        p.entropy() + p.kl_divergence(&q),
         1e-12,
     );
     close(
-        p.cross_entropy(&q).unwrap(),
+        p.cross_entropy(&q),
         1.0 + 0.5 * std::f64::consts::TAU.ln(),
         1e-12,
     );
     // Gibbs equality case: H(p, p) = H(p); nonneg KL only raises it.
-    close(p.cross_entropy(&p).unwrap(), p.entropy().unwrap(), 1e-12);
-    assert!(p.cross_entropy(&q).unwrap() > p.entropy().unwrap());
-    // No analytic entropy (Poisson) → honest `None`.
+    close(p.cross_entropy(&p), p.entropy(), 1e-12);
+    assert!(p.cross_entropy(&q) > p.entropy());
+    // No analytic entropy (Poisson) -> explicit `NaN`.
     assert!(
         Poisson::new(2.0)
             .unwrap()
             .cross_entropy(&Poisson::new(3.0).unwrap())
-            .is_none()
+            .is_nan()
     );
 }

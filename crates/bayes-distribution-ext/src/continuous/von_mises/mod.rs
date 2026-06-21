@@ -87,26 +87,50 @@ impl Distribution<f64> for VonMises {
     }
 }
 
-impl Support for VonMises {
-    fn min(&self) -> f64 {
-        -PI
+impl<T: LazyReal> Support<T> for VonMises {
+    fn min(&self) -> T {
+        T::scalar(-PI)
     }
-    fn max(&self) -> f64 {
-        PI
+    fn max(&self) -> T {
+        T::scalar(PI)
     }
 }
 
 impl Moments for VonMises {
     /// The mean direction `μ`.
-    fn mean(&self) -> Option<f64> {
-        Some(self.mu)
+    fn mean(&self) -> f64 {
+        self.mu
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.mu)
+    fn mode(&self) -> f64 {
+        self.mu
     }
     /// Circular (differential) entropy `−κ I₁(κ)/I₀(κ) + ln(2π I₀(κ))`.
-    fn entropy(&self) -> Option<f64> {
-        Some(TAU.ln() + self.kappa.ln_bessel_i0() - self.kappa * self.kappa.bessel_i1_over_i0())
+    fn entropy(&self) -> f64 {
+        TAU.ln() + self.kappa.ln_bessel_i0() - self.kappa * self.kappa.bessel_i1_over_i0()
+    }
+    fn variance(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 

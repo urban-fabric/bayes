@@ -34,8 +34,8 @@ fn normal_linear_combination_is_public() {
         10.0,
     )
     .unwrap();
-    close(combo.mean().unwrap(), 9.0, 1e-12);
-    close(combo.variance().unwrap(), 32.0, 1e-12);
+    close(combo.mean(), 9.0, 1e-12);
+    close(combo.variance(), 32.0, 1e-12);
 }
 
 #[test]
@@ -165,8 +165,8 @@ fn public_distribution_surface_round_trips() {
         close(fre.cdf(fre.inverse_cdf(p)), p, 1e-9);
         close(wald.cdf(wald.inverse_cdf(p)), p, 1e-6);
     }
-    close(wald.mean().unwrap(), 1.0, 1e-12);
-    close(wald.variance().unwrap(), 0.5, 1e-12);
+    close(wald.mean(), 1.0, 1e-12);
+    close(wald.variance(), 0.5, 1e-12);
 }
 
 #[test]
@@ -211,12 +211,8 @@ fn exponential_family_fit_and_streaming_merge_agree() {
     let stat = MeanVar::from_sample(&data[..111]).merge(&MeanVar::from_sample(&data[111..]));
     let streamed = Normal::from_sufficient(&stat).unwrap();
 
-    close(streamed.mean().unwrap(), batch.mean().unwrap(), 1e-10);
-    close(
-        streamed.variance().unwrap(),
-        batch.variance().unwrap(),
-        1e-10,
-    );
+    close(streamed.mean(), batch.mean(), 1e-10);
+    close(streamed.variance(), batch.variance(), 1e-10);
 
     close(
         Poisson::fit(&[2u64, 4, 6, 0, 3]).unwrap().lambda(),

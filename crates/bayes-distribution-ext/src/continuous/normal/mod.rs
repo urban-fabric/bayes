@@ -1,10 +1,11 @@
-use std::f64::consts::{E, LN_2, SQRT_2, TAU};
+use std::f64::consts::{E, TAU};
 
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Estimate, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -38,9 +39,9 @@ impl Normal {
     }
 
     /// The distribution's parameters `(μ, σ)`. Moments are read through the
-    /// [`Moments`] trait (`mean()`/`std_dev()` → `Option<f64>`); this is the
-    /// infallible accessor for the raw parameters (consumed by the matrix-coupled
-    /// conjugate models in the sibling crate `ito`).
+    /// [`Moments`] trait (`mean()`/`std_dev()`); this is the infallible accessor
+    /// for the raw parameters (consumed by the matrix-coupled conjugate models in
+    /// the sibling crate `ito`).
     pub fn params(&self) -> (f64, f64) {
         (self.mean, self.std_dev)
     }
@@ -129,67 +130,63 @@ pub fn standard_normal_polar<R: Rng + ?Sized>(rng: &mut R) -> f64 {
     }
 }
 
-impl Support for Normal {
-    fn min(&self) -> f64 {
-        f64::NEG_INFINITY
+impl<T: LazyReal> Support<T> for Normal {
+    fn min(&self) -> T {
+        T::neg_infinity()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Normal {
-    fn cdf(&self, x: f64) -> f64 {
-        0.5 * (-(x - self.mean) / (self.std_dev * SQRT_2)).erfc()
+impl<T: LazyReal> ContinuousCdf<T> for Normal {
+    fn cdf(&self, x: T) -> T {
+        kernels::normal_cdf(x, T::scalar(self.mean), T::scalar(self.std_dev))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        self.mean + self.std_dev * SQRT_2 * (2.0 * p - 1.0).erf_inv()
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::normal_quantile(p, T::scalar(self.mean), T::scalar(self.std_dev))
     }
     /// Stable `ln Φ((x-μ)/σ)`. In the left tail (`z ≤ 0`) it uses `erfcx`, so it
     /// stays accurate where `Φ` itself underflows to `0`; in the right tail it
-    /// defers to `ln(1 − sf)` via the stable `ln_sf`.
-    fn ln_cdf(&self, x: f64) -> f64 {
-        let z = (x - self.mean) / self.std_dev;
-        if z <= 0.0 {
-            let t = -z / SQRT_2;
-            -LN_2 + t.erfcx().ln() - t * t
-        } else {
-            self.ln_sf(x).ln_1m_exp()
-        }
+    /// defers to `ln(1 − sf)`.
+    fn ln_cdf(&self, x: T) -> T {
+        kernels::normal_ln_cdf(x, T::scalar(self.mean), T::scalar(self.std_dev))
     }
     /// Stable `ln(1 − Φ((x-μ)/σ))`, the mirror of [`ln_cdf`](Self::ln_cdf).
-    fn ln_sf(&self, x: f64) -> f64 {
-        let z = (x - self.mean) / self.std_dev;
-        if z >= 0.0 {
-            let t = z / SQRT_2;
-            -LN_2 + t.erfcx().ln() - t * t
-        } else {
-            self.ln_cdf(x).ln_1m_exp()
-        }
+    fn ln_sf(&self, x: T) -> T {
+        kernels::normal_ln_sf(x, T::scalar(self.mean), T::scalar(self.std_dev))
     }
 }
 
 impl Moments for Normal {
-    fn mean(&self) -> Option<f64> {
-        Some(self.mean)
+    fn mean(&self) -> f64 {
+        self.mean
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.std_dev * self.std_dev)
+    fn variance(&self) -> f64 {
+        self.std_dev * self.std_dev
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(0.0)
+    fn skewness(&self) -> f64 {
+        0.0
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(0.0)
+    fn kurtosis(&self) -> f64 {
+        0.0
     }
-    fn entropy(&self) -> Option<f64> {
-        Some(0.5 * (TAU * E * self.std_dev * self.std_dev).ln())
+    fn entropy(&self) -> f64 {
+        0.5 * (TAU * E * self.std_dev * self.std_dev).ln()
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.mean)
+    fn median(&self) -> f64 {
+        self.mean
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.mean)
+    fn mode(&self) -> f64 {
+        self.mean
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
     }
 }
 

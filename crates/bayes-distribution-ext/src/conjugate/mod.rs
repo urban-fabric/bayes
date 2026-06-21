@@ -28,7 +28,7 @@
 //! let model = BetaBernoulli::new(Beta::new(1.0, 1.0).unwrap()); // uniform prior
 //! let data = [true, true, false, true, true];                   // 4 of 5 successes
 //! let post = model.posterior(&data);                            // Beta(5, 2)
-//! assert!((post.mean().unwrap() - 5.0 / 7.0).abs() < 1e-12);
+//! assert!((post.mean() - 5.0 / 7.0).abs() < 1e-12);
 //! ```
 
 mod beta;

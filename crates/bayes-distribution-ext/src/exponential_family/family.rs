@@ -86,8 +86,8 @@ mod tests {
     fn normal_fit_recovers_parameters() {
         let data = [-2.0, -1.0, 0.0, 1.0, 2.0];
         let n = Normal::fit(&data).unwrap();
-        close(n.mean().unwrap(), 0.0, 1e-12);
-        close(n.variance().unwrap(), 2.0, 1e-12);
+        close(n.mean(), 0.0, 1e-12);
+        close(n.variance(), 2.0, 1e-12);
     }
 
     #[test]

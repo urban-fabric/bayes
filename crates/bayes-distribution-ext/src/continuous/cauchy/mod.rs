@@ -5,10 +5,12 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 /// The Cauchy (Lorentz) distribution with location `x₀` and scale `γ > 0`. It has
 /// **no finite mean or variance** — the canonical example of [`Moments`] returning
-/// `None`. Support `(-∞, ∞)`.
+/// `NaN` for undefined analytic summaries. Support `(-∞, ∞)`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cauchy {
     location: f64,
@@ -53,33 +55,61 @@ impl Distribution<f64> for Cauchy {
     }
 }
 
-impl Support for Cauchy {
-    fn min(&self) -> f64 {
-        f64::NEG_INFINITY
+impl<T: LazyReal> Support<T> for Cauchy {
+    fn min(&self) -> T {
+        T::neg_infinity()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Cauchy {
-    fn cdf(&self, x: f64) -> f64 {
-        0.5 + ((x - self.location) / self.scale).atan() / PI
+impl<T: LazyReal> ContinuousCdf<T> for Cauchy {
+    fn cdf(&self, x: T) -> T {
+        kernels::cauchy_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        self.location + self.scale * (PI * (p.clamp(0.0, 1.0) - 0.5)).tan()
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::cauchy_quantile(
+            p.clamp(T::zero(), T::one()),
+            T::scalar(self.location),
+            T::scalar(self.scale),
+        )
     }
 }
 
 impl Moments for Cauchy {
-    fn entropy(&self) -> Option<f64> {
-        Some((4.0 * PI * self.scale).ln())
+    fn entropy(&self) -> f64 {
+        (4.0 * PI * self.scale).ln()
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.location)
+    fn median(&self) -> f64 {
+        self.location
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.location)
+    fn mode(&self) -> f64 {
+        self.location
+    }
+    fn mean(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn variance(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -100,8 +130,8 @@ mod tests {
         for &p in &[0.1, 0.25, 0.5, 0.75, 0.9] {
             close(c.cdf(c.inverse_cdf(p)), p, 1e-10);
         }
-        assert_eq!(c.mean(), None);
-        assert_eq!(c.variance(), None);
-        assert_eq!(c.median(), Some(1.0));
+        assert!(c.mean().is_nan());
+        assert!(c.variance().is_nan());
+        assert_eq!(c.median(), 1.0);
     }
 }

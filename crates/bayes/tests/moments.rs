@@ -115,12 +115,12 @@ fn moment2_matches_closed_form_second_moment() {
     // It must reproduce each family's analytic raw second moment, and — by
     // construction — equal `variance + mean²`.
     fn check<M: Moments>(d: &M, expected_e_x2: f64, label: &str) {
-        let m2 = d.moment2().unwrap();
+        let m2 = d.moment2();
         assert_close(label, m2, expected_e_x2, 1e-12);
         assert_close(
             &format!("{label} (identity)"),
             m2,
-            d.variance().unwrap() + d.mean().unwrap().powi(2),
+            d.variance() + d.mean().powi(2),
             1e-12,
         );
     }
@@ -141,19 +141,19 @@ fn closed_form_entropies_match_known_values() {
     // Geometric(½) = 2 ln 2.
     assert_close(
         "Bernoulli(.5) H",
-        Bernoulli::new(0.5).unwrap().entropy().unwrap(),
+        Bernoulli::new(0.5).unwrap().entropy(),
         ln2,
         1e-12,
     );
     assert_close(
         "Beta(1,1) H",
-        Beta::new(1.0, 1.0).unwrap().entropy().unwrap(),
+        Beta::new(1.0, 1.0).unwrap().entropy(),
         0.0,
         1e-12,
     );
     assert_close(
         "Geometric(.5) H",
-        Geometric::new(0.5).unwrap().entropy().unwrap(),
+        Geometric::new(0.5).unwrap().entropy(),
         2.0 * ln2,
         1e-12,
     );
@@ -162,13 +162,13 @@ fn closed_form_entropies_match_known_values() {
     let b1 = Binomial::new(1, 0.3).unwrap();
     assert_close(
         "Binomial(1,.3) H",
-        b1.entropy().unwrap(),
-        Bernoulli::new(0.3).unwrap().entropy().unwrap(),
+        b1.entropy(),
+        Bernoulli::new(0.3).unwrap().entropy(),
         1e-12,
     );
     // Binomial entropy is bounded by ln(n+1) (uniform over n+1 outcomes).
     let b = Binomial::new(10, 0.5).unwrap();
-    assert!(b.entropy().unwrap() > 0.0 && b.entropy().unwrap() < 11.0_f64.ln());
+    assert!(b.entropy() > 0.0 && b.entropy() < 11.0_f64.ln());
     let _ = b.pmf(5_u64); // Discrete in scope
 
     // The entropy fill unlocks cross_entropy for these families.
@@ -176,8 +176,8 @@ fn closed_form_entropies_match_known_values() {
     let q = Beta::new(3.0, 2.0).unwrap();
     assert_close(
         "Beta cross-entropy",
-        p.cross_entropy(&q).unwrap(),
-        p.entropy().unwrap() + p.kl_divergence(&q),
+        p.cross_entropy(&q),
+        p.entropy() + p.kl_divergence(&q),
         1e-12,
     );
 }
@@ -189,40 +189,40 @@ fn more_closed_form_entropies_match_known_values() {
     // Weibull(scale λ, shape 1) is Exponential(rate 1/λ); the entropies agree.
     assert_close(
         "Weibull(2,1) H",
-        Weibull::new(2.0, 1.0).unwrap().entropy().unwrap(),
-        Exponential::new(0.5).unwrap().entropy().unwrap(),
+        Weibull::new(2.0, 1.0).unwrap().entropy(),
+        Exponential::new(0.5).unwrap().entropy(),
         1e-12,
     );
     // Triangular(0,2,c): H = ½ + ln((b−a)/2) = ½, independent of the mode.
     assert_close(
         "Triangular H",
-        Triangular::new(0.0, 2.0, 1.5).unwrap().entropy().unwrap(),
+        Triangular::new(0.0, 2.0, 1.5).unwrap().entropy(),
         0.5,
         1e-12,
     );
     // DiscreteUniform(0,10): 10 outcomes → ln 10.
     assert_close(
         "DiscreteUniform H",
-        DiscreteUniform::new(0, 10).unwrap().entropy().unwrap(),
+        DiscreteUniform::new(0, 10).unwrap().entropy(),
         10.0_f64.ln(),
         1e-12,
     );
     // Categorical: fair coin → ln 2; uniform over 4 → ln 4; point mass → 0.
     assert_close(
         "Categorical[.5,.5] H",
-        Categorical::new(&[0.5, 0.5]).unwrap().entropy().unwrap(),
+        Categorical::new(&[0.5, 0.5]).unwrap().entropy(),
         ln2,
         1e-12,
     );
     assert_close(
         "Categorical 4-uniform H",
-        Categorical::new(&[0.25; 4]).unwrap().entropy().unwrap(),
+        Categorical::new(&[0.25; 4]).unwrap().entropy(),
         4.0_f64.ln(),
         1e-12,
     );
     assert_close(
         "Categorical point-mass H",
-        Categorical::new(&[1.0, 0.0]).unwrap().entropy().unwrap(),
+        Categorical::new(&[1.0, 0.0]).unwrap().entropy(),
         0.0,
         1e-12,
     );

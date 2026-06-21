@@ -24,18 +24,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "bayes-core-ext"
+name = "bayes-core"
 version = "0.1.0"
 dependencies = [
- "bayes-core-lazy",
- "bayes-error",
  "euclid",
 ]
 
 [[package]]
-name = "bayes-core-lazy"
+name = "bayes-core-ext"
 version = "0.1.0"
 dependencies = [
+ "bayes-core",
+ "bayes-error",
  "euclid",
 ]
 
@@ -50,8 +50,7 @@ dependencies = [
 name = "bayes-distribution"
 version = "0.1.0"
 dependencies = [
- "bayes-core-lazy",
- "bayes-error",
+ "bayes-core",
  "bayes-kernels",
  "euclid",
 ]
@@ -154,7 +153,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "euclid"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "foldhash"

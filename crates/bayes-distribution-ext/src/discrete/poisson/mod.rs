@@ -3,7 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{DiscreteCdf, Moments, Support};
 use bayes_error::BayesError;
-use euclid::{LazyNatural, LazyReal};
+use euclid::{LazyCompare, LazyNatural, LazyReal};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Poisson {
@@ -93,46 +93,62 @@ fn atkinson_pa<R: Rng + ?Sized>(rng: &mut R, lambda: f64) -> u64 {
     }
 }
 
-impl Support<u64> for Poisson {
-    fn min(&self) -> u64 {
-        0
+impl<K: LazyNatural> Support<K> for Poisson {
+    fn min(&self) -> K {
+        K::zero()
     }
-    fn max(&self) -> u64 {
-        u64::MAX
+    fn max(&self) -> K {
+        K::from_u64(u64::MAX)
     }
 }
 
-impl DiscreteCdf<u64> for Poisson {
-    fn cdf(&self, k: u64) -> f64 {
-        self.lambda.gamma_ur(k as f64 + 1.0)
+impl<K> DiscreteCdf<K> for Poisson
+where
+    K: LazyNatural + LazyCompare,
+    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+{
+    fn cdf(&self, k: K) -> K::Real {
+        K::Real::scalar(self.lambda).gamma_ur(k.to_real() + K::Real::one())
     }
-    fn inverse_cdf(&self, p: f64) -> u64 {
-        if p <= 0.0 {
-            return 0;
-        }
-        let mut k = 0u64;
-        while self.cdf(k) < p {
-            k += 1;
-        }
-        k
+    fn inverse_cdf(&self, p: K::Real) -> K {
+        // Smallest `k` with `cdf(k) ≥ p`. The host integer search is expressed through
+        // `while_loop`, so the same routine runs on a tensor of counts; `cdf(0) > 0 ≥ p`
+        // covers `p ≤ 0` (the loop never runs).
+        K::while_loop(K::zero(), |k| self.cdf(k.clone()).lt(&p), |k| k + K::one())
     }
 }
 
 impl Moments for Poisson {
-    fn mean(&self) -> Option<f64> {
-        Some(self.lambda)
+    fn mean(&self) -> f64 {
+        self.lambda
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.lambda)
+    fn variance(&self) -> f64 {
+        self.lambda
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(self.lambda.sqrt().recip())
+    fn skewness(&self) -> f64 {
+        self.lambda.sqrt().recip()
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(self.lambda.recip())
+    fn kurtosis(&self) -> f64 {
+        self.lambda.recip()
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.lambda.floor())
+    fn mode(&self) -> f64 {
+        self.lambda.floor()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 

@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousCdf, Support};
 use bayes_error::BayesError;
+use euclid::{LazyBool, LazyReal};
 
 /// A continuous distribution **truncated** to the interval `[lo, hi]` and
 /// renormalized: density `f(x) / (F(hi) − F(lo))` on the interval, zero outside.
@@ -48,45 +49,48 @@ impl<D: ContinuousCdf> Truncated<D> {
     }
 }
 
-impl<D: Continuous + ContinuousCdf> Continuous for Truncated<D> {
-    fn pdf(&self, x: f64) -> f64 {
-        if x < self.lo || x > self.hi {
-            0.0
-        } else {
-            self.base.pdf(x) / self.z
-        }
+impl<T, D> Continuous<T> for Truncated<D>
+where
+    T: LazyReal,
+    D: Continuous<T>,
+{
+    fn pdf(&self, x: T) -> T {
+        let outside = x.lt(&T::scalar(self.lo)).or(&x.gt(&T::scalar(self.hi)));
+        T::select(&outside, T::zero(), self.base.pdf(x) / T::scalar(self.z))
     }
-    fn ln_pdf(&self, x: f64) -> f64 {
-        if x < self.lo || x > self.hi {
-            f64::NEG_INFINITY
-        } else {
-            self.base.ln_pdf(x) - self.z.ln()
-        }
-    }
-}
-
-impl<D: ContinuousCdf> Support for Truncated<D> {
-    fn min(&self) -> f64 {
-        self.lo
-    }
-    fn max(&self) -> f64 {
-        self.hi
+    fn ln_pdf(&self, x: T) -> T {
+        let outside = x.lt(&T::scalar(self.lo)).or(&x.gt(&T::scalar(self.hi)));
+        T::select(
+            &outside,
+            T::neg_infinity(),
+            self.base.ln_pdf(x) - T::scalar(self.z).ln(),
+        )
     }
 }
 
-impl<D: ContinuousCdf> ContinuousCdf for Truncated<D> {
-    fn cdf(&self, x: f64) -> f64 {
-        if x <= self.lo {
-            0.0
-        } else if x >= self.hi {
-            1.0
-        } else {
-            (self.base.cdf(x) - self.cdf_lo) / self.z
-        }
+impl<T: LazyReal, D> Support<T> for Truncated<D> {
+    fn min(&self) -> T {
+        T::scalar(self.lo)
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
+    fn max(&self) -> T {
+        T::scalar(self.hi)
+    }
+}
+
+impl<T, D> ContinuousCdf<T> for Truncated<D>
+where
+    T: LazyReal,
+    D: ContinuousCdf<T>,
+{
+    fn cdf(&self, x: T) -> T {
+        let below = x.le(&T::scalar(self.lo));
+        let above = x.ge(&T::scalar(self.hi));
+        let interior = (self.base.cdf(x) - T::scalar(self.cdf_lo)) / T::scalar(self.z);
+        T::select(&below, T::zero(), T::select(&above, T::one(), interior))
+    }
+    fn inverse_cdf(&self, p: T) -> T {
         self.base
-            .inverse_cdf(self.cdf_lo + p.clamp(0.0, 1.0) * self.z)
+            .inverse_cdf(T::scalar(self.cdf_lo) + p.clamp(T::zero(), T::one()) * T::scalar(self.z))
     }
 }
 

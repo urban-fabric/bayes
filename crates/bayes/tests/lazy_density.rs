@@ -173,71 +173,43 @@ fn lazy_real_discrete_kernels_match_distribution_log_masses() {
 #[test]
 fn lazy_real_moment_kernels_match_distribution() {
     let lognormal = LogNormal::new(0.2, 0.7).unwrap();
-    close(lognormal_mean(0.2, 0.7), lognormal.mean().unwrap(), 1e-12);
-    close(
-        lognormal_variance(0.2, 0.7),
-        lognormal.variance().unwrap(),
-        1e-12,
-    );
+    close(lognormal_mean(0.2, 0.7), lognormal.mean(), 1e-12);
+    close(lognormal_variance(0.2, 0.7), lognormal.variance(), 1e-12);
 
     let gamma = Gamma::new(2.5, 1.2).unwrap();
-    close(gamma_variance(2.5, 1.2), gamma.variance().unwrap(), 1e-12);
-    close(gamma_skewness(2.5), gamma.skewness().unwrap(), 1e-12);
-    close(gamma_excess_kurtosis(2.5), gamma.kurtosis().unwrap(), 1e-12);
+    close(gamma_variance(2.5, 1.2), gamma.variance(), 1e-12);
+    close(gamma_skewness(2.5), gamma.skewness(), 1e-12);
+    close(gamma_excess_kurtosis(2.5), gamma.kurtosis(), 1e-12);
 
     let beta = Beta::new(2.0, 5.0).unwrap();
-    close(beta_variance(2.0, 5.0), beta.variance().unwrap(), 1e-12);
-    close(beta_skewness(2.0, 5.0), beta.skewness().unwrap(), 1e-12);
+    close(beta_variance(2.0, 5.0), beta.variance(), 1e-12);
+    close(beta_skewness(2.0, 5.0), beta.skewness(), 1e-12);
 
     let chi = ChiSquared::new(5.0).unwrap();
-    close(chi_squared_skewness(5.0), chi.skewness().unwrap(), 1e-12);
-    close(
-        chi_squared_excess_kurtosis(5.0),
-        chi.kurtosis().unwrap(),
-        1e-12,
-    );
+    close(chi_squared_skewness(5.0), chi.skewness(), 1e-12);
+    close(chi_squared_excess_kurtosis(5.0), chi.kurtosis(), 1e-12);
 
     let wald = Wald::new(1.0, 2.0).unwrap();
-    close(wald_skewness(1.0, 2.0), wald.skewness().unwrap(), 1e-12);
-    close(
-        wald_excess_kurtosis(1.0, 2.0),
-        wald.kurtosis().unwrap(),
-        1e-12,
-    );
+    close(wald_skewness(1.0, 2.0), wald.skewness(), 1e-12);
+    close(wald_excess_kurtosis(1.0, 2.0), wald.kurtosis(), 1e-12);
 
     let poisson = Poisson::new(3.5).unwrap();
-    close(poisson_skewness(3.5), poisson.skewness().unwrap(), 1e-12);
-    close(
-        poisson_excess_kurtosis(3.5),
-        poisson.kurtosis().unwrap(),
-        1e-12,
-    );
+    close(poisson_skewness(3.5), poisson.skewness(), 1e-12);
+    close(poisson_excess_kurtosis(3.5), poisson.kurtosis(), 1e-12);
 
     let binomial = Binomial::new(12, 0.3).unwrap();
-    close(
-        binomial_skewness(12.0, 0.3),
-        binomial.skewness().unwrap(),
-        1e-12,
-    );
+    close(binomial_skewness(12.0, 0.3), binomial.skewness(), 1e-12);
 
     let geometric = Geometric::new(0.25).unwrap();
-    close(
-        geometric_skewness(0.25),
-        geometric.skewness().unwrap(),
-        1e-12,
-    );
+    close(geometric_skewness(0.25), geometric.skewness(), 1e-12);
 
     let negbin = NegativeBinomial::new(5.0, 0.4).unwrap();
     close(
         negative_binomial_skewness(5.0, 0.4),
-        negbin.skewness().unwrap(),
+        negbin.skewness(),
         1e-12,
     );
 
     let bernoulli = Bernoulli::new(0.3).unwrap();
-    close(
-        bernoulli_skewness(0.3),
-        bernoulli.skewness().unwrap(),
-        1e-12,
-    );
+    close(bernoulli_skewness(0.3), bernoulli.skewness(), 1e-12);
 }

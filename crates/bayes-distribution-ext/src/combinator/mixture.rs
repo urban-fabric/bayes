@@ -137,19 +137,20 @@ impl<D: Moments> Mixture<D> {
     ///
     /// The identity `variance = within + between` and its nonnegativity are proved
     /// in `riemann` (`RiemannLean/Bayes/Mixture.lean`: `law_of_total_variance`,
-    /// `mixtureVar_nonneg`). `None` if any component lacks a mean or variance.
-    pub fn variance_decomposition(&self) -> Option<(f64, f64)> {
+    /// `mixtureVar_nonneg`). Returns `NaN` components if any component lacks a
+    /// mean or variance.
+    pub fn variance_decomposition(&self) -> (f64, f64) {
         let mut mean = 0.0;
         for (&w, c) in self.weights.iter().zip(&self.components) {
-            mean += w * c.mean()?;
+            mean += w * c.mean();
         }
         let mut within = 0.0;
         let mut between = 0.0;
         for (&w, c) in self.weights.iter().zip(&self.components) {
-            within += w * c.variance()?;
-            between += w * (c.mean()? - mean).powi(2);
+            within += w * c.variance();
+            between += w * (c.mean() - mean).powi(2);
         }
-        Some((within, between))
+        (within, between)
     }
 }
 
@@ -244,28 +245,56 @@ impl<D> Moments for Mixture<D>
 where
     D: Moments,
 {
-    /// Mixture mean `Σ wᵢ μᵢ` (if every component has a mean).
-    fn mean(&self) -> Option<f64> {
+    /// Mixture mean `Σ wᵢ μᵢ`, propagating `NaN` from undefined component means.
+    fn mean(&self) -> f64 {
         let mut m = 0.0;
         for (&w, c) in self.weights.iter().zip(&self.components) {
-            m += w * c.mean()?;
+            m += w * c.mean();
         }
-        Some(m)
+        m
     }
     /// Mixture variance by the **law of total variance**, in the one-pass form
     /// `Σ wᵢ(σᵢ² + μᵢ²) − (Σ wᵢ μᵢ)²` — equal to the within + between split
     /// ([`variance_decomposition`](Mixture::variance_decomposition)) and always
     /// nonnegative, proved in `riemann` (`RiemannLean/Bayes/Mixture.lean`:
     /// `law_of_total_variance`, `mixtureVar_nonneg`).
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         let mut e_x2 = 0.0;
         for (&w, c) in self.weights.iter().zip(&self.components) {
-            let mi = c.mean()?;
-            let vi = c.variance()?;
+            let mi = c.mean();
+            let vi = c.variance();
             e_x2 += w * (vi + mi * mi);
         }
-        let m = self.mean()?;
-        Some(e_x2 - m * m)
+        let m = self.mean();
+        e_x2 - m * m
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn mode(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -368,14 +397,14 @@ mod tests {
             ],
         )
         .unwrap();
-        close(m.mean().unwrap(), 2.0, 1e-12);
-        close(m.variance().unwrap(), 5.0, 1e-12);
+        close(m.mean(), 2.0, 1e-12);
+        close(m.variance(), 5.0, 1e-12);
         // Law of total variance: within = ½·1 + ½·1 = 1, between = ½·2² + ½·2² = 4.
-        let (within, between) = m.variance_decomposition().unwrap();
+        let (within, between) = m.variance_decomposition();
         close(within, 1.0, 1e-12);
         close(between, 4.0, 1e-12);
         // within + between == variance (law_of_total_variance).
-        close(within + between, m.variance().unwrap(), 1e-12);
+        close(within + between, m.variance(), 1e-12);
     }
 
     #[test]

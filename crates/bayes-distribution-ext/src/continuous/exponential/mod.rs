@@ -43,65 +43,61 @@ impl Distribution<f64> for Exponential {
     }
 }
 
-impl Support for Exponential {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for Exponential {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Exponential {
-    fn cdf(&self, x: f64) -> f64 {
-        if x < 0.0 {
-            0.0
-        } else {
-            1.0 - (-self.rate * x).exp()
-        }
+impl<T: LazyReal> ContinuousCdf<T> for Exponential {
+    fn cdf(&self, x: T) -> T {
+        kernels::exponential_cdf(x, T::scalar(self.rate))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        -(1.0 - p.clamp(0.0, 1.0)).ln() / self.rate
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::exponential_quantile(p.clamp(T::zero(), T::one()), T::scalar(self.rate))
     }
     /// `ln(1 − e^{−λx})`, stable near `x = 0` via `ln_1m_exp`.
-    fn ln_cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            f64::NEG_INFINITY
-        } else {
-            (-self.rate * x).ln_1m_exp()
-        }
+    fn ln_cdf(&self, x: T) -> T {
+        kernels::exponential_ln_cdf(x, T::scalar(self.rate))
     }
     /// `ln P(X > x) = −λx` exactly — no underflow, unlike `ln(1 − cdf)`.
-    fn ln_sf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            0.0
-        } else {
-            kernels::exponential_log_survival_on_support(x, self.rate)
-        }
+    fn ln_sf(&self, x: T) -> T {
+        kernels::exponential_ln_sf(x, T::scalar(self.rate))
     }
 }
 
 impl Moments for Exponential {
-    fn mean(&self) -> Option<f64> {
-        Some(self.rate.recip())
+    fn mean(&self) -> f64 {
+        self.rate.recip()
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.rate.powi(-2))
+    fn variance(&self) -> f64 {
+        self.rate.powi(-2)
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(2.0)
+    fn skewness(&self) -> f64 {
+        2.0
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(6.0)
+    fn kurtosis(&self) -> f64 {
+        6.0
     }
-    fn entropy(&self) -> Option<f64> {
-        Some(1.0 - self.rate.ln())
+    fn entropy(&self) -> f64 {
+        1.0 - self.rate.ln()
     }
-    fn median(&self) -> Option<f64> {
-        Some(std::f64::consts::LN_2 / self.rate)
+    fn median(&self) -> f64 {
+        std::f64::consts::LN_2 / self.rate
     }
-    fn mode(&self) -> Option<f64> {
-        Some(0.0)
+    fn mode(&self) -> f64 {
+        0.0
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
     }
 }
 
@@ -129,8 +125,8 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(e.cdf(e.inverse_cdf(p)), p, 1e-12);
         }
-        close(e.mean().unwrap(), 0.5, 1e-12);
-        close(e.variance().unwrap(), 0.25, 1e-12);
-        close(e.median().unwrap(), std::f64::consts::LN_2 / 2.0, 1e-12);
+        close(e.mean(), 0.5, 1e-12);
+        close(e.variance(), 0.25, 1e-12);
+        close(e.median(), std::f64::consts::LN_2 / 2.0, 1e-12);
     }
 }

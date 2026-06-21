@@ -63,19 +63,19 @@ fn independent_normal_algebra_is_closed_form() {
     let b = Normal::new(3.0, 4.0).unwrap();
 
     let sum = a.sum_independent(b);
-    assert!((sum.mean().unwrap() - 4.0).abs() < 1e-12);
-    assert!((sum.variance().unwrap() - 20.0).abs() < 1e-12);
+    assert!((sum.mean() - 4.0).abs() < 1e-12);
+    assert!((sum.variance() - 20.0).abs() < 1e-12);
 
     let diff = a.difference_independent(b);
-    assert!((diff.mean().unwrap() + 2.0).abs() < 1e-12);
-    assert!((diff.variance().unwrap() - 20.0).abs() < 1e-12);
+    assert!((diff.mean() + 2.0).abs() < 1e-12);
+    assert!((diff.variance() - 20.0).abs() < 1e-12);
 
     let affine = a.affine(-2.0, 5.0).unwrap();
-    assert!((affine.mean().unwrap() - 3.0).abs() < 1e-12);
-    assert!((affine.variance().unwrap() - 16.0).abs() < 1e-12);
+    assert!((affine.mean() - 3.0).abs() < 1e-12);
+    assert!((affine.variance() - 16.0).abs() < 1e-12);
 
     let combo = Normal::linear_combination_independent(&[(2.0, a), (-1.0, b)], 10.0).unwrap();
-    assert!((combo.mean().unwrap() - 9.0).abs() < 1e-12);
-    assert!((combo.variance().unwrap() - 32.0).abs() < 1e-12);
+    assert!((combo.mean() - 9.0).abs() < 1e-12);
+    assert!((combo.variance() - 32.0).abs() < 1e-12);
     assert!(Normal::linear_combination_independent(&[], 0.0).is_err());
 }

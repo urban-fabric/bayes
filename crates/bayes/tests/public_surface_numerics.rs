@@ -29,7 +29,7 @@ fn close(a: f64, b: f64, tol: f64) {
 fn normal_log_cdf_is_accurate_in_the_far_tail_where_naive_underflows() {
     let n = Normal::new(0.0, 1.0).unwrap();
     assert_eq!(n.cdf(-40.0).ln(), f64::NEG_INFINITY);
-    let lc = n.ln_cdf(-40.0);
+    let lc: f64 = n.ln_cdf(-40.0);
     assert!(lc.is_finite());
     close(lc, -804.6084, 1e-2);
     close(n.ln_sf(40.0), n.ln_cdf(-40.0), 1e-12);

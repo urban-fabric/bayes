@@ -23,7 +23,7 @@ thiserror = "2.0"
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 # internal members
 bayes-error = { path = "crates/bayes-error" }
-bayes-core-lazy = { path = "crates/bayes-core-lazy" }
+bayes-core = { path = "crates/bayes-core" }
 bayes-core-ext = { path = "crates/bayes-core-ext" }
 bayes-kernels = { path = "crates/bayes-kernels" }
 bayes-dist-core = { path = "crates/bayes-dist-core" }

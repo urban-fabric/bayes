@@ -3,6 +3,8 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Estimate, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Uniform {
@@ -61,42 +63,58 @@ impl Distribution<f64> for Uniform {
     }
 }
 
-impl Support for Uniform {
-    fn min(&self) -> f64 {
-        self.lo
+impl<T: LazyReal> Support<T> for Uniform {
+    fn min(&self) -> T {
+        T::scalar(self.lo)
     }
-    fn max(&self) -> f64 {
-        self.lo + self.width
+    fn max(&self) -> T {
+        T::scalar(self.lo + self.width)
     }
 }
 
-impl ContinuousCdf for Uniform {
-    fn cdf(&self, x: f64) -> f64 {
-        ((x - self.lo) / self.width).clamp(0.0, 1.0)
+impl<T: LazyReal> ContinuousCdf<T> for Uniform {
+    fn cdf(&self, x: T) -> T {
+        kernels::uniform_cdf(x, T::scalar(self.lo), T::scalar(self.width))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        self.lo + self.width * p.clamp(0.0, 1.0)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::uniform_quantile(
+            p.clamp(T::zero(), T::one()),
+            T::scalar(self.lo),
+            T::scalar(self.width),
+        )
     }
 }
 
 impl Moments for Uniform {
-    fn mean(&self) -> Option<f64> {
-        Some(self.lo + self.width / 2.0)
+    fn mean(&self) -> f64 {
+        self.lo + self.width / 2.0
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.width * self.width / 12.0)
+    fn variance(&self) -> f64 {
+        self.width * self.width / 12.0
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(0.0)
+    fn skewness(&self) -> f64 {
+        0.0
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(-1.2)
+    fn kurtosis(&self) -> f64 {
+        -1.2
     }
-    fn entropy(&self) -> Option<f64> {
-        Some(self.width.ln())
+    fn entropy(&self) -> f64 {
+        self.width.ln()
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.lo + self.width / 2.0)
+    fn median(&self) -> f64 {
+        self.lo + self.width / 2.0
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn mode(&self) -> f64 {
+        f64::NAN
     }
 }
 

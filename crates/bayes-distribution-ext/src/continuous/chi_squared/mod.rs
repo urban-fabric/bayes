@@ -45,44 +45,56 @@ impl Distribution<f64> for ChiSquared {
     }
 }
 
-impl Support for ChiSquared {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for ChiSquared {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for ChiSquared {
-    fn cdf(&self, x: f64) -> f64 {
+impl<T: LazyReal> ContinuousCdf<T> for ChiSquared {
+    fn cdf(&self, x: T) -> T {
         self.gamma.cdf(x)
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
+    fn inverse_cdf(&self, p: T) -> T {
         self.gamma.inverse_cdf(p)
     }
 }
 
 impl Moments for ChiSquared {
-    fn mean(&self) -> Option<f64> {
-        Some(self.freedom)
+    fn mean(&self) -> f64 {
+        self.freedom
     }
-    fn variance(&self) -> Option<f64> {
-        Some(2.0 * self.freedom)
+    fn variance(&self) -> f64 {
+        2.0 * self.freedom
     }
-    fn skewness(&self) -> Option<f64> {
-        Some((8.0 / self.freedom).sqrt())
+    fn skewness(&self) -> f64 {
+        (8.0 / self.freedom).sqrt()
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(12.0 / self.freedom)
+    fn kurtosis(&self) -> f64 {
+        12.0 / self.freedom
     }
-    fn mode(&self) -> Option<f64> {
-        Some((self.freedom - 2.0).max(0.0))
+    fn mode(&self) -> f64 {
+        (self.freedom - 2.0).max(0.0)
     }
     /// `H = k/2 + ln(2 Γ(k/2)) + (1 − k/2)ψ(k/2)`.
-    fn entropy(&self) -> Option<f64> {
+    fn entropy(&self) -> f64 {
         let h = self.freedom / 2.0;
-        Some(h + std::f64::consts::LN_2 + h.ln_gamma() + (1.0 - h) * h.digamma())
+        h + std::f64::consts::LN_2 + h.ln_gamma() + (1.0 - h) * h.digamma()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -98,8 +110,8 @@ mod tests {
     #[test]
     fn moments_and_quantile() {
         let c = ChiSquared::new(5.0).unwrap();
-        close(c.mean().unwrap(), 5.0, 1e-12);
-        close(c.variance().unwrap(), 10.0, 1e-12);
+        close(c.mean(), 5.0, 1e-12);
+        close(c.variance(), 10.0, 1e-12);
         close(c.inverse_cdf(0.5), 4.351_460_191, 1e-4);
         for &p in &[0.1, 0.5, 0.9] {
             close(c.cdf(c.inverse_cdf(p)), p, 1e-8);
@@ -111,8 +123,8 @@ mod tests {
         // χ²(k) ≡ Gamma(k/2, rate 1/2), so the entropies must coincide.
         for &k in &[1.0, 2.0, 5.0, 9.0] {
             close(
-                ChiSquared::new(k).unwrap().entropy().unwrap(),
-                Gamma::new(k / 2.0, 0.5).unwrap().entropy().unwrap(),
+                ChiSquared::new(k).unwrap().entropy(),
+                Gamma::new(k / 2.0, 0.5).unwrap().entropy(),
                 1e-12,
             );
         }

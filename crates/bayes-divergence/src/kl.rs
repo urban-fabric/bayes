@@ -289,14 +289,14 @@ pub trait Divergence: KlDivergence + Sized {
     /// Cross-entropy `H(self, other) = H(self) + D_KL(self ‖ other)`, in nats —
     /// the expected surprise of coding `self`-distributed data under `other`.
     /// Derived from [`entropy`](Moments::entropy) and
-    /// [`kl_divergence`](KlDivergence::kl_divergence); `None` when `self`'s
+    /// [`kl_divergence`](KlDivergence::kl_divergence); returns `NaN` when `self`'s
     /// entropy is unavailable. Because the KL term is proved nonnegative (Gibbs),
     /// `H(self, other) ≥ H(self)`, with equality iff the distributions agree.
-    fn cross_entropy(&self, other: &Self) -> Option<f64>
+    fn cross_entropy(&self, other: &Self) -> f64
     where
         Self: Moments,
     {
-        Some(self.entropy()? + self.kl_divergence(other))
+        self.entropy() + self.kl_divergence(other)
     }
 }
 

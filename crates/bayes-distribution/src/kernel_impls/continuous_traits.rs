@@ -1,4 +1,4 @@
-use super::{neg_inf, scalar};
+use super::neg_inf;
 use crate::continuous::{
     Beta, Cauchy, ChiSquared, Exponential, FisherSnedecor, Frechet, Gamma, Gumbel, HalfNormal,
     InverseGamma, Laplace, LogNormal, Logistic, Lomax, Normal, Pareto, Rayleigh, StudentT, Uniform,
@@ -30,7 +30,7 @@ where
     }
 }
 
-impl<T: LazyReal> Continuous<T> for Cauchy {
+impl<T: LazyReal> Continuous<T> for Cauchy<T> {
     fn pdf(&self, x: T) -> T {
         self.ln_pdf(x).exp()
     }
@@ -40,7 +40,7 @@ impl<T: LazyReal> Continuous<T> for Cauchy {
     }
 }
 
-impl<T> Continuous<T> for ChiSquared
+impl<T> Continuous<T> for ChiSquared<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -55,7 +55,7 @@ where
     }
 }
 
-impl<T> Continuous<T> for Exponential
+impl<T> Continuous<T> for Exponential<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -70,7 +70,7 @@ where
     }
 }
 
-impl<T> Continuous<T> for FisherSnedecor
+impl<T> Continuous<T> for FisherSnedecor<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -85,7 +85,7 @@ where
     }
 }
 
-impl<T> Continuous<T> for Frechet
+impl<T> Continuous<T> for Frechet<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -100,7 +100,7 @@ where
     }
 }
 
-impl<T> Continuous<T> for Gamma
+impl<T> Continuous<T> for Gamma<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -115,7 +115,7 @@ where
     }
 }
 
-impl<T: LazyReal> Continuous<T> for Gumbel {
+impl<T: LazyReal> Continuous<T> for Gumbel<T> {
     fn pdf(&self, x: T) -> T {
         self.ln_pdf(x).exp()
     }
@@ -125,7 +125,7 @@ impl<T: LazyReal> Continuous<T> for Gumbel {
     }
 }
 
-impl<T> Continuous<T> for HalfNormal
+impl<T> Continuous<T> for HalfNormal<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -140,7 +140,7 @@ where
     }
 }
 
-impl<T> Continuous<T> for InverseGamma
+impl<T> Continuous<T> for InverseGamma<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -155,7 +155,7 @@ where
     }
 }
 
-impl<T: LazyReal> Continuous<T> for Laplace {
+impl<T: LazyReal> Continuous<T> for Laplace<T> {
     fn pdf(&self, x: T) -> T {
         self.ln_pdf(x).exp()
     }
@@ -165,7 +165,7 @@ impl<T: LazyReal> Continuous<T> for Laplace {
     }
 }
 
-impl<T: LazyReal> Continuous<T> for Logistic {
+impl<T: LazyReal> Continuous<T> for Logistic<T> {
     fn pdf(&self, x: T) -> T {
         self.ln_pdf(x).exp()
     }
@@ -175,7 +175,7 @@ impl<T: LazyReal> Continuous<T> for Logistic {
     }
 }
 
-impl<T> Continuous<T> for LogNormal
+impl<T> Continuous<T> for LogNormal<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -190,7 +190,7 @@ where
     }
 }
 
-impl<T> Continuous<T> for Lomax
+impl<T> Continuous<T> for Lomax<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -205,7 +205,7 @@ where
     }
 }
 
-impl<T: LazyReal> Continuous<T> for Normal {
+impl<T: LazyReal> Continuous<T> for Normal<T> {
     fn pdf(&self, x: T) -> T {
         self.ln_pdf(x).exp()
     }
@@ -215,7 +215,7 @@ impl<T: LazyReal> Continuous<T> for Normal {
     }
 }
 
-impl<T> Continuous<T> for Pareto
+impl<T> Continuous<T> for Pareto<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -224,13 +224,13 @@ where
     }
 
     fn ln_pdf(&self, x: T) -> T {
-        let min = scalar::<T>(self.scale());
+        let min = self.scale();
         let valid = x.ge(&min);
         select(&valid, self.ln_pdf_kernel(x), neg_inf())
     }
 }
 
-impl<T> Continuous<T> for Rayleigh
+impl<T> Continuous<T> for Rayleigh<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -245,7 +245,7 @@ where
     }
 }
 
-impl<T: LazyReal> Continuous<T> for StudentT {
+impl<T: LazyReal> Continuous<T> for StudentT<T> {
     fn pdf(&self, x: T) -> T {
         self.ln_pdf(x).exp()
     }
@@ -281,7 +281,7 @@ impl<T: LazyReal> Continuous<T> for VonMises<T> {
     }
 }
 
-impl<T> Continuous<T> for Wald
+impl<T> Continuous<T> for Wald<T>
 where
     T: LazyReal + LazyCompare,
 {
@@ -296,7 +296,7 @@ where
     }
 }
 
-impl<T> Continuous<T> for Weibull
+impl<T> Continuous<T> for Weibull<T>
 where
     T: LazyReal + LazyCompare,
 {

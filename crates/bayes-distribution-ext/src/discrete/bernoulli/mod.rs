@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{DiscreteCdf, Moments, Support};
 use bayes_error::BayesError;
+use euclid::{LazyCompare, LazyNatural, LazyReal};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bernoulli {
@@ -39,42 +40,70 @@ impl Distribution<bool> for Bernoulli {
     }
 }
 
-impl Support<u64> for Bernoulli {
-    fn min(&self) -> u64 {
-        0
+impl<K: LazyNatural> Support<K> for Bernoulli {
+    fn min(&self) -> K {
+        K::zero()
     }
-    fn max(&self) -> u64 {
-        1
+    fn max(&self) -> K {
+        K::one()
     }
 }
 
-impl DiscreteCdf<u64> for Bernoulli {
-    fn cdf(&self, k: u64) -> f64 {
-        if k == 0 { 1.0 - self.p } else { 1.0 }
+impl<K> DiscreteCdf<K> for Bernoulli
+where
+    K: LazyNatural + LazyCompare,
+    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+{
+    fn cdf(&self, k: K) -> K::Real {
+        // `1 − p` at `k = 0`, else `1`.
+        let is_zero = k.eq(&K::zero());
+        K::Real::select(
+            &is_zero,
+            K::Real::one() - K::Real::scalar(self.p),
+            K::Real::one(),
+        )
     }
-    fn inverse_cdf(&self, p: f64) -> u64 {
-        u64::from(p > 1.0 - self.p)
+    fn inverse_cdf(&self, p: K::Real) -> K {
+        // `1` once `p` clears the `k = 0` mass `1 − p`, else `0`.
+        let threshold = K::Real::one() - K::Real::scalar(self.p);
+        K::select(&p.gt(&threshold), K::one(), K::zero())
     }
 }
 
 impl Moments for Bernoulli {
-    fn mean(&self) -> Option<f64> {
-        Some(self.p)
+    fn mean(&self) -> f64 {
+        self.p
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.p * (1.0 - self.p))
+    fn variance(&self) -> f64 {
+        self.p * (1.0 - self.p)
     }
-    fn skewness(&self) -> Option<f64> {
+    fn skewness(&self) -> f64 {
         let q = 1.0 - self.p;
-        Some((q - self.p) / (self.p * q).sqrt())
+        (q - self.p) / (self.p * q).sqrt()
     }
-    fn mode(&self) -> Option<f64> {
-        Some(if self.p > 0.5 { 1.0 } else { 0.0 })
+    fn mode(&self) -> f64 {
+        if self.p > 0.5 { 1.0 } else { 0.0 }
     }
-    /// Binary entropy `H = −p ln p − (1−p) ln(1−p)`, with `0 ln 0 = 0`.
-    fn entropy(&self) -> Option<f64> {
-        let term = |x: f64| if x > 0.0 { x * x.ln() } else { 0.0 };
-        Some(-term(self.p) - term(1.0 - self.p))
+    /// Binary entropy `H = −p ln p − (1−p) ln(1−p)`, with `0 ln 0 = 0` via `xlogy`.
+    fn entropy(&self) -> f64 {
+        let q = 1.0 - self.p;
+        -self.p.xlogy(self.p) - q.xlogy(q)
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 

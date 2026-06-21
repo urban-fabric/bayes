@@ -3,7 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{Discrete, DiscreteCdf, Moments, Support};
 use bayes_error::BayesError;
-use euclid::LazyReal;
+use euclid::{LazyBool, LazyCompare, LazyNatural, LazyReal};
 
 /// The binomial distribution: the number of successes in `n` independent trials,
 /// each with success probability `p ∈ [0, 1]`. Support `{0, …, n}`.
@@ -35,51 +35,58 @@ impl Distribution<u64> for Binomial {
     }
 }
 
-impl Support<u64> for Binomial {
-    fn min(&self) -> u64 {
-        0
+impl<K: LazyNatural> Support<K> for Binomial {
+    fn min(&self) -> K {
+        K::zero()
     }
-    fn max(&self) -> u64 {
-        self.n
+    fn max(&self) -> K {
+        K::from_u64(self.n)
     }
 }
 
-impl DiscreteCdf<u64> for Binomial {
-    fn cdf(&self, k: u64) -> f64 {
-        if k >= self.n {
-            return 1.0;
-        }
-        (1.0 - self.p).beta_reg((self.n - k) as f64, (k + 1) as f64)
+impl<K> DiscreteCdf<K> for Binomial
+where
+    K: LazyNatural + LazyCompare,
+    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+{
+    fn cdf(&self, k: K) -> K::Real {
+        // `1` at or above `n`, else the regularized incomplete beta `I_{1−p}(n−k, k+1)`.
+        let at_or_above = k.ge(&K::from_u64(self.n));
+        let one = K::Real::one();
+        let n = K::Real::scalar(self.n as f64);
+        let kr = k.to_real();
+        let interior =
+            (one.clone() - K::Real::scalar(self.p)).beta_reg(n - kr.clone(), kr + one.clone());
+        K::Real::select(&at_or_above, one, interior)
     }
-    fn inverse_cdf(&self, p: f64) -> u64 {
-        if p <= 0.0 {
-            return 0;
-        }
-        let mut k = 0;
-        while k < self.n && self.cdf(k) < p {
-            k += 1;
-        }
-        k
+    fn inverse_cdf(&self, p: K::Real) -> K {
+        // Smallest `k ≤ n` with `cdf(k) ≥ p`, the bounded host search via `while_loop`.
+        let n = K::from_u64(self.n);
+        K::while_loop(
+            K::zero(),
+            |k| k.lt(&n).and(&self.cdf(k.clone()).lt(&p)),
+            |k| k + K::one(),
+        )
     }
 }
 
 impl Moments for Binomial {
-    fn mean(&self) -> Option<f64> {
-        Some(self.n as f64 * self.p)
+    fn mean(&self) -> f64 {
+        self.n as f64 * self.p
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.n as f64 * self.p * (1.0 - self.p))
+    fn variance(&self) -> f64 {
+        self.n as f64 * self.p * (1.0 - self.p)
     }
-    fn skewness(&self) -> Option<f64> {
+    fn skewness(&self) -> f64 {
         let v = self.n as f64 * self.p * (1.0 - self.p);
-        Some((1.0 - 2.0 * self.p) / v.sqrt())
+        (1.0 - 2.0 * self.p) / v.sqrt()
     }
-    fn mode(&self) -> Option<f64> {
-        Some(((self.n as f64 + 1.0) * self.p).floor())
+    fn mode(&self) -> f64 {
+        ((self.n as f64 + 1.0) * self.p).floor()
     }
     /// `H = −Σ_{k=0}^{n} P(k) ln P(k)`, the exact finite-support sum (no
     /// elementary closed form exists). Zero-probability outcomes are skipped.
-    fn entropy(&self) -> Option<f64> {
+    fn entropy(&self) -> f64 {
         let mut h = 0.0;
         for k in 0..=self.n {
             let lp = self.ln_pmf(k);
@@ -87,7 +94,23 @@ impl Moments for Binomial {
                 h -= lp.exp() * lp;
             }
         }
-        Some(h)
+        h
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -109,8 +132,8 @@ mod tests {
             close(b.cdf(k), cum, 1e-9);
         }
         close(cum, 1.0, 1e-10);
-        close(b.mean().unwrap(), 3.0, 1e-12);
-        close(b.variance().unwrap(), 10.0 * 0.3 * 0.7, 1e-12);
+        close(b.mean(), 3.0, 1e-12);
+        close(b.variance(), 10.0 * 0.3 * 0.7, 1e-12);
     }
 
     #[test]

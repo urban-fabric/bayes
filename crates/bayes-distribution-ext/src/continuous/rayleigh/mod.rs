@@ -5,6 +5,8 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Estimate, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 #[cfg(test)]
 use crate::Continuous;
@@ -44,43 +46,55 @@ impl Distribution<f64> for Rayleigh {
     }
 }
 
-impl Support for Rayleigh {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for Rayleigh {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Rayleigh {
-    fn cdf(&self, x: f64) -> f64 {
-        if x < 0.0 {
-            0.0
-        } else {
-            1.0 - (-x * x / (2.0 * self.scale * self.scale)).exp()
-        }
+impl<T: LazyReal> ContinuousCdf<T> for Rayleigh {
+    fn cdf(&self, x: T) -> T {
+        kernels::rayleigh_cdf(x, T::scalar(self.scale))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        self.scale * (-2.0 * (1.0 - p.clamp(0.0, 1.0)).ln()).sqrt()
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::rayleigh_quantile(p.clamp(T::zero(), T::one()), T::scalar(self.scale))
     }
 }
 
 impl Moments for Rayleigh {
-    fn mean(&self) -> Option<f64> {
-        Some(self.scale * (PI / 2.0).sqrt())
+    fn mean(&self) -> f64 {
+        self.scale * (PI / 2.0).sqrt()
     }
-    fn variance(&self) -> Option<f64> {
-        Some((4.0 - PI) / 2.0 * self.scale * self.scale)
+    fn variance(&self) -> f64 {
+        (4.0 - PI) / 2.0 * self.scale * self.scale
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.scale * (2.0 * std::f64::consts::LN_2).sqrt())
+    fn median(&self) -> f64 {
+        self.scale * (2.0 * std::f64::consts::LN_2).sqrt()
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.scale)
+    fn mode(&self) -> f64 {
+        self.scale
     }
-    fn entropy(&self) -> Option<f64> {
-        Some(1.0 + (self.scale / 2.0_f64.sqrt()).ln() + 0.577_215_664_901_532_9 / 2.0)
+    fn entropy(&self) -> f64 {
+        1.0 + (self.scale / 2.0_f64.sqrt()).ln() + 0.577_215_664_901_532_9 / 2.0
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -109,8 +123,8 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(r.cdf(r.inverse_cdf(p)), p, 1e-12);
         }
-        close(r.mean().unwrap(), 2.0 * (PI / 2.0).sqrt(), 1e-12);
-        close(r.mode().unwrap(), 2.0, 1e-12);
+        close(r.mean(), 2.0 * (PI / 2.0).sqrt(), 1e-12);
+        close(r.mode(), 2.0, 1e-12);
         close(r.pdf(2.0), (2.0 / 4.0) * (-0.5f64).exp(), 1e-12);
     }
 }

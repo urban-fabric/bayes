@@ -3,6 +3,8 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 /// The Lomax (Pareto type II) distribution with shape `α > 0` and scale `λ > 0`,
 /// support `[0, ∞)` — a Pareto shifted to start at 0, and the heavy-tailed
@@ -42,52 +44,72 @@ impl Distribution<f64> for Lomax {
     }
 }
 
-impl Support for Lomax {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for Lomax {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Lomax {
-    fn cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            0.0
-        } else {
-            1.0 - (1.0 + x / self.scale).powf(-self.shape)
-        }
+impl<T: LazyReal> ContinuousCdf<T> for Lomax {
+    fn cdf(&self, x: T) -> T {
+        kernels::lomax_cdf(x, T::scalar(self.shape), T::scalar(self.scale))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        self.scale * ((1.0 - p.clamp(0.0, 1.0)).powf(-1.0 / self.shape) - 1.0)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::lomax_quantile(
+            p.clamp(T::zero(), T::one()),
+            T::scalar(self.scale),
+            T::scalar(self.shape),
+        )
     }
-    fn ln_sf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            0.0
-        } else {
-            -self.shape * (1.0 + x / self.scale).ln()
-        }
+    fn ln_sf(&self, x: T) -> T {
+        kernels::lomax_ln_sf(x, T::scalar(self.shape), T::scalar(self.scale))
     }
 }
 
 impl Moments for Lomax {
-    fn mean(&self) -> Option<f64> {
-        (self.shape > 1.0).then(|| self.scale / (self.shape - 1.0))
-    }
-    fn variance(&self) -> Option<f64> {
-        if self.shape > 2.0 {
-            let a = self.shape;
-            Some(self.scale * self.scale * a / ((a - 1.0) * (a - 1.0) * (a - 2.0)))
+    fn mean(&self) -> f64 {
+        if self.shape > 1.0 {
+            self.scale / (self.shape - 1.0)
         } else {
-            None
+            f64::NAN
         }
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.scale * (2.0_f64.powf(1.0 / self.shape) - 1.0))
+    fn variance(&self) -> f64 {
+        if self.shape > 2.0 {
+            let a = self.shape;
+            self.scale * self.scale * a / ((a - 1.0) * (a - 1.0) * (a - 2.0))
+        } else {
+            f64::NAN
+        }
     }
-    fn mode(&self) -> Option<f64> {
-        Some(0.0)
+    fn median(&self) -> f64 {
+        self.scale * (2.0_f64.powf(1.0 / self.shape) - 1.0)
+    }
+    fn mode(&self) -> f64 {
+        0.0
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -109,13 +131,9 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(d.cdf(d.inverse_cdf(p)), p, 1e-10);
         }
-        close(d.mean().unwrap(), 2.0 / 2.0, 1e-12);
-        close(
-            d.median().unwrap(),
-            2.0 * (2.0_f64.powf(1.0 / 3.0) - 1.0),
-            1e-12,
-        );
-        assert!(Lomax::new(1.5, 1.0).unwrap().variance().is_none());
+        close(d.mean(), 2.0 / 2.0, 1e-12);
+        close(d.median(), 2.0 * (2.0_f64.powf(1.0 / 3.0) - 1.0), 1e-12);
+        assert!(Lomax::new(1.5, 1.0).unwrap().variance().is_nan());
     }
 
     #[test]
@@ -124,6 +142,6 @@ mod tests {
         let d = Lomax::new(4.0, 3.0).unwrap();
         let n = 200_000;
         let s: f64 = (0..n).map(|_| d.sample(&mut rng)).sum();
-        close(s / n as f64, d.mean().unwrap(), 0.05);
+        close(s / n as f64, d.mean(), 0.05);
     }
 }

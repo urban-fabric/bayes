@@ -3,8 +3,8 @@ use rand::distr::Distribution;
 
 use super::chi_squared::ChiSquared;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_core_ext::numeric::inverse_cdf_bisect;
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 /// The F (Fisher–Snedecor) distribution with numerator/denominator degrees of
@@ -49,45 +49,70 @@ impl Distribution<f64> for FisherSnedecor {
     }
 }
 
-impl Support for FisherSnedecor {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for FisherSnedecor {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for FisherSnedecor {
-    fn cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            return 0.0;
-        }
-        (self.d1 * x / (self.d1 * x + self.d2)).beta_reg(self.d1 / 2.0, self.d2 / 2.0)
+impl<T: LazyReal> ContinuousCdf<T> for FisherSnedecor {
+    fn cdf(&self, x: T) -> T {
+        kernels::fisher_snedecor_cdf(x, T::scalar(self.d1), T::scalar(self.d2))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        inverse_cdf_bisect(|x| self.cdf(x), 0.0, f64::INFINITY, p)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::inverse_cdf_bisect(|x| self.cdf(x), T::zero(), T::infinity(), p)
     }
 }
 
 impl Moments for FisherSnedecor {
-    fn mean(&self) -> Option<f64> {
-        (self.d2 > 2.0).then(|| self.d2 / (self.d2 - 2.0))
+    fn mean(&self) -> f64 {
+        if self.d2 > 2.0 {
+            self.d2 / (self.d2 - 2.0)
+        } else {
+            f64::NAN
+        }
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         if self.d2 > 4.0 {
             let (d1, d2) = (self.d1, self.d2);
-            Some(2.0 * d2 * d2 * (d1 + d2 - 2.0) / (d1 * (d2 - 2.0) * (d2 - 2.0) * (d2 - 4.0)))
+            2.0 * d2 * d2 * (d1 + d2 - 2.0) / (d1 * (d2 - 2.0) * (d2 - 2.0) * (d2 - 4.0))
         } else {
-            None
+            f64::NAN
         }
     }
-    fn mode(&self) -> Option<f64> {
+    fn mode(&self) -> f64 {
         if self.d1 > 2.0 {
-            Some((self.d1 - 2.0) / self.d1 * self.d2 / (self.d2 + 2.0))
+            (self.d1 - 2.0) / self.d1 * self.d2 / (self.d2 + 2.0)
         } else {
-            Some(0.0)
+            0.0
         }
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -106,8 +131,8 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(f.cdf(f.inverse_cdf(p)), p, 1e-6);
         }
-        close(f.mean().unwrap(), 10.0 / 8.0, 1e-12);
-        assert_eq!(FisherSnedecor::new(5.0, 2.0).unwrap().mean(), None);
+        close(f.mean(), 10.0 / 8.0, 1e-12);
+        assert!(FisherSnedecor::new(5.0, 2.0).unwrap().mean().is_nan());
         close(f.inverse_cdf(0.95), 3.325_835, 1e-3);
     }
 }

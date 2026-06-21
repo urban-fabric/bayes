@@ -274,7 +274,7 @@ mod tests {
         close(post.beta(), 11.0, 1e-12);
         assert_eq!(model.trials(), 10);
         let pred = model.posterior_predictive(&data);
-        close(pred.mean().unwrap(), 10.0 * 31.0 / 42.0, 1e-12);
+        close(pred.mean(), 10.0 * 31.0 / 42.0, 1e-12);
         close(
             model.ln_predictive(7).exp(),
             BetaBinomial::from_beta(10, model.prior()).pmf(7_u64),

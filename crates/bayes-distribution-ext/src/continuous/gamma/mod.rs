@@ -3,8 +3,8 @@ use rand::{Rng, RngExt};
 
 use crate::normal::standard_normal_polar;
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_core_ext::numeric::inverse_cdf_bisect;
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 #[cfg(test)]
@@ -94,54 +94,60 @@ impl Distribution<f64> for Gamma {
     }
 }
 
-impl Support for Gamma {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for Gamma {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Gamma {
-    fn cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            0.0
-        } else {
-            (self.rate * x).gamma_lr(self.shape)
-        }
+impl<T: LazyReal> ContinuousCdf<T> for Gamma {
+    fn cdf(&self, x: T) -> T {
+        kernels::gamma_cdf(x, T::scalar(self.shape), T::scalar(self.rate))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        inverse_cdf_bisect(|x| self.cdf(x), 0.0, f64::INFINITY, p)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::inverse_cdf_bisect(|x| self.cdf(x), T::zero(), T::infinity(), p)
     }
 }
 
 impl Moments for Gamma {
-    fn mean(&self) -> Option<f64> {
-        Some(self.shape / self.rate)
+    fn mean(&self) -> f64 {
+        self.shape / self.rate
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.shape / (self.rate * self.rate))
+    fn variance(&self) -> f64 {
+        self.shape / (self.rate * self.rate)
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(2.0 / self.shape.sqrt())
+    fn skewness(&self) -> f64 {
+        2.0 / self.shape.sqrt()
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(6.0 / self.shape)
+    fn kurtosis(&self) -> f64 {
+        6.0 / self.shape
     }
-    fn entropy(&self) -> Option<f64> {
-        Some(
-            self.shape - self.rate.ln()
-                + self.shape.ln_gamma()
-                + (1.0 - self.shape) * self.shape.digamma(),
-        )
+    fn entropy(&self) -> f64 {
+        self.shape - self.rate.ln()
+            + self.shape.ln_gamma()
+            + (1.0 - self.shape) * self.shape.digamma()
     }
-    fn mode(&self) -> Option<f64> {
+    fn mode(&self) -> f64 {
         if self.shape >= 1.0 {
-            Some((self.shape - 1.0) / self.rate)
+            (self.shape - 1.0) / self.rate
         } else {
-            Some(0.0)
+            0.0
         }
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -184,8 +190,8 @@ mod tests {
         for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
             close(g.cdf(g.inverse_cdf(p)), p, 1e-8);
         }
-        close(g.mean().unwrap(), 3.5 / 1.5, 1e-12);
-        close(g.variance().unwrap(), 3.5 / (1.5 * 1.5), 1e-12);
+        close(g.mean(), 3.5 / 1.5, 1e-12);
+        close(g.variance(), 3.5 / (1.5 * 1.5), 1e-12);
     }
 
     #[test]
@@ -194,7 +200,7 @@ mod tests {
         let g = Gamma::new(2.7, 0.8).unwrap();
         let n = 60_000;
         let s: f64 = (0..n).map(|_| g.sample(&mut rng)).sum();
-        close(s / n as f64, g.mean().unwrap(), 0.03);
+        close(s / n as f64, g.mean(), 0.03);
     }
 
     #[test]
@@ -204,12 +210,23 @@ mod tests {
         let sum = Gamma::sum_independent_same_rate(&[a, b]).unwrap();
         close(sum.shape(), 7.0, 1e-12);
         close(sum.rate(), 3.0, 1e-12);
-        close(
-            sum.mean().unwrap(),
-            a.mean().unwrap() + b.mean().unwrap(),
-            1e-12,
-        );
+        close(sum.mean(), a.mean() + b.mean(), 1e-12);
         assert!(Gamma::sum_independent_same_rate(&[]).is_err());
         assert!(Gamma::sum_independent_same_rate(&[a, Gamma::new(1.0, 4.0).unwrap()]).is_err());
+    }
+
+    #[test]
+    fn cdf_trait_is_generic_over_lazyreal() {
+        // The eager CDF/quantile surface now runs on any `LazyReal` carrier, not just
+        // `f64` — demonstrated on `f32` (a second host carrier) through a generic bound.
+        // The quantile path also exercises the `while_loop` bisection on `f32`.
+        fn roundtrip<T: LazyReal, D: ContinuousCdf<T>>(d: &D, p: T) -> T {
+            d.cdf(d.inverse_cdf(p))
+        }
+        let g = Gamma::new(2.5, 1.0).unwrap();
+        let r32: f32 = roundtrip(&g, 0.4_f32);
+        assert!((r32 - 0.4).abs() < 1e-3, "f32 roundtrip {r32}");
+        let r64: f64 = roundtrip(&g, 0.4_f64);
+        assert!((r64 - 0.4).abs() < 1e-8);
     }
 }

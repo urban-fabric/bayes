@@ -28,8 +28,8 @@ fn normal_cdf_pdf_and_quantile() {
         1e-12,
     );
     close(n.cdf(1.0) + n.sf(1.0), 1.0, 1e-12);
-    assert_eq!(n.mean(), Some(2.0));
-    assert_eq!(n.variance(), Some(9.0));
+    assert_eq!(n.mean(), 2.0);
+    assert_eq!(n.variance(), 9.0);
 }
 
 #[test]
@@ -37,10 +37,12 @@ fn uniform_cdf_and_moments() {
     let u = Uniform::new(-2.0, 4.0).unwrap();
     close(u.cdf(1.0), 0.5, 1e-12);
     close(u.inverse_cdf(0.5), 1.0, 1e-12);
-    assert_eq!(u.min(), -2.0);
-    assert_eq!(u.max(), 4.0);
-    close(u.mean().unwrap(), 1.0, 1e-12);
-    close(u.variance().unwrap(), 36.0 / 12.0, 1e-12);
+    let lo: f64 = u.min();
+    let hi: f64 = u.max();
+    assert_eq!(lo, -2.0);
+    assert_eq!(hi, 4.0);
+    close(u.mean(), 1.0, 1e-12);
+    close(u.variance(), 36.0 / 12.0, 1e-12);
     close(u.pdf(0.0), 1.0 / 6.0, 1e-12);
     assert_eq!(u.pdf(5.0), 0.0);
 }
@@ -49,8 +51,8 @@ fn uniform_cdf_and_moments() {
 fn lognormal_cdf_quantile_and_mean() {
     let ln = LogNormal::new(0.0, 1.0).unwrap();
     close(ln.cdf(1.0), 0.5, 1e-9);
-    close(ln.median().unwrap(), 1.0, 1e-12);
-    close(ln.mean().unwrap(), (0.5f64).exp(), 1e-12);
+    close(ln.median(), 1.0, 1e-12);
+    close(ln.mean(), (0.5f64).exp(), 1e-12);
     for &p in &[0.1, 0.5, 0.9] {
         close(ln.cdf(ln.inverse_cdf(p)), p, 1e-9);
     }
@@ -66,8 +68,8 @@ fn poisson_pmf_cdf_and_moments() {
         close(p.cdf(k), cum, 1e-9);
     }
     close(cum, 1.0, 1e-6);
-    assert_eq!(p.mean(), Some(4.0));
-    assert_eq!(p.variance(), Some(4.0));
+    assert_eq!(p.mean(), 4.0);
+    assert_eq!(p.variance(), 4.0);
     close(p.pmf(0_u64), (-4.0f64).exp(), 1e-12);
 }
 
@@ -76,9 +78,9 @@ fn bernoulli_and_discrete_uniform_spine() {
     let b = Bernoulli::new(0.3).unwrap();
     close(b.pmf(0_u64), 0.7, 1e-12);
     close(b.pmf(1_u64), 0.3, 1e-12);
-    close(b.cdf(0), 0.7, 1e-12);
-    assert_eq!(b.cdf(1), 1.0);
-    assert_eq!(b.mean(), Some(0.3));
+    close(b.cdf(0_u64), 0.7, 1e-12);
+    assert_eq!(b.cdf(1_u64), 1.0);
+    assert_eq!(b.mean(), 0.3);
 
     let d = DiscreteUniform::new(1, 7).unwrap();
     close(d.pmf(3_i64), 1.0 / 6.0, 1e-12);
@@ -86,7 +88,7 @@ fn bernoulli_and_discrete_uniform_spine() {
     assert_eq!(d.min(), 1);
     assert_eq!(d.max(), 6);
     close(d.cdf(3_i64), 0.5, 1e-12);
-    close(d.mean().unwrap(), 3.5, 1e-12);
+    close(d.mean(), 3.5, 1e-12);
 }
 
 #[test]
@@ -95,8 +97,8 @@ fn estimate_recovers_parameters_from_samples() {
     let truth = Normal::new(5.0, 2.0).unwrap();
     let data: Vec<f64> = (0..20_000).map(|_| truth.sample(&mut rng)).collect();
     let fit = Normal::from_sample(&data).unwrap();
-    close(fit.mean().unwrap(), 5.0, 0.05);
-    close(fit.std_dev().unwrap(), 2.0, 0.05);
+    close(fit.mean(), 5.0, 0.05);
+    close(fit.std_dev(), 2.0, 0.05);
 }
 
 #[test]
@@ -105,5 +107,5 @@ fn sampled_mean_matches_analytic_moments() {
     let p = Poisson::new(7.0).unwrap();
     let n = 50_000;
     let sum: u64 = (0..n).map(|_| p.sample(&mut rng)).sum();
-    close(sum as f64 / n as f64, p.mean().unwrap(), 0.05);
+    close(sum as f64 / n as f64, p.mean(), 0.05);
 }

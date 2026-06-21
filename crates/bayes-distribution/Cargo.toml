@@ -1,6 +1,6 @@
 [package]
 name = "bayes-distribution"
-description = "Lazy-compatible concrete distribution families for bayes."
+description = "Lazy-only concrete distribution families for bayes."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,8 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bayes-error.workspace = true
-bayes-core-lazy.workspace = true
+bayes-core.workspace = true
 bayes-kernels.workspace = true
 euclid.workspace = true
 

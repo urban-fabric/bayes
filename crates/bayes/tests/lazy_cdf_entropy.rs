@@ -111,19 +111,19 @@ fn lazy_real_cdf_kernels_match_distribution() {
 
     // Discrete CDFs via the incomplete gamma / beta.
     let poisson = Poisson::new(3.5).unwrap();
-    close(poisson_cdf(6_i64, 3.5), poisson.cdf(6), 1e-12);
+    close(poisson_cdf(6_i64, 3.5), poisson.cdf(6_u64), 1e-12);
 
     let binomial = Binomial::new(12, 0.3).unwrap();
     close(
         binomial_cdf_on_support(4_i64, 12_i64, 0.3),
-        binomial.cdf(4),
+        binomial.cdf(4_u64),
         1e-12,
     );
 
     let negative_binomial = NegativeBinomial::new(5.0, 0.4).unwrap();
     close(
         negative_binomial_cdf(3_i64, 5.0, 0.4),
-        negative_binomial.cdf(3),
+        negative_binomial.cdf(3_u64),
         1e-12,
     );
 
@@ -214,91 +214,67 @@ fn lazy_real_quantile_kernels_match_distribution() {
 #[test]
 fn lazy_real_entropy_kernels_match_distribution() {
     let normal = Normal::new(1.0, 2.0).unwrap();
-    close(normal_entropy(2.0), normal.entropy().unwrap(), 1e-12);
+    close(normal_entropy(2.0), normal.entropy(), 1e-12);
 
     let lognormal = LogNormal::new(0.2, 0.7).unwrap();
-    close(
-        lognormal_entropy(0.2, 0.7),
-        lognormal.entropy().unwrap(),
-        1e-12,
-    );
+    close(lognormal_entropy(0.2, 0.7), lognormal.entropy(), 1e-12);
 
     let exponential = Exponential::new(1.7).unwrap();
-    close(
-        exponential_entropy(1.7),
-        exponential.entropy().unwrap(),
-        1e-12,
-    );
+    close(exponential_entropy(1.7), exponential.entropy(), 1e-12);
 
     let laplace = Laplace::new(0.5, 1.7).unwrap();
-    close(laplace_entropy(1.7), laplace.entropy().unwrap(), 1e-12);
+    close(laplace_entropy(1.7), laplace.entropy(), 1e-12);
 
     let logistic = Logistic::new(-0.5, 1.3).unwrap();
-    close(logistic_entropy(1.3), logistic.entropy().unwrap(), 1e-12);
+    close(logistic_entropy(1.3), logistic.entropy(), 1e-12);
 
     let uniform = Uniform::new(-2.0, 3.0).unwrap();
-    close(uniform_entropy(5.0), uniform.entropy().unwrap(), 1e-12);
+    close(uniform_entropy(5.0), uniform.entropy(), 1e-12);
 
     let discrete_uniform = DiscreteUniform::new(-2, 5).unwrap();
     close(
         discrete_uniform_entropy(7.0),
-        discrete_uniform.entropy().unwrap(),
+        discrete_uniform.entropy(),
         1e-12,
     );
 
     let cauchy = Cauchy::new(0.5, 1.7).unwrap();
-    close(cauchy_entropy(1.7), cauchy.entropy().unwrap(), 1e-12);
+    close(cauchy_entropy(1.7), cauchy.entropy(), 1e-12);
 
     let gumbel = Gumbel::new(1.0, 2.0).unwrap();
-    close(gumbel_entropy(2.0), gumbel.entropy().unwrap(), 1e-12);
+    close(gumbel_entropy(2.0), gumbel.entropy(), 1e-12);
 
     let rayleigh = Rayleigh::new(1.4).unwrap();
-    close(rayleigh_entropy(1.4), rayleigh.entropy().unwrap(), 1e-12);
+    close(rayleigh_entropy(1.4), rayleigh.entropy(), 1e-12);
 
     let weibull = Weibull::new(1.4, 2.2).unwrap();
-    close(weibull_entropy(1.4, 2.2), weibull.entropy().unwrap(), 1e-12);
+    close(weibull_entropy(1.4, 2.2), weibull.entropy(), 1e-12);
 
     let pareto = Pareto::new(2.0, 3.0).unwrap();
-    close(pareto_entropy(2.0, 3.0), pareto.entropy().unwrap(), 1e-12);
+    close(pareto_entropy(2.0, 3.0), pareto.entropy(), 1e-12);
 
     let triangular = Triangular::new(-1.0, 4.0, 1.0).unwrap();
-    close(
-        triangular_entropy(-1.0, 4.0),
-        triangular.entropy().unwrap(),
-        1e-12,
-    );
+    close(triangular_entropy(-1.0, 4.0), triangular.entropy(), 1e-12);
 
     let half_normal = HalfNormal::new(1.4).unwrap();
-    close(
-        half_normal_entropy(1.4),
-        half_normal.entropy().unwrap(),
-        1e-12,
-    );
+    close(half_normal_entropy(1.4), half_normal.entropy(), 1e-12);
 
     let gamma = Gamma::new(2.5, 1.2).unwrap();
-    close(gamma_entropy(2.5, 1.2), gamma.entropy().unwrap(), 1e-12);
+    close(gamma_entropy(2.5, 1.2), gamma.entropy(), 1e-12);
 
     let chi_squared = ChiSquared::new(5.0).unwrap();
-    close(
-        chi_squared_entropy(2.5),
-        chi_squared.entropy().unwrap(),
-        1e-12,
-    );
+    close(chi_squared_entropy(2.5), chi_squared.entropy(), 1e-12);
 
     let inverse_gamma = InverseGamma::new(3.0, 2.0).unwrap();
     close(
         inverse_gamma_entropy(3.0, 2.0),
-        inverse_gamma.entropy().unwrap(),
+        inverse_gamma.entropy(),
         1e-12,
     );
 
     let beta = Beta::new(2.0, 5.0).unwrap();
-    close(beta_entropy(2.0, 5.0), beta.entropy().unwrap(), 1e-12);
+    close(beta_entropy(2.0, 5.0), beta.entropy(), 1e-12);
 
     let student = StudentT::new_location_scale(6.0, -0.5, 1.3).unwrap();
-    close(
-        students_t_entropy(1.3, 6.0),
-        student.entropy().unwrap(),
-        1e-12,
-    );
+    close(students_t_entropy(1.3, 6.0), student.entropy(), 1e-12);
 }

@@ -3,6 +3,8 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Estimate, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 #[cfg(test)]
 use crate::Continuous;
@@ -75,52 +77,57 @@ impl Distribution<f64> for Laplace {
     }
 }
 
-impl Support for Laplace {
-    fn min(&self) -> f64 {
-        f64::NEG_INFINITY
+impl<T: LazyReal> Support<T> for Laplace {
+    fn min(&self) -> T {
+        T::neg_infinity()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Laplace {
-    fn cdf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        if x < self.location {
-            0.5 * z.exp()
-        } else {
-            1.0 - 0.5 * (-z).exp()
-        }
+impl<T: LazyReal> ContinuousCdf<T> for Laplace {
+    fn cdf(&self, x: T) -> T {
+        kernels::laplace_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        let p = p.clamp(0.0, 1.0);
-        let q = p - 0.5;
-        self.location - self.scale * q.signum() * (1.0 - 2.0 * q.abs()).ln()
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::laplace_quantile(
+            p.clamp(T::zero(), T::one()),
+            T::scalar(self.location),
+            T::scalar(self.scale),
+        )
     }
 }
 
 impl Moments for Laplace {
-    fn mean(&self) -> Option<f64> {
-        Some(self.location)
+    fn mean(&self) -> f64 {
+        self.location
     }
-    fn variance(&self) -> Option<f64> {
-        Some(2.0 * self.scale * self.scale)
+    fn variance(&self) -> f64 {
+        2.0 * self.scale * self.scale
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(0.0)
+    fn skewness(&self) -> f64 {
+        0.0
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(3.0)
+    fn kurtosis(&self) -> f64 {
+        3.0
     }
-    fn entropy(&self) -> Option<f64> {
-        Some((2.0 * std::f64::consts::E * self.scale).ln())
+    fn entropy(&self) -> f64 {
+        (2.0 * std::f64::consts::E * self.scale).ln()
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.location)
+    fn median(&self) -> f64 {
+        self.location
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.location)
+    fn mode(&self) -> f64 {
+        self.location
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
     }
 }
 
@@ -152,7 +159,7 @@ mod tests {
         for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
             close(l.cdf(l.inverse_cdf(p)), p, 1e-12);
         }
-        close(l.mean().unwrap(), 1.0, 1e-12);
-        close(l.variance().unwrap(), 8.0, 1e-12);
+        close(l.mean(), 1.0, 1e-12);
+        close(l.variance(), 8.0, 1e-12);
     }
 }

@@ -108,7 +108,7 @@ mod tests {
         close(post.shape(), 16.0, 1e-12);
         close(post.rate(), 5.0, 1e-12);
         let pred = model.posterior_predictive(&data);
-        close(pred.mean().unwrap(), 16.0 / 5.0, 1e-12);
+        close(pred.mean(), 16.0 / 5.0, 1e-12);
         assert!(pred.pmf(3_u64) > 0.0);
         close(
             model.ln_predictive(3).exp(),
@@ -150,7 +150,7 @@ mod tests {
         let pred = model
             .posterior_predictive_with_exposure(&counts, &exposures, 2.0)
             .unwrap();
-        close(pred.mean().unwrap(), 14.0 / 3.0, 1e-12);
+        close(pred.mean(), 14.0 / 3.0, 1e-12);
         close(
             model.ln_predictive_with_exposure(3, 0.5).exp(),
             model
@@ -218,7 +218,7 @@ mod tests {
         let pred = model.posterior_predictive(&data);
         close(pred.shape(), 4.0, 1e-12);
         close(pred.scale(), 5.0, 1e-12);
-        close(pred.mean().unwrap(), 5.0 / 3.0, 1e-12);
+        close(pred.mean(), 5.0 / 3.0, 1e-12);
         close(
             model.ln_predictive(0.5).exp(),
             model.posterior_predictive(&[]).pdf(0.5),
@@ -259,7 +259,7 @@ mod tests {
         let pred = model.posterior_predictive_with_exposure(2, 4.0).unwrap();
         close(pred.shape(), 3.0, 1e-12);
         close(pred.scale(), 5.0, 1e-12);
-        close(pred.mean().unwrap(), 2.5, 1e-12);
+        close(pred.mean(), 2.5, 1e-12);
         close(
             model.ln_posterior_predictive_with_exposure(2, 4.0, 1, 2.0),
             GammaExponential::new(post).ln_marginal_likelihood_with_exposure(1, 2.0),

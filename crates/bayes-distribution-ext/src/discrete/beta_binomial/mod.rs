@@ -102,21 +102,45 @@ impl DiscreteCdf<u64> for BetaBinomial {
 }
 
 impl Moments for BetaBinomial {
-    fn mean(&self) -> Option<f64> {
+    fn mean(&self) -> f64 {
         let s = self.alpha + self.beta;
-        Some(self.n as f64 * self.alpha / s)
+        self.n as f64 * self.alpha / s
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         let nf = self.n as f64;
         let s = self.alpha + self.beta;
-        Some(nf * self.alpha * self.beta * (s + nf) / (s * s * (s + 1.0)))
+        nf * self.alpha * self.beta * (s + nf) / (s * s * (s + 1.0))
     }
-    fn mode(&self) -> Option<f64> {
+    fn mode(&self) -> f64 {
         if self.alpha > 1.0 && self.beta > 1.0 {
-            Some((self.n as f64) * (self.alpha - 1.0) / (self.alpha + self.beta - 2.0))
+            (self.n as f64) * (self.alpha - 1.0) / (self.alpha + self.beta - 2.0)
         } else {
-            None
+            f64::NAN
         }
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -157,7 +181,7 @@ mod tests {
             close(bb.cdf(k), cum, 1e-12);
         }
         close(cum, 1.0, 1e-12);
-        close(bb.mean().unwrap(), 12.0 * 2.0 / 7.0, 1e-12);
+        close(bb.mean(), 12.0 * 2.0 / 7.0, 1e-12);
     }
 
     #[test]
@@ -166,6 +190,6 @@ mod tests {
         let bb = BetaBinomial::new(20, 3.0, 4.0).unwrap();
         let n = 60_000;
         let s: u64 = (0..n).map(|_| bb.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, bb.mean().unwrap(), 0.03);
+        close(s as f64 / n as f64, bb.mean(), 0.03);
     }
 }

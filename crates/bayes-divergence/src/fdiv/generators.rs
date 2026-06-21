@@ -1,4 +1,5 @@
 use super::*;
+use euclid::LazyReal;
 
 /// `f(t) = t ln t` — the **Kullback–Leibler** generator. `D_f = Σ pᵢ ln(pᵢ/qᵢ)`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -6,7 +7,9 @@ pub struct Kl;
 
 impl FGenerator for Kl {
     fn f(&self, t: f64) -> f64 {
-        if t > 0.0 { t * t.ln() } else { 0.0 }
+        // `x·ln y` with the `0·ln 0 = 0` convention (euclid's stable `xlogy`), which is
+        // exactly `t ln t` floored to `0` at the absorbing zero — no host branch.
+        t.xlogy(t)
     }
 }
 

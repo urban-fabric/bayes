@@ -106,42 +106,58 @@ impl DiscreteCdf<u64> for Categorical {
 
 impl Moments for Categorical {
     /// Treating the categories as the integers `0..k`, the mean index `Σ i·pᵢ`.
-    fn mean(&self) -> Option<f64> {
-        Some(
-            self.p
-                .iter()
-                .enumerate()
-                .map(|(i, &pi)| i as f64 * pi)
-                .sum(),
-        )
+    fn mean(&self) -> f64 {
+        self.p
+            .iter()
+            .enumerate()
+            .map(|(i, &pi)| i as f64 * pi)
+            .sum()
     }
-    fn variance(&self) -> Option<f64> {
-        let m = self.mean()?;
-        Some(
-            self.p
-                .iter()
-                .enumerate()
-                .map(|(i, &pi)| (i as f64 - m).powi(2) * pi)
-                .sum(),
-        )
+    fn variance(&self) -> f64 {
+        let m = self.mean();
+
+        self.p
+            .iter()
+            .enumerate()
+            .map(|(i, &pi)| (i as f64 - m).powi(2) * pi)
+            .sum()
     }
-    fn mode(&self) -> Option<f64> {
+    fn mode(&self) -> f64 {
         self.p
             .iter()
             .enumerate()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(i, _)| i as f64)
+            .unwrap_or(f64::NAN)
     }
     /// Shannon entropy `H = −Σ pᵢ ln pᵢ` (with `0 ln 0 = 0`).
-    fn entropy(&self) -> Option<f64> {
-        Some(
-            -self
-                .p
-                .iter()
-                .filter(|&&pi| pi > 0.0)
-                .map(|&pi| pi * pi.ln())
-                .sum::<f64>(),
-        )
+    fn entropy(&self) -> f64 {
+        -self
+            .p
+            .iter()
+            .filter(|&&pi| pi > 0.0)
+            .map(|&pi| pi * pi.ln())
+            .sum::<f64>()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -163,8 +179,8 @@ mod tests {
         close(c.pmf(1), 0.75, 1e-12);
         close(c.cdf(0), 0.25, 1e-12);
         close(c.cdf(1), 1.0, 1e-12);
-        assert_eq!(c.mode(), Some(1.0));
-        close(c.mean().unwrap(), 0.75, 1e-12);
+        assert_eq!(c.mode(), 1.0);
+        close(c.mean(), 0.75, 1e-12);
     }
 
     #[test]

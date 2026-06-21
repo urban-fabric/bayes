@@ -7,13 +7,10 @@
 mod continuous_density;
 mod continuous_traits;
 mod discrete;
+mod moments;
 
 use euclid::LazyReal;
 
-fn scalar<T: LazyReal>(x: f64) -> T {
-    T::scalar(x)
-}
-
 fn neg_inf<T: LazyReal>() -> T {
-    T::scalar(f64::NEG_INFINITY)
+    T::neg_infinity()
 }

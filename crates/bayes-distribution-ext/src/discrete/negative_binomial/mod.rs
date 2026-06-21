@@ -5,7 +5,7 @@ use super::poisson::Poisson;
 use crate::continuous::Gamma;
 use crate::{DiscreteCdf, Moments, Support};
 use bayes_error::BayesError;
-use euclid::LazyReal;
+use euclid::{LazyCompare, LazyNatural, LazyReal};
 
 #[cfg(test)]
 use crate::Discrete;
@@ -67,47 +67,65 @@ impl Distribution<u64> for NegativeBinomial {
     }
 }
 
-impl Support<u64> for NegativeBinomial {
-    fn min(&self) -> u64 {
-        0
+impl<K: LazyNatural> Support<K> for NegativeBinomial {
+    fn min(&self) -> K {
+        K::zero()
     }
-    fn max(&self) -> u64 {
-        u64::MAX
+    fn max(&self) -> K {
+        K::from_u64(u64::MAX)
     }
 }
 
-impl DiscreteCdf<u64> for NegativeBinomial {
-    fn cdf(&self, k: u64) -> f64 {
-        self.p.beta_reg(self.r, (k + 1) as f64)
+impl<K> DiscreteCdf<K> for NegativeBinomial
+where
+    K: LazyNatural + LazyCompare,
+    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+{
+    fn cdf(&self, k: K) -> K::Real {
+        K::Real::scalar(self.p).beta_reg(K::Real::scalar(self.r), k.to_real() + K::Real::one())
     }
-    fn inverse_cdf(&self, p: f64) -> u64 {
-        if p <= 0.0 {
-            return 0;
-        }
-        let mut k = 0u64;
-        while self.cdf(k) < p {
-            k += 1;
-        }
-        k
+    fn inverse_cdf(&self, p: K::Real) -> K {
+        // Smallest `k` with `cdf(k) ≥ p`, the host search expressed via `while_loop`.
+        K::while_loop(K::zero(), |k| self.cdf(k.clone()).lt(&p), |k| k + K::one())
     }
 }
 
 impl Moments for NegativeBinomial {
-    fn mean(&self) -> Option<f64> {
-        Some(self.r * (1.0 - self.p) / self.p)
+    fn mean(&self) -> f64 {
+        self.r * (1.0 - self.p) / self.p
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.r * (1.0 - self.p) / (self.p * self.p))
+    fn variance(&self) -> f64 {
+        self.r * (1.0 - self.p) / (self.p * self.p)
     }
-    fn skewness(&self) -> Option<f64> {
-        Some((2.0 - self.p) / (self.r * (1.0 - self.p)).sqrt())
+    fn skewness(&self) -> f64 {
+        (2.0 - self.p) / (self.r * (1.0 - self.p)).sqrt()
     }
-    fn mode(&self) -> Option<f64> {
+    fn mode(&self) -> f64 {
         if self.r > 1.0 {
-            Some(((self.r - 1.0) * (1.0 - self.p) / self.p).floor())
+            ((self.r - 1.0) * (1.0 - self.p) / self.p).floor()
         } else {
-            Some(0.0)
+            0.0
         }
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -127,7 +145,7 @@ mod tests {
         let nb = NegativeBinomial::new(1.0, 0.3).unwrap();
         close(nb.pmf(0_u64), 0.3, 1e-12);
         close(nb.pmf(1_u64), 0.3 * 0.7, 1e-12);
-        close(nb.mean().unwrap(), 0.7 / 0.3, 1e-12);
+        close(nb.mean(), 0.7 / 0.3, 1e-12);
     }
 
     #[test]
@@ -141,6 +159,6 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(9);
         let n = 60_000;
         let s: u64 = (0..n).map(|_| nb.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, nb.mean().unwrap(), 0.05);
+        close(s as f64 / n as f64, nb.mean(), 0.05);
     }
 }

@@ -3,6 +3,8 @@ use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousCdf, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 /// The triangular distribution on `[lo, hi]` with mode `mode ∈ [lo, hi]` — a
 /// simple bounded distribution with a single peak.
@@ -50,16 +52,7 @@ impl Distribution<f64> for Triangular {
 
 impl Continuous for Triangular {
     fn pdf(&self, x: f64) -> f64 {
-        let (a, b, c) = (self.lo, self.hi, self.mode);
-        if x < a || x > b {
-            0.0
-        } else if x < c {
-            2.0 * (x - a) / ((b - a) * (c - a))
-        } else if x > c {
-            2.0 * (b - x) / ((b - a) * (b - c))
-        } else {
-            2.0 / (b - a)
-        }
+        kernels::triangular_pdf(x, self.lo, self.hi, self.mode)
     }
 
     fn ln_pdf(&self, x: f64) -> f64 {
@@ -67,54 +60,68 @@ impl Continuous for Triangular {
     }
 }
 
-impl Support for Triangular {
-    fn min(&self) -> f64 {
-        self.lo
+impl<T: LazyReal> Support<T> for Triangular {
+    fn min(&self) -> T {
+        T::scalar(self.lo)
     }
-    fn max(&self) -> f64 {
-        self.hi
+    fn max(&self) -> T {
+        T::scalar(self.hi)
     }
 }
 
-impl ContinuousCdf for Triangular {
-    fn cdf(&self, x: f64) -> f64 {
-        let (a, b, c) = (self.lo, self.hi, self.mode);
-        if x <= a {
-            0.0
-        } else if x < c {
-            (x - a) * (x - a) / ((b - a) * (c - a))
-        } else if x < b {
-            1.0 - (b - x) * (b - x) / ((b - a) * (b - c))
-        } else {
-            1.0
-        }
+impl<T: LazyReal> ContinuousCdf<T> for Triangular {
+    fn cdf(&self, x: T) -> T {
+        kernels::triangular_cdf(
+            x,
+            T::scalar(self.lo),
+            T::scalar(self.hi),
+            T::scalar(self.mode),
+        )
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        let (a, b, c) = (self.lo, self.hi, self.mode);
-        let p = p.clamp(0.0, 1.0);
-        let split = (c - a) / (b - a);
-        if p < split {
-            a + ((b - a) * (c - a) * p).sqrt()
-        } else {
-            b - ((b - a) * (b - c) * (1.0 - p)).sqrt()
-        }
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::triangular_quantile(
+            p.clamp(T::zero(), T::one()),
+            T::scalar(self.lo),
+            T::scalar(self.hi),
+            T::scalar(self.mode),
+        )
     }
 }
 
 impl Moments for Triangular {
-    fn mean(&self) -> Option<f64> {
-        Some((self.lo + self.hi + self.mode) / 3.0)
+    fn mean(&self) -> f64 {
+        (self.lo + self.hi + self.mode) / 3.0
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         let (a, b, c) = (self.lo, self.hi, self.mode);
-        Some((a * a + b * b + c * c - a * b - a * c - b * c) / 18.0)
+        (a * a + b * b + c * c - a * b - a * c - b * c) / 18.0
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.mode)
+    fn mode(&self) -> f64 {
+        self.mode
     }
     /// `H = ½ + ln((b − a)/2)` — independent of the mode `c`.
-    fn entropy(&self) -> Option<f64> {
-        Some(0.5 + ((self.hi - self.lo) / 2.0).ln())
+    fn entropy(&self) -> f64 {
+        0.5 + ((self.hi - self.lo) / 2.0).ln()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -136,6 +143,6 @@ mod tests {
         for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
             close(t.cdf(t.inverse_cdf(p)), p, 1e-10);
         }
-        close(t.mean().unwrap(), 5.0 / 3.0, 1e-12);
+        close(t.mean(), 5.0 / 3.0, 1e-12);
     }
 }

@@ -5,6 +5,8 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 /// Euler–Mascheroni constant.
 const EULER_GAMMA: f64 = 0.577_215_664_901_532_9;
@@ -54,44 +56,55 @@ impl Distribution<f64> for Gumbel {
     }
 }
 
-impl Support for Gumbel {
-    fn min(&self) -> f64 {
-        f64::NEG_INFINITY
+impl<T: LazyReal> Support<T> for Gumbel {
+    fn min(&self) -> T {
+        T::neg_infinity()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Gumbel {
-    fn cdf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        (-(-z).exp()).exp()
+impl<T: LazyReal> ContinuousCdf<T> for Gumbel {
+    fn cdf(&self, x: T) -> T {
+        kernels::gumbel_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        let p = p.clamp(f64::MIN_POSITIVE, 1.0 - f64::EPSILON);
-        self.location - self.scale * (-p.ln()).ln()
+    fn inverse_cdf(&self, p: T) -> T {
+        let p = p.clamp(T::scalar(f64::MIN_POSITIVE), T::scalar(1.0 - f64::EPSILON));
+        kernels::gumbel_quantile(p, T::scalar(self.location), T::scalar(self.scale))
     }
 }
 
 impl Moments for Gumbel {
-    fn mean(&self) -> Option<f64> {
-        Some(self.location + self.scale * EULER_GAMMA)
+    fn mean(&self) -> f64 {
+        self.location + self.scale * EULER_GAMMA
     }
-    fn variance(&self) -> Option<f64> {
-        Some(PI * PI / 6.0 * self.scale * self.scale)
+    fn variance(&self) -> f64 {
+        PI * PI / 6.0 * self.scale * self.scale
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(1.139_547_099_404_649)
+    fn skewness(&self) -> f64 {
+        1.139_547_099_404_649
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.location - self.scale * std::f64::consts::LN_2.ln())
+    fn median(&self) -> f64 {
+        self.location - self.scale * std::f64::consts::LN_2.ln()
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.location)
+    fn mode(&self) -> f64 {
+        self.location
     }
-    fn entropy(&self) -> Option<f64> {
-        Some(self.scale.ln() + EULER_GAMMA + 1.0)
+    fn entropy(&self) -> f64 {
+        self.scale.ln() + EULER_GAMMA + 1.0
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -110,8 +123,8 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(g.cdf(g.inverse_cdf(p)), p, 1e-10);
         }
-        close(g.mean().unwrap(), 1.0 + 2.0 * EULER_GAMMA, 1e-12);
-        close(g.mode().unwrap(), 1.0, 1e-12);
+        close(g.mean(), 1.0 + 2.0 * EULER_GAMMA, 1e-12);
+        close(g.mode(), 1.0, 1e-12);
         close(g.cdf(1.0), (-1.0f64).exp(), 1e-12);
     }
 }

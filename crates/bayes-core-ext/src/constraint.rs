@@ -12,7 +12,7 @@
 //! but the smooth unconstraining map uses the positive interior and reaches the
 //! boundary only at an infinite unconstrained coordinate.
 
-use euclid::LazyReal;
+use euclid::{LazyBool, LazyReal};
 
 /// The domain of a scalar random variable.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -29,23 +29,6 @@ pub enum Constraint {
     Interval { lo: f64, hi: f64 },
     /// The integers `ℤ` (discrete — no continuous reparameterization).
     Integer,
-}
-
-fn sigmoid(y: f64) -> f64 {
-    if y >= 0.0 {
-        1.0 / (1.0 + (-y).exp())
-    } else {
-        let ey = y.exp();
-        ey / (1.0 + ey)
-    }
-}
-
-fn log_sigmoid(y: f64) -> f64 {
-    -(-y).ln_1p_exp()
-}
-
-fn log1m_sigmoid(y: f64) -> f64 {
-    -y.ln_1p_exp()
 }
 
 impl Constraint {
@@ -83,41 +66,40 @@ impl Constraint {
     /// [`to_constrained`](Self::to_constrained)) for constraints with a continuous
     /// transform. Boundary support points map to infinities; discrete constraints
     /// return `NaN`.
-    pub fn to_unconstrained(&self, x: f64) -> f64 {
+    pub fn to_unconstrained<T: LazyReal>(&self, x: T) -> T {
         match *self {
             Constraint::Real => x,
             Constraint::Positive | Constraint::NonNegative => x.ln(),
-            Constraint::UnitInterval => x.ln() - (-x).ln_1p(),
-            Constraint::Interval { lo, hi } => {
-                let u = (x - lo) / (hi - lo);
-                u.ln() - (-u).ln_1p()
-            }
-            Constraint::Integer => f64::NAN,
+            Constraint::UnitInterval => x.logit(),
+            Constraint::Interval { lo, hi } => ((x - T::scalar(lo)) / T::scalar(hi - lo)).logit(),
+            Constraint::Integer => T::nan(),
         }
     }
 
     /// Map an unconstrained `y ∈ ℝ` into the constrained domain for constraints
     /// with a continuous transform. Discrete constraints return `NaN`.
-    pub fn to_constrained(&self, y: f64) -> f64 {
+    pub fn to_constrained<T: LazyReal>(&self, y: T) -> T {
         match *self {
             Constraint::Real => y,
             Constraint::Positive | Constraint::NonNegative => y.exp(),
-            Constraint::UnitInterval => sigmoid(y),
-            Constraint::Interval { lo, hi } => lo + (hi - lo) * sigmoid(y),
-            Constraint::Integer => f64::NAN,
+            Constraint::UnitInterval => y.sigmoid(),
+            Constraint::Interval { lo, hi } => T::scalar(lo) + T::scalar(hi - lo) * y.sigmoid(),
+            Constraint::Integer => T::nan(),
         }
     }
 
     /// `ln |d to_constrained(y) / dy|` — the Jacobian correction for transforming a
     /// density between constrained and unconstrained space. Discrete constraints
     /// return `NaN`.
-    pub fn log_abs_det_jacobian(&self, y: f64) -> f64 {
+    pub fn log_abs_det_jacobian<T: LazyReal>(&self, y: T) -> T {
         match *self {
-            Constraint::Real => 0.0,
+            Constraint::Real => T::zero(),
             Constraint::Positive | Constraint::NonNegative => y,
-            Constraint::UnitInterval => log_sigmoid(y) + log1m_sigmoid(y),
-            Constraint::Interval { lo, hi } => (hi - lo).ln() + log_sigmoid(y) + log1m_sigmoid(y),
-            Constraint::Integer => f64::NAN,
+            Constraint::UnitInterval => y.ln_sigmoid() + y.ln_1m_sigmoid(),
+            Constraint::Interval { lo, hi } => {
+                T::scalar((hi - lo).ln()) + y.ln_sigmoid() + y.ln_1m_sigmoid()
+            }
+            Constraint::Integer => T::nan(),
         }
     }
 
@@ -128,50 +110,50 @@ impl Constraint {
     /// [`log_abs_det_jacobian`](Self::log_abs_det_jacobian) at
     /// `to_unconstrained(x)` for interior support points. Boundary points on
     /// closed supports return `+∞`; points outside the support return `NaN`.
-    pub fn log_abs_det_inverse_jacobian(&self, x: f64) -> f64 {
+    pub fn log_abs_det_inverse_jacobian<T: LazyReal>(&self, x: T) -> T {
         match *self {
-            Constraint::Real => {
-                if x.is_finite() {
-                    0.0
-                } else {
-                    f64::NAN
-                }
-            }
+            Constraint::Real => T::select(&x.is_finite(), T::zero(), T::nan()),
             Constraint::Positive => {
-                if x > 0.0 {
-                    -x.ln()
-                } else {
-                    f64::NAN
-                }
+                let valid = x.gt(&T::zero());
+                let safe = T::select(&valid, x, T::one());
+                T::select(&valid, -safe.ln(), T::nan())
             }
             Constraint::NonNegative => {
-                if x > 0.0 {
-                    -x.ln()
-                } else if x == 0.0 {
-                    f64::INFINITY
-                } else {
-                    f64::NAN
-                }
+                let positive = x.gt(&T::zero());
+                let at_zero = x.eq(&T::zero());
+                let safe = T::select(&positive, x, T::one());
+                T::select(
+                    &positive,
+                    -safe.ln(),
+                    T::select(&at_zero, T::infinity(), T::nan()),
+                )
             }
             Constraint::UnitInterval => {
-                if x > 0.0 && x < 1.0 {
-                    -x.ln() - (-x).ln_1p()
-                } else if x == 0.0 || x == 1.0 {
-                    f64::INFINITY
-                } else {
-                    f64::NAN
-                }
+                let interior = x.gt(&T::zero()).and(&x.lt(&T::one()));
+                let boundary = x.eq(&T::zero()).or(&x.eq(&T::one()));
+                let safe = T::select(&interior, x, T::half());
+                let body = -safe.clone().ln() - (-safe).ln_1p();
+                T::select(
+                    &interior,
+                    body,
+                    T::select(&boundary, T::infinity(), T::nan()),
+                )
             }
             Constraint::Interval { lo, hi } => {
-                if x > lo && x < hi {
-                    (hi - lo).ln() - (x - lo).ln() - (hi - x).ln()
-                } else if x == lo || x == hi {
-                    f64::INFINITY
-                } else {
-                    f64::NAN
-                }
+                let lo_t = T::scalar(lo);
+                let hi_t = T::scalar(hi);
+                let interior = x.gt(&lo_t).and(&x.lt(&hi_t));
+                let boundary = x.eq(&lo_t).or(&x.eq(&hi_t));
+                let safe = T::select(&interior, x, T::scalar(0.5 * (lo + hi)));
+                let body =
+                    T::scalar((hi - lo).ln()) - (safe.clone() - lo_t).ln() - (hi_t - safe).ln();
+                T::select(
+                    &interior,
+                    body,
+                    T::select(&boundary, T::infinity(), T::nan()),
+                )
             }
-            Constraint::Integer => f64::NAN,
+            Constraint::Integer => T::nan(),
         }
     }
 }
@@ -244,12 +226,12 @@ mod tests {
 
     #[test]
     fn integer_constraints_do_not_claim_a_continuous_transform() {
-        assert!(Constraint::Integer.to_unconstrained(3.0).is_nan());
-        assert!(Constraint::Integer.to_constrained(3.0).is_nan());
-        assert!(Constraint::Integer.log_abs_det_jacobian(3.0).is_nan());
+        assert!(Constraint::Integer.to_unconstrained(3.0_f64).is_nan());
+        assert!(Constraint::Integer.to_constrained(3.0_f64).is_nan());
+        assert!(Constraint::Integer.log_abs_det_jacobian(3.0_f64).is_nan());
         assert!(
             Constraint::Integer
-                .log_abs_det_inverse_jacobian(3.0)
+                .log_abs_det_inverse_jacobian(3.0_f64)
                 .is_nan()
         );
     }
@@ -302,7 +284,7 @@ mod tests {
         );
         assert!(
             Constraint::UnitInterval
-                .log_abs_det_inverse_jacobian(2.0)
+                .log_abs_det_inverse_jacobian(2.0_f64)
                 .is_nan()
         );
     }

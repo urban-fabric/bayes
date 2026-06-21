@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 /// The logistic distribution with `location` `μ` and `scale` `s > 0`, support
@@ -52,54 +53,59 @@ impl Distribution<f64> for Logistic {
     }
 }
 
-impl Support for Logistic {
-    fn min(&self) -> f64 {
-        f64::NEG_INFINITY
+impl<T: LazyReal> Support<T> for Logistic {
+    fn min(&self) -> T {
+        T::neg_infinity()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Logistic {
-    fn cdf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        1.0 / (1.0 + (-z).exp())
+impl<T: LazyReal> ContinuousCdf<T> for Logistic {
+    fn cdf(&self, x: T) -> T {
+        kernels::logistic_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        self.location + self.scale * (p / (1.0 - p)).ln()
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::logistic_quantile(p, T::scalar(self.location), T::scalar(self.scale))
     }
-    fn ln_cdf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        -(-z).ln_1p_exp()
+    fn ln_cdf(&self, x: T) -> T {
+        kernels::logistic_ln_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
-    fn ln_sf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        -z.ln_1p_exp()
+    fn ln_sf(&self, x: T) -> T {
+        kernels::logistic_ln_sf(x, T::scalar(self.location), T::scalar(self.scale))
     }
 }
 
 impl Moments for Logistic {
-    fn mean(&self) -> Option<f64> {
-        Some(self.location)
+    fn mean(&self) -> f64 {
+        self.location
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.scale * self.scale * std::f64::consts::PI.powi(2) / 3.0)
+    fn variance(&self) -> f64 {
+        self.scale * self.scale * std::f64::consts::PI.powi(2) / 3.0
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(0.0)
+    fn skewness(&self) -> f64 {
+        0.0
     }
-    fn kurtosis(&self) -> Option<f64> {
-        Some(1.2)
+    fn kurtosis(&self) -> f64 {
+        1.2
     }
-    fn entropy(&self) -> Option<f64> {
-        Some(self.scale.ln() + 2.0)
+    fn entropy(&self) -> f64 {
+        self.scale.ln() + 2.0
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.location)
+    fn median(&self) -> f64 {
+        self.location
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.location)
+    fn mode(&self) -> f64 {
+        self.location
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
     }
 }
 
@@ -123,9 +129,9 @@ mod tests {
         }
         close(d.ln_cdf(0.5).exp(), d.cdf(0.5), 1e-12);
         close(d.ln_sf(0.5).exp(), d.sf(0.5), 1e-12);
-        close(d.mean().unwrap(), 1.0, 1e-12);
+        close(d.mean(), 1.0, 1e-12);
         close(
-            d.variance().unwrap(),
+            d.variance(),
             4.0 * std::f64::consts::PI.powi(2) / 3.0,
             1e-12,
         );
@@ -137,6 +143,6 @@ mod tests {
         let d = Logistic::new(-1.0, 1.5).unwrap();
         let n = 80_000;
         let s: f64 = (0..n).map(|_| d.sample(&mut rng)).sum();
-        close(s / n as f64, d.mean().unwrap(), 0.05);
+        close(s / n as f64, d.mean(), 0.05);
     }
 }

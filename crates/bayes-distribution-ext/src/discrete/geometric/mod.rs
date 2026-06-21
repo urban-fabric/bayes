@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{DiscreteCdf, Moments, Support};
 use bayes_error::BayesError;
+use euclid::{LazyCompare, LazyNatural, LazyReal};
 
 #[cfg(test)]
 use crate::Discrete;
@@ -43,55 +44,68 @@ impl Distribution<u64> for Geometric {
     }
 }
 
-impl Support<u64> for Geometric {
-    fn min(&self) -> u64 {
-        1
+impl<K: LazyNatural> Support<K> for Geometric {
+    fn min(&self) -> K {
+        K::one()
     }
-    fn max(&self) -> u64 {
-        u64::MAX
+    fn max(&self) -> K {
+        K::from_u64(u64::MAX)
     }
 }
 
-impl DiscreteCdf<u64> for Geometric {
-    fn cdf(&self, k: u64) -> f64 {
-        if k == 0 {
-            0.0
-        } else {
-            1.0 - (1.0 - self.p).powi(k as i32)
-        }
+impl<K> DiscreteCdf<K> for Geometric
+where
+    K: LazyNatural + LazyCompare,
+    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+{
+    fn cdf(&self, k: K) -> K::Real {
+        // `1 − (1−p)^k = 1 − exp(k·ln(1−p))`, which is `0` at `k = 0` with no branch.
+        let one = K::Real::one();
+        one.clone() - (k.to_real() * (one - K::Real::scalar(self.p)).ln()).exp()
     }
-    fn inverse_cdf(&self, p: f64) -> u64 {
-        if p <= 0.0 {
-            return 1;
-        }
-        if self.p >= 1.0 {
-            return 1;
-        }
-        ((1.0 - p).ln() / (1.0 - self.p).ln()).ceil().max(1.0) as u64
+    fn inverse_cdf(&self, p: K::Real) -> K {
+        // Smallest `k ≥ 1` with `cdf(k) ≥ p`, the host search via `while_loop`.
+        K::while_loop(K::one(), |k| self.cdf(k.clone()).lt(&p), |k| k + K::one())
     }
 }
 
 impl Moments for Geometric {
-    fn mean(&self) -> Option<f64> {
-        Some(self.p.recip())
+    fn mean(&self) -> f64 {
+        self.p.recip()
     }
-    fn variance(&self) -> Option<f64> {
-        Some((1.0 - self.p) / (self.p * self.p))
+    fn variance(&self) -> f64 {
+        (1.0 - self.p) / (self.p * self.p)
     }
-    fn skewness(&self) -> Option<f64> {
-        Some((2.0 - self.p) / (1.0 - self.p).sqrt())
+    fn skewness(&self) -> f64 {
+        (2.0 - self.p) / (1.0 - self.p).sqrt()
     }
     /// `H = (−(1−p) ln(1−p) − p ln p) / p`; `0` for the degenerate `p = 1`.
-    fn entropy(&self) -> Option<f64> {
+    fn entropy(&self) -> f64 {
         let p = self.p;
         if p >= 1.0 {
-            return Some(0.0);
+            return 0.0;
         }
         let q = 1.0 - p;
-        Some((-q * q.ln() - p * p.ln()) / p)
+        (-q * q.ln() - p * p.ln()) / p
     }
-    fn mode(&self) -> Option<f64> {
-        Some(1.0)
+    fn mode(&self) -> f64 {
+        1.0
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -112,8 +126,8 @@ mod tests {
             cum += g.pmf(k);
             close(g.cdf(k), cum, 1e-9);
         }
-        close(g.mean().unwrap(), 4.0, 1e-12);
-        close(g.variance().unwrap(), 0.75 / 0.0625, 1e-12);
+        close(g.mean(), 4.0, 1e-12);
+        close(g.variance(), 0.75 / 0.0625, 1e-12);
         close(g.pmf(1_u64), 0.25, 1e-12);
     }
 
@@ -121,7 +135,7 @@ mod tests {
     fn quantile_round_trips() {
         let g = Geometric::new(0.3).unwrap();
         for &p in &[0.1, 0.5, 0.9] {
-            let k = g.inverse_cdf(p);
+            let k: u64 = g.inverse_cdf(p);
             assert!(g.cdf(k) >= p && (k == 1 || g.cdf(k - 1) < p), "p={p} k={k}");
         }
     }

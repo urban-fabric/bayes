@@ -9,7 +9,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bayes-core-lazy.workspace = true
+bayes-core.workspace = true
 bayes-error.workspace = true
 euclid.workspace = true
 

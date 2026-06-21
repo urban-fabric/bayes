@@ -3,8 +3,8 @@ use rand::distr::Distribution;
 
 use super::gamma::sample_standard_gamma;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_core_ext::numeric::inverse_cdf_bisect;
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 #[cfg(test)]
@@ -47,53 +47,71 @@ impl Distribution<f64> for Beta {
     }
 }
 
-impl Support for Beta {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for Beta {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        1.0
+    fn max(&self) -> T {
+        T::one()
     }
 }
 
-impl ContinuousCdf for Beta {
-    fn cdf(&self, x: f64) -> f64 {
-        x.clamp(0.0, 1.0).beta_reg(self.alpha, self.beta)
+impl<T: LazyReal> ContinuousCdf<T> for Beta {
+    fn cdf(&self, x: T) -> T {
+        kernels::beta_cdf_on_unit(
+            x.clamp(T::zero(), T::one()),
+            T::scalar(self.alpha),
+            T::scalar(self.beta),
+        )
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        inverse_cdf_bisect(|x| self.cdf(x), 0.0, 1.0, p)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::inverse_cdf_bisect(|x| self.cdf(x), T::zero(), T::one(), p)
     }
 }
 
 impl Moments for Beta {
-    fn mean(&self) -> Option<f64> {
-        Some(self.alpha / (self.alpha + self.beta))
+    fn mean(&self) -> f64 {
+        self.alpha / (self.alpha + self.beta)
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         let s = self.alpha + self.beta;
-        Some(self.alpha * self.beta / (s * s * (s + 1.0)))
+        self.alpha * self.beta / (s * s * (s + 1.0))
     }
-    fn skewness(&self) -> Option<f64> {
+    fn skewness(&self) -> f64 {
         let s = self.alpha + self.beta;
-        Some(
-            2.0 * (self.beta - self.alpha) * (s + 1.0).sqrt()
-                / ((s + 2.0) * (self.alpha * self.beta).sqrt()),
-        )
+
+        2.0 * (self.beta - self.alpha) * (s + 1.0).sqrt()
+            / ((s + 2.0) * (self.alpha * self.beta).sqrt())
     }
-    fn mode(&self) -> Option<f64> {
+    fn mode(&self) -> f64 {
         if self.alpha > 1.0 && self.beta > 1.0 {
-            Some((self.alpha - 1.0) / (self.alpha + self.beta - 2.0))
+            (self.alpha - 1.0) / (self.alpha + self.beta - 2.0)
         } else {
-            None
+            f64::NAN
         }
     }
     /// `H = ln B(α,β) − (α−1)ψ(α) − (β−1)ψ(β) + (α+β−2)ψ(α+β)`.
-    fn entropy(&self) -> Option<f64> {
+    fn entropy(&self) -> f64 {
         let (a, b) = (self.alpha, self.beta);
-        Some(
-            a.ln_beta(b) - (a - 1.0) * a.digamma() - (b - 1.0) * b.digamma()
-                + (a + b - 2.0) * (a + b).digamma(),
-        )
+
+        a.ln_beta(b) - (a - 1.0) * a.digamma() - (b - 1.0) * b.digamma()
+            + (a + b - 2.0) * (a + b).digamma()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -118,7 +136,7 @@ mod tests {
     #[test]
     fn moments_and_quantile() {
         let b = Beta::new(2.0, 5.0).unwrap();
-        close(b.mean().unwrap(), 2.0 / 7.0, 1e-12);
+        close(b.mean(), 2.0 / 7.0, 1e-12);
         for &p in &[0.1, 0.5, 0.9] {
             close(b.cdf(b.inverse_cdf(p)), p, 1e-8);
         }
@@ -130,6 +148,6 @@ mod tests {
         let b = Beta::new(2.0, 5.0).unwrap();
         let n = 60_000;
         let s: f64 = (0..n).map(|_| b.sample(&mut rng)).sum();
-        close(s / n as f64, b.mean().unwrap(), 0.01);
+        close(s / n as f64, b.mean(), 0.01);
     }
 }

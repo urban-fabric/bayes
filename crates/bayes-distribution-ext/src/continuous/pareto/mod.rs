@@ -3,6 +3,8 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Estimate, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 /// The Pareto distribution with `scale x_m > 0` (the minimum) and `shape α > 0`,
 /// support `[x_m, ∞)`. Density `f(x) = α x_mᵅ / x^{α+1}` for `x ≥ x_m`.
@@ -40,48 +42,68 @@ impl Distribution<f64> for Pareto {
     }
 }
 
-impl Support for Pareto {
-    fn min(&self) -> f64 {
-        self.scale
+impl<T: LazyReal> Support<T> for Pareto {
+    fn min(&self) -> T {
+        T::scalar(self.scale)
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for Pareto {
-    fn cdf(&self, x: f64) -> f64 {
-        if x < self.scale {
-            0.0
-        } else {
-            1.0 - (self.scale / x).powf(self.shape)
-        }
+impl<T: LazyReal> ContinuousCdf<T> for Pareto {
+    fn cdf(&self, x: T) -> T {
+        kernels::pareto_cdf(x, T::scalar(self.scale), T::scalar(self.shape))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        self.scale / (1.0 - p.clamp(0.0, 1.0)).powf(1.0 / self.shape)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::pareto_quantile(
+            p.clamp(T::zero(), T::one()),
+            T::scalar(self.scale),
+            T::scalar(self.shape),
+        )
     }
 }
 
 impl Moments for Pareto {
-    fn mean(&self) -> Option<f64> {
-        (self.shape > 1.0).then(|| self.shape * self.scale / (self.shape - 1.0))
-    }
-    fn variance(&self) -> Option<f64> {
-        if self.shape > 2.0 {
-            let a = self.shape;
-            Some(self.scale * self.scale * a / ((a - 1.0) * (a - 1.0) * (a - 2.0)))
+    fn mean(&self) -> f64 {
+        if self.shape > 1.0 {
+            self.shape * self.scale / (self.shape - 1.0)
         } else {
-            None
+            f64::NAN
         }
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.scale * 2.0_f64.powf(1.0 / self.shape))
+    fn variance(&self) -> f64 {
+        if self.shape > 2.0 {
+            let a = self.shape;
+            self.scale * self.scale * a / ((a - 1.0) * (a - 1.0) * (a - 2.0))
+        } else {
+            f64::NAN
+        }
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.scale)
+    fn median(&self) -> f64 {
+        self.scale * 2.0_f64.powf(1.0 / self.shape)
     }
-    fn entropy(&self) -> Option<f64> {
-        Some((self.scale / self.shape).ln() + 1.0 / self.shape + 1.0)
+    fn mode(&self) -> f64 {
+        self.scale
+    }
+    fn entropy(&self) -> f64 {
+        (self.scale / self.shape).ln() + 1.0 / self.shape + 1.0
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -116,8 +138,8 @@ mod tests {
         for &q in &[0.1, 0.5, 0.9] {
             close(p.cdf(p.inverse_cdf(q)), q, 1e-10);
         }
-        close(p.mean().unwrap(), 3.0 * 2.0 / 2.0, 1e-12);
-        assert!(Pareto::new(1.0, 1.5).unwrap().variance().is_none());
-        assert_eq!(Pareto::new(1.0, 0.8).unwrap().mean(), None);
+        close(p.mean(), 3.0 * 2.0 / 2.0, 1e-12);
+        assert!(Pareto::new(1.0, 1.5).unwrap().variance().is_nan());
+        assert!(Pareto::new(1.0, 0.8).unwrap().mean().is_nan());
     }
 }

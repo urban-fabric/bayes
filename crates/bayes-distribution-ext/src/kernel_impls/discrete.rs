@@ -41,6 +41,10 @@ impl<N: LazyNatural> DiscreteMassKernel<N> for Bernoulli {
     fn ln_pmf_kernel(&self, k: N) -> N::Real {
         kernels::bernoulli_log_pmf(k.to_real(), scalar(self.p()))
     }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
 }
 
 impl<N: LazyNatural> DiscreteMassKernel<N> for BetaBinomial {
@@ -54,6 +58,10 @@ impl<N: LazyNatural> DiscreteMassKernel<N> for BetaBinomial {
             (k_real.clone() + alpha.clone()).ln_beta(n_real - k_real + beta.clone());
         kernels::beta_binomial_log_pmf(n.ln_binomial(&k), ln_beta_posterior, alpha.ln_beta(beta))
     }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
 }
 
 impl<N: LazyNatural> DiscreteMassKernel<N> for Binomial {
@@ -64,12 +72,20 @@ impl<N: LazyNatural> DiscreteMassKernel<N> for Binomial {
         let failures = n.to_real() - k_real.clone();
         n.ln_binomial(&k) + k_real * p.clone().ln() + failures * (N::Real::one() - p).ln()
     }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
 }
 
 impl<N: LazyNatural> DiscreteMassKernel<N> for Geometric {
     fn ln_pmf_kernel(&self, k: N) -> N::Real {
         let p = scalar::<N::Real>(self.p());
         (k.to_real() - N::Real::one()) * (N::Real::one() - p.clone()).ln() + p.ln()
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
     }
 }
 
@@ -83,6 +99,10 @@ impl<N: LazyNatural> DiscreteMassKernel<N> for Hypergeometric {
             + ln_binomial_real(population.clone() - successes, draws.clone() - k)
             - ln_binomial_real(population, draws)
     }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
 }
 
 impl<N: LazyNatural> DiscreteMassKernel<N> for NegativeBinomial {
@@ -94,6 +114,10 @@ impl<N: LazyNatural> DiscreteMassKernel<N> for NegativeBinomial {
             (k_real.clone() + r.clone()).ln_gamma() - r.clone().ln_gamma() - k.ln_factorial();
         ln_coefficient + r * p.clone().ln() + k_real * (N::Real::one() - p).ln()
     }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
 }
 
 impl<N: LazyNatural> DiscreteMassKernel<N> for Poisson {
@@ -101,11 +125,19 @@ impl<N: LazyNatural> DiscreteMassKernel<N> for Poisson {
         let lambda = scalar::<N::Real>(self.lambda());
         k.to_real() * lambda.clone().ln() - lambda - k.ln_factorial()
     }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
 }
 
 impl<I: LazyInteger> IntegerMassKernel<I> for DiscreteUniform {
     fn ln_pmf_kernel(&self, _k: I) -> I::Real {
         kernels::discrete_uniform_log_pmf_on_support(scalar((self.hi() - self.lo()) as f64))
+    }
+
+    fn pmf_kernel(&self, k: I) -> I::Real {
+        self.ln_pmf_kernel(k).exp()
     }
 }
 

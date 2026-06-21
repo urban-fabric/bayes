@@ -3,6 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 /// The Fréchet (type-II generalized extreme value) distribution with shape
@@ -53,46 +54,58 @@ impl Support for Frechet {
 
 impl ContinuousCdf for Frechet {
     fn cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            0.0
-        } else {
-            (-(self.scale / x).powf(self.shape)).exp()
-        }
+        kernels::frechet_cdf(x, self.scale, self.shape)
     }
     fn inverse_cdf(&self, p: f64) -> f64 {
-        let p = p.clamp(0.0, 1.0);
-        if p <= 0.0 {
-            return 0.0;
-        }
-        self.scale * (-p.ln()).powf(-1.0 / self.shape)
+        kernels::frechet_quantile(p.clamp(0.0, 1.0), self.scale, self.shape)
     }
     fn ln_cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            f64::NEG_INFINITY
-        } else {
-            -(self.scale / x).powf(self.shape)
-        }
+        kernels::frechet_ln_cdf(x, self.scale, self.shape)
     }
 }
 
 impl Moments for Frechet {
-    fn mean(&self) -> Option<f64> {
-        (self.shape > 1.0).then(|| self.scale * (1.0 - 1.0 / self.shape).gamma())
+    fn mean(&self) -> f64 {
+        if self.shape > 1.0 {
+            self.scale * (1.0 - 1.0 / self.shape).gamma()
+        } else {
+            f64::NAN
+        }
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         if self.shape > 2.0 {
             let g1 = (1.0 - 1.0 / self.shape).gamma();
             let g2 = (1.0 - 2.0 / self.shape).gamma();
-            Some(self.scale * self.scale * (g2 - g1 * g1))
+            self.scale * self.scale * (g2 - g1 * g1)
         } else {
-            None
+            f64::NAN
         }
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.scale * std::f64::consts::LN_2.powf(-1.0 / self.shape))
+    fn median(&self) -> f64 {
+        self.scale * std::f64::consts::LN_2.powf(-1.0 / self.shape)
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.scale * (self.shape / (self.shape + 1.0)).powf(1.0 / self.shape))
+    fn mode(&self) -> f64 {
+        self.scale * (self.shape / (self.shape + 1.0)).powf(1.0 / self.shape)
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -114,11 +127,11 @@ mod tests {
             close(d.cdf(d.inverse_cdf(p)), p, 1e-9);
         }
         close(
-            d.median().unwrap(),
+            d.median(),
             2.0 * std::f64::consts::LN_2.powf(-1.0 / 3.0),
             1e-12,
         );
-        assert!(Frechet::new(0.8, 1.0).unwrap().mean().is_none());
+        assert!(Frechet::new(0.8, 1.0).unwrap().mean().is_nan());
     }
 
     #[test]
@@ -128,6 +141,6 @@ mod tests {
         let n = 40_000;
         let mut xs: Vec<f64> = (0..n).map(|_| d.sample(&mut rng)).collect();
         xs.sort_by(f64::total_cmp);
-        close(xs[n / 2], d.median().unwrap(), 0.03);
+        close(xs[n / 2], d.median(), 0.03);
     }
 }

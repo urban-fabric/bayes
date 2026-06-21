@@ -8,7 +8,7 @@
 //!
 //! This crate is a thin **facade** over the `bayes` workspace: each module below
 //! re-exports a focused member crate, preserving the original `bayes::…` public
-//! API. The implementations live in the members — `bayes-core-lazy` /
+//! API. The implementations live in the members — `bayes-core` /
 //! `bayes-core-ext` (the trait spine), `bayes-distribution-ext` (full eager
 //! families), `bayes-divergence`, `bayes-kernels`, `bayes-statistics`, and
 //! `bayes-process`.

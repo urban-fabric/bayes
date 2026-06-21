@@ -70,27 +70,35 @@ where
 /// the median and mode map through the monotone affine map, and the differential
 /// entropy gains `ln|a|`.
 impl<D: Moments> Moments for Transformed<D, Affine> {
-    fn mean(&self) -> Option<f64> {
-        Some(self.bijector.scale * self.base.mean()? + self.bijector.shift)
+    fn mean(&self) -> f64 {
+        self.bijector.scale * self.base.mean() + self.bijector.shift
     }
-    fn variance(&self) -> Option<f64> {
-        Some(self.bijector.scale.powi(2) * self.base.variance()?)
+    fn variance(&self) -> f64 {
+        self.bijector.scale.powi(2) * self.base.variance()
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(self.bijector.scale.signum() * self.base.skewness()?)
+    fn skewness(&self) -> f64 {
+        self.bijector.scale.signum() * self.base.skewness()
     }
-    fn kurtosis(&self) -> Option<f64> {
+    fn kurtosis(&self) -> f64 {
         self.base.kurtosis()
     }
     /// Differential entropy `H[Y] = H[X] + ln|a|`.
-    fn entropy(&self) -> Option<f64> {
-        Some(self.base.entropy()? + self.bijector.scale.abs().ln())
+    fn entropy(&self) -> f64 {
+        self.base.entropy() + self.bijector.scale.abs().ln()
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.bijector.scale * self.base.median()? + self.bijector.shift)
+    fn median(&self) -> f64 {
+        self.bijector.scale * self.base.median() + self.bijector.shift
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.bijector.scale * self.base.mode()? + self.bijector.shift)
+    fn mode(&self) -> f64 {
+        self.bijector.scale * self.base.mode() + self.bijector.shift
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
     }
 }
 
@@ -143,16 +151,16 @@ mod tests {
             Affine::new(2.0, 3.0).unwrap(),
         );
         let target = Normal::new(5.0, 3.0).unwrap();
-        close(t.mean().unwrap(), target.mean().unwrap(), 1e-12);
-        close(t.variance().unwrap(), target.variance().unwrap(), 1e-12);
-        close(t.std_dev().unwrap(), target.std_dev().unwrap(), 1e-12);
+        close(t.mean(), target.mean(), 1e-12);
+        close(t.variance(), target.variance(), 1e-12);
+        close(t.std_dev(), target.std_dev(), 1e-12);
         // Differential entropy gains ln|a|: H[N(1,1.5)] + ln 2 = H[N(5,3)].
-        close(t.entropy().unwrap(), target.entropy().unwrap(), 1e-12);
-        close(t.median().unwrap(), 5.0, 1e-12);
-        close(t.mode().unwrap(), 5.0, 1e-12);
+        close(t.entropy(), target.entropy(), 1e-12);
+        close(t.median(), 5.0, 1e-12);
+        close(t.mode(), 5.0, 1e-12);
         // Normal is symmetric/mesokurtic, preserved under affine maps.
-        close(t.skewness().unwrap(), 0.0, 1e-12);
-        close(t.kurtosis().unwrap(), 0.0, 1e-12);
+        close(t.skewness(), 0.0, 1e-12);
+        close(t.kurtosis(), 0.0, 1e-12);
     }
 
     #[test]
@@ -162,9 +170,9 @@ mod tests {
         // skewness flips sign (odd), excess kurtosis is invariant (even).
         let base = Exponential::new(2.0).unwrap(); // mean 0.5, var 0.25, skew 2, kurt 6
         let t = Transformed::new(base, Affine::new(-1.0, 5.0).unwrap());
-        close(t.mean().unwrap(), -base.mean().unwrap() + 5.0, 1e-12);
-        close(t.variance().unwrap(), base.variance().unwrap(), 1e-12);
-        close(t.skewness().unwrap(), -base.skewness().unwrap(), 1e-12);
-        close(t.kurtosis().unwrap(), base.kurtosis().unwrap(), 1e-12);
+        close(t.mean(), -base.mean() + 5.0, 1e-12);
+        close(t.variance(), base.variance(), 1e-12);
+        close(t.skewness(), -base.skewness(), 1e-12);
+        close(t.kurtosis(), base.kurtosis(), 1e-12);
     }
 }

@@ -6,6 +6,8 @@ use rand::distr::Distribution;
 use super::normal::Normal;
 use crate::{ContinuousCdf, Moments, Support};
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
+use euclid::LazyReal;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LogNormal {
@@ -34,47 +36,60 @@ impl Distribution<f64> for LogNormal {
     }
 }
 
-impl Support for LogNormal {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for LogNormal {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for LogNormal {
-    fn cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            return 0.0;
-        }
-        self.underlying.cdf(x.ln())
+impl<T: LazyReal> ContinuousCdf<T> for LogNormal {
+    fn cdf(&self, x: T) -> T {
+        kernels::lognormal_cdf(x, T::scalar(self.mu()), T::scalar(self.sigma()))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
+    fn inverse_cdf(&self, p: T) -> T {
         self.underlying.inverse_cdf(p).exp()
     }
 }
 
 impl Moments for LogNormal {
-    fn mean(&self) -> Option<f64> {
+    fn mean(&self) -> f64 {
         let (mu, sigma) = (self.mu(), self.sigma());
-        Some((mu + sigma * sigma / 2.0).exp())
+        (mu + sigma * sigma / 2.0).exp()
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         let (mu, sigma) = (self.mu(), self.sigma());
         let s2 = sigma * sigma;
-        Some((s2.exp() - 1.0) * (2.0 * mu + s2).exp())
+        (s2.exp() - 1.0) * (2.0 * mu + s2).exp()
     }
-    fn entropy(&self) -> Option<f64> {
+    fn entropy(&self) -> f64 {
         let (mu, sigma) = (self.mu(), self.sigma());
-        Some(mu + 0.5 * (TAU * std::f64::consts::E * sigma * sigma).ln())
+        mu + 0.5 * (TAU * std::f64::consts::E * sigma * sigma).ln()
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.mu().exp())
+    fn median(&self) -> f64 {
+        self.mu().exp()
     }
-    fn mode(&self) -> Option<f64> {
+    fn mode(&self) -> f64 {
         let (mu, sigma) = (self.mu(), self.sigma());
-        Some((mu - sigma * sigma).exp())
+        (mu - sigma * sigma).exp()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
     }
 }
 

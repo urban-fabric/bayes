@@ -3,8 +3,8 @@ use rand::distr::Distribution;
 
 use super::gamma::Gamma;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_core_ext::numeric::inverse_cdf_bisect;
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 /// The inverse-gamma distribution with shape `α > 0` and scale `β > 0`, support
@@ -48,47 +48,67 @@ impl Distribution<f64> for InverseGamma {
     }
 }
 
-impl Support for InverseGamma {
-    fn min(&self) -> f64 {
-        0.0
+impl<T: LazyReal> Support<T> for InverseGamma {
+    fn min(&self) -> T {
+        T::zero()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for InverseGamma {
-    fn cdf(&self, x: f64) -> f64 {
-        if x <= 0.0 {
-            0.0
-        } else {
-            (self.scale / x).gamma_ur(self.shape)
-        }
+impl<T: LazyReal> ContinuousCdf<T> for InverseGamma {
+    fn cdf(&self, x: T) -> T {
+        kernels::inverse_gamma_cdf(x, T::scalar(self.shape), T::scalar(self.scale))
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        inverse_cdf_bisect(|x| self.cdf(x), 0.0, f64::INFINITY, p)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::inverse_cdf_bisect(|x| self.cdf(x), T::zero(), T::infinity(), p)
     }
 }
 
 impl Moments for InverseGamma {
-    fn mean(&self) -> Option<f64> {
-        (self.shape > 1.0).then(|| self.scale / (self.shape - 1.0))
-    }
-    fn variance(&self) -> Option<f64> {
-        if self.shape > 2.0 {
-            let a = self.shape;
-            Some(self.scale * self.scale / ((a - 1.0) * (a - 1.0) * (a - 2.0)))
+    fn mean(&self) -> f64 {
+        if self.shape > 1.0 {
+            self.scale / (self.shape - 1.0)
         } else {
-            None
+            f64::NAN
         }
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.scale / (self.shape + 1.0))
+    fn variance(&self) -> f64 {
+        if self.shape > 2.0 {
+            let a = self.shape;
+            self.scale * self.scale / ((a - 1.0) * (a - 1.0) * (a - 2.0))
+        } else {
+            f64::NAN
+        }
+    }
+    fn mode(&self) -> f64 {
+        self.scale / (self.shape + 1.0)
     }
     /// `H = α + ln(β Γ(α)) − (1+α)ψ(α)`.
-    fn entropy(&self) -> Option<f64> {
+    fn entropy(&self) -> f64 {
         let (a, b) = (self.shape, self.scale);
-        Some(a + b.ln() + a.ln_gamma() - (1.0 + a) * a.digamma())
+        a + b.ln() + a.ln_gamma() - (1.0 + a) * a.digamma()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -107,16 +127,16 @@ mod tests {
         for &p in &[0.1, 0.5, 0.9] {
             close(ig.cdf(ig.inverse_cdf(p)), p, 1e-7);
         }
-        close(ig.mean().unwrap(), 2.0 / 2.0, 1e-12);
-        close(ig.mode().unwrap(), 2.0 / 4.0, 1e-12);
-        assert!(InverseGamma::new(1.5, 1.0).unwrap().variance().is_none());
+        close(ig.mean(), 2.0 / 2.0, 1e-12);
+        close(ig.mode(), 2.0 / 4.0, 1e-12);
+        assert!(InverseGamma::new(1.5, 1.0).unwrap().variance().is_nan());
     }
 
     #[test]
     fn entropy_known_value() {
         // H = α + ln(β Γ(α)) − (1+α)ψ(α); for InverseGamma(3, 2): ≈ 0.69515702.
         close(
-            InverseGamma::new(3.0, 2.0).unwrap().entropy().unwrap(),
+            InverseGamma::new(3.0, 2.0).unwrap().entropy(),
             0.695_157_02,
             1e-6,
         );

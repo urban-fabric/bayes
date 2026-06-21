@@ -6,8 +6,8 @@ use rand::distr::Distribution;
 use super::chi_squared::ChiSquared;
 use crate::normal::standard_normal_polar;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_core_ext::numeric::inverse_cdf_bisect;
 use bayes_error::BayesError;
+use bayes_kernels as kernels;
 use euclid::LazyReal;
 
 #[cfg(test)]
@@ -119,59 +119,72 @@ impl Distribution<f64> for StudentT {
     }
 }
 
-impl Support for StudentT {
-    fn min(&self) -> f64 {
-        f64::NEG_INFINITY
+impl<T: LazyReal> Support<T> for StudentT {
+    fn min(&self) -> T {
+        T::neg_infinity()
     }
-    fn max(&self) -> f64 {
-        f64::INFINITY
+    fn max(&self) -> T {
+        T::infinity()
     }
 }
 
-impl ContinuousCdf for StudentT {
-    fn cdf(&self, x: f64) -> f64 {
-        let z = (x - self.location) / self.scale;
-        if z == 0.0 {
-            return 0.5;
-        }
-        let nu = self.freedom;
-        let ix = (nu / (nu + z * z)).beta_reg(nu / 2.0, 0.5);
-        if z > 0.0 { 1.0 - 0.5 * ix } else { 0.5 * ix }
+impl<T: LazyReal> ContinuousCdf<T> for StudentT {
+    fn cdf(&self, x: T) -> T {
+        kernels::students_t_cdf(
+            x,
+            T::scalar(self.location),
+            T::scalar(self.scale),
+            T::scalar(self.freedom),
+        )
     }
-    fn inverse_cdf(&self, p: f64) -> f64 {
-        inverse_cdf_bisect(|x| self.cdf(x), f64::NEG_INFINITY, f64::INFINITY, p)
+    fn inverse_cdf(&self, p: T) -> T {
+        kernels::inverse_cdf_bisect(|x| self.cdf(x), T::neg_infinity(), T::infinity(), p)
     }
 }
 
 impl Moments for StudentT {
-    fn mean(&self) -> Option<f64> {
-        (self.freedom > 1.0).then_some(self.location)
-    }
-    fn variance(&self) -> Option<f64> {
-        if self.freedom > 2.0 {
-            Some(self.scale * self.scale * self.freedom / (self.freedom - 2.0))
+    fn mean(&self) -> f64 {
+        if self.freedom > 1.0 {
+            self.location
         } else {
-            None
+            f64::NAN
         }
     }
-    fn skewness(&self) -> Option<f64> {
-        (self.freedom > 3.0).then_some(0.0)
+    fn variance(&self) -> f64 {
+        if self.freedom > 2.0 {
+            self.scale * self.scale * self.freedom / (self.freedom - 2.0)
+        } else {
+            f64::NAN
+        }
     }
-    fn entropy(&self) -> Option<f64> {
+    fn skewness(&self) -> f64 {
+        if self.freedom > 3.0 { 0.0 } else { f64::NAN }
+    }
+    fn entropy(&self) -> f64 {
         let nu = self.freedom;
         let half_nu = 0.5 * nu;
         let half_nu_plus_one = 0.5 * (nu + 1.0);
-        Some(
-            self.scale.ln() + 0.5 * (nu * PI).ln() + half_nu.ln_gamma()
-                - half_nu_plus_one.ln_gamma()
-                + half_nu_plus_one * (half_nu_plus_one.digamma() - half_nu.digamma()),
-        )
+
+        self.scale.ln() + 0.5 * (nu * PI).ln() + half_nu.ln_gamma() - half_nu_plus_one.ln_gamma()
+            + half_nu_plus_one * (half_nu_plus_one.digamma() - half_nu.digamma())
     }
-    fn median(&self) -> Option<f64> {
-        Some(self.location)
+    fn median(&self) -> f64 {
+        self.location
     }
-    fn mode(&self) -> Option<f64> {
-        Some(self.location)
+    fn mode(&self) -> f64 {
+        self.location
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -197,19 +210,15 @@ mod tests {
 
     #[test]
     fn heavy_tail_moments() {
-        assert_eq!(StudentT::new(1.0).unwrap().mean(), None);
-        assert_eq!(StudentT::new(2.0).unwrap().variance(), None);
-        close(
-            StudentT::new(5.0).unwrap().variance().unwrap(),
-            5.0 / 3.0,
-            1e-12,
-        );
+        assert!(StudentT::new(1.0).unwrap().mean().is_nan());
+        assert!(StudentT::new(2.0).unwrap().variance().is_nan());
+        close(StudentT::new(5.0).unwrap().variance(), 5.0 / 3.0, 1e-12);
     }
 
     #[test]
     fn entropy_matches_cauchy_special_case() {
         let cauchy = StudentT::new_location_scale(1.0, 3.0, 2.0).unwrap();
-        close(cauchy.entropy().unwrap(), (8.0 * PI).ln(), 1e-10);
+        close(cauchy.entropy(), (8.0 * PI).ln(), 1e-10);
     }
 
     #[test]
@@ -219,9 +228,9 @@ mod tests {
         let z = 0.7;
         close(ls.pdf(3.0 + 2.0 * z), std.pdf(z) / 2.0, 1e-12);
         close(ls.cdf(3.0 + 2.0 * z), std.cdf(z), 1e-12);
-        close(ls.mean().unwrap(), 3.0, 1e-12);
-        close(ls.variance().unwrap(), 4.0 * 8.0 / 6.0, 1e-12);
-        close(ls.median().unwrap(), 3.0, 1e-12);
+        close(ls.mean(), 3.0, 1e-12);
+        close(ls.variance(), 4.0 * 8.0 / 6.0, 1e-12);
+        close(ls.median(), 3.0, 1e-12);
         for &p in &[0.1, 0.5, 0.9] {
             close(ls.cdf(ls.inverse_cdf(p)), p, 1e-6);
         }

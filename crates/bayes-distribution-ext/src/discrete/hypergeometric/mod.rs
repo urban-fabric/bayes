@@ -97,19 +97,47 @@ impl DiscreteCdf<u64> for Hypergeometric {
 }
 
 impl Moments for Hypergeometric {
-    fn mean(&self) -> Option<f64> {
-        Some(self.draws as f64 * self.successes as f64 / self.population as f64)
+    fn mean(&self) -> f64 {
+        self.draws as f64 * self.successes as f64 / self.population as f64
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         let (n, k, d) = (
             self.population as f64,
             self.successes as f64,
             self.draws as f64,
         );
         if n <= 1.0 {
-            return Some(0.0);
+            return 0.0;
         }
-        Some(d * (k / n) * ((n - k) / n) * ((n - d) / (n - 1.0)))
+        d * (k / n) * ((n - k) / n) * ((n - d) / (n - 1.0))
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn skewness(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn entropy(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn median(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn mode(&self) -> f64 {
+        f64::NAN
     }
 }
 
@@ -129,7 +157,7 @@ mod tests {
         let h = Hypergeometric::new(50, 5, 10).unwrap();
         let total: f64 = (h.min()..=h.max()).map(|k| h.pmf(k)).sum();
         close(total, 1.0, 1e-10);
-        close(h.mean().unwrap(), 1.0, 1e-12);
+        close(h.mean(), 1.0, 1e-12);
     }
 
     #[test]
@@ -138,6 +166,6 @@ mod tests {
         let h = Hypergeometric::new(100, 30, 20).unwrap();
         let n = 40_000;
         let s: u64 = (0..n).map(|_| h.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, h.mean().unwrap(), 0.05);
+        close(s as f64 / n as f64, h.mean(), 0.05);
     }
 }

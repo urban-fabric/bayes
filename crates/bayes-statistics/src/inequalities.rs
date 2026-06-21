@@ -3,6 +3,8 @@
 //! bounds and the variance cap live in [`super::confidence::concentration`]; this module
 //! collects the moment-*relationship* facts: Cauchy–Schwarz and the Jensen gap.
 
+use euclid::LazyReal;
+
 /// **Cauchy–Schwarz moment consistency**: whether three (computed) moments satisfy the
 /// inequality that *every* joint distribution obeys, `E[XY]² ≤ E[X²]·E[Y²]`. A `false`
 /// means the moments are mutually inconsistent — no random pair `(X, Y)` can produce them
@@ -19,11 +21,9 @@ pub fn cauchy_schwarz_moment_holds(e_xy: f64, e_x2: f64, e_y2: f64) -> bool {
 /// guaranteed bias floor for plug-in / delta-method estimates. Backed by riemann
 /// `Bayes/Inequalities.jensen_gap_lower` (`m = 0` recovers plain Jensen, gap `≥ 0`).
 /// Returns `NaN` on a negative variance.
-pub fn jensen_gap_lower_bound(variance: f64, convexity_modulus: f64) -> f64 {
-    if variance < 0.0 {
-        return f64::NAN;
-    }
-    convexity_modulus / 2.0 * variance
+pub fn jensen_gap_lower_bound<T: LazyReal>(variance: T, convexity_modulus: T) -> T {
+    let valid = variance.ge(&T::zero());
+    T::select(&valid, convexity_modulus / T::two() * variance, T::nan())
 }
 
 #[cfg(test)]
@@ -53,6 +53,6 @@ mod tests {
         close(jensen_gap_lower_bound(4.0, 2.0), 4.0, 1e-12);
         // m=0 recovers plain Jensen: only gap ≥ 0.
         close(jensen_gap_lower_bound(4.0, 0.0), 0.0, 1e-12);
-        assert!(jensen_gap_lower_bound(-1.0, 2.0).is_nan());
+        assert!(jensen_gap_lower_bound(-1.0_f64, 2.0).is_nan());
     }
 }

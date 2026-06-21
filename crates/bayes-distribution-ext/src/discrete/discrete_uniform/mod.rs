@@ -72,23 +72,39 @@ impl IntegerDiscreteCdf<i64> for DiscreteUniform {
 }
 
 impl Moments for DiscreteUniform {
-    fn mean(&self) -> Option<f64> {
-        Some((self.lo + self.hi - 1) as f64 / 2.0)
+    fn mean(&self) -> f64 {
+        (self.lo + self.hi - 1) as f64 / 2.0
     }
-    fn variance(&self) -> Option<f64> {
+    fn variance(&self) -> f64 {
         let n = self.n();
-        Some((n * n - 1.0) / 12.0)
+        (n * n - 1.0) / 12.0
     }
-    fn skewness(&self) -> Option<f64> {
-        Some(0.0)
+    fn skewness(&self) -> f64 {
+        0.0
     }
-    fn median(&self) -> Option<f64> {
-        Some((self.lo + self.hi - 1) as f64 / 2.0)
+    fn median(&self) -> f64 {
+        (self.lo + self.hi - 1) as f64 / 2.0
     }
     /// `H = ln n` over `n` equally-likely outcomes — the maximum-entropy
     /// discrete law on its support.
-    fn entropy(&self) -> Option<f64> {
-        Some(self.n().ln())
+    fn entropy(&self) -> f64 {
+        self.n().ln()
+    }
+    fn moment2(&self) -> f64 {
+        let mean = self.mean();
+        self.variance() + mean * mean
+    }
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+
+    fn kurtosis(&self) -> f64 {
+        f64::NAN
+    }
+
+    fn mode(&self) -> f64 {
+        f64::NAN
     }
 }
 

@@ -1,5 +1,5 @@
 [package]
-name = "bayes-core-lazy"
+name = "bayes-core"
 description = "Lazy numeric probability traits for bayes distributions."
 version.workspace = true
 edition.workspace = true
