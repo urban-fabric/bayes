@@ -13,7 +13,6 @@ mod error;
 pub mod function;
 pub mod gp;
 pub mod lazy;
-pub mod lazy_matrix;
 pub mod multivariate;
 pub mod primitives;
 pub mod process;
@@ -47,10 +46,7 @@ pub use distribution::{
     validate_row_stochastic_with_tolerance, variation_of_information,
 };
 pub use error::{BayesError, StatsError};
-pub use multivariate::{
-    LazyMultivariateContinuous, LazyMultivariateMoments, MultivariateContinuous,
-    MultivariateMoments,
-};
+pub use multivariate::{MultivariateContinuous, MultivariateMoments};
 
 /// Sample statistics over data (`data.mean()`, `data.median()`, …), including
 /// robust/weighted summaries, effect sizes, OLS diagnostics, confidence intervals,

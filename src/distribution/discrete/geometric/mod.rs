@@ -55,7 +55,7 @@ impl Discrete<u64> for Geometric {
         if self.p >= 1.0 {
             return if k == 1 { 0.0 } else { f64::NEG_INFINITY };
         }
-        lazy::geometric_log_pmf(k as f64, self.p)
+        lazy::geometric_log_pmf(k as i64, self.p)
     }
 }
 

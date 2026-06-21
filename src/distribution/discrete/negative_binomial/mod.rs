@@ -77,7 +77,7 @@ impl Discrete<u64> for NegativeBinomial {
         }
         let kf = k as f64;
         let ln_coefficient = ln_gamma(kf + self.r) - ln_gamma(self.r) - ln_factorial(k);
-        lazy::negative_binomial_log_pmf(kf, self.r, self.p, ln_coefficient)
+        lazy::negative_binomial_log_pmf(k as i64, self.r, self.p, ln_coefficient)
     }
 }
 

@@ -11,7 +11,7 @@
 //! backends such as `lebesgue`, where comparisons and container construction may
 //! not exist, but algebraic log-density formulas should still be reusable.
 
-use euclid::numeric::LazyReal;
+use euclid::numeric::{LazyInteger, LazyReal};
 
 pub use crate::primitives::{
     complex_normal_log_prob_with_normalizer, complex_residual_norm_sqr, normal_log_kernel,
@@ -213,11 +213,17 @@ pub fn bernoulli_logit_log_pmf<T: LazyReal>(y: T, logit: T) -> T {
     y * logit.clone() - logit.ln_1p_exp()
 }
 
-/// Binomial log-mass for supplied success/failure counts:
-/// `ln C(n,k) + k log(p) + (n-k) log(1-p)`.
-pub fn binomial_log_pmf<T: LazyReal>(successes: T, failures: T, p: T, ln_binomial: T) -> T {
+/// Binomial log-mass for supplied success/failure **counts**:
+/// `ln C(n,k) + k log(p) + (n-k) log(1-p)`. The counts are integer-typed
+/// ([`LazyInteger`]) — a fractional `k` is unrepresentable — and cross into the real
+/// surface via [`to_real`](LazyInteger::to_real).
+pub fn binomial_log_pmf<I, T>(successes: I, failures: I, p: T, ln_binomial: T) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
     let one = T::one();
-    ln_binomial + successes * p.clone().ln() + failures * (one - p).ln()
+    ln_binomial + successes.to_real() * p.clone().ln() + failures.to_real() * (one - p).ln()
 }
 
 /// Categorical log-mass for the selected class probability.
@@ -226,35 +232,56 @@ pub fn categorical_log_pmf<T: LazyReal>(selected_probability: T) -> T {
 }
 
 /// Geometric log-mass for Bayes' trial-count parameterization:
-/// `(trials - 1) * log(1-p) + log(p)`.
-pub fn geometric_log_pmf<T: LazyReal>(trials: T, p: T) -> T {
+/// `(trials - 1) * log(1-p) + log(p)`. `trials` is an integer count
+/// ([`LazyInteger`]).
+pub fn geometric_log_pmf<I, T>(trials: I, p: T) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
     let one = T::one();
-    (trials - one.clone()) * (one - p.clone()).ln() + p.ln()
+    (trials.to_real() - one.clone()) * (one - p.clone()).ln() + p.ln()
 }
 
 /// Geometric log-mass for `failures` failures before the first success:
-/// `failures * log(1-p) + log(p)`.
-pub fn geometric_failures_log_pmf<T: LazyReal>(failures: T, p: T) -> T {
+/// `failures * log(1-p) + log(p)`. `failures` is an integer count ([`LazyInteger`]).
+pub fn geometric_failures_log_pmf<I, T>(failures: I, p: T) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
     let one = T::one();
-    failures * (one - p.clone()).ln() + p.ln()
+    failures.to_real() * (one - p.clone()).ln() + p.ln()
 }
 
-/// Poisson log-mass: `k log(lambda) - lambda - ln(k!)`.
-pub fn poisson_log_pmf<T: LazyReal>(k: T, lambda: T, ln_factorial_k: T) -> T {
-    k * lambda.clone().ln() - lambda - ln_factorial_k
+/// Poisson log-mass: `k log(lambda) - lambda - ln(k!)`. The count `k` is integer-typed
+/// ([`LazyInteger`]) — there is no Poisson mass at a fractional `k` — and crosses into
+/// the real surface via [`to_real`](LazyInteger::to_real); `lambda` and `ln(k!)` are real.
+pub fn poisson_log_pmf<I, T>(k: I, lambda: T, ln_factorial_k: T) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
+    k.to_real() * lambda.clone().ln() - lambda - ln_factorial_k
 }
 
 /// Negative-binomial log-mass in the "failures before r successes"
 /// parameterization:
-/// `ln C(k+r-1,k) + r log(p) + k log(1-p)`.
-pub fn negative_binomial_log_pmf<T: LazyReal>(
-    failures: T,
+/// `ln C(k+r-1,k) + r log(p) + k log(1-p)`. The `failures` count is integer-typed
+/// ([`LazyInteger`]); `successes_until_stop` (`r`) stays real, as it is a continuous
+/// shape parameter in the Pólya / Gamma–Poisson generalization.
+pub fn negative_binomial_log_pmf<I, T>(
+    failures: I,
     successes_until_stop: T,
     p: T,
     ln_coefficient: T,
-) -> T {
+) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
     let one = T::one();
-    ln_coefficient + successes_until_stop * p.clone().ln() + failures * (one - p).ln()
+    ln_coefficient + successes_until_stop * p.clone().ln() + failures.to_real() * (one - p).ln()
 }
 
 /// Beta-binomial log-mass:
@@ -540,17 +567,23 @@ fn dot_product<T: LazyReal>(a: &[T], b: &[T]) -> Option<T> {
 /// probabilities: `ln_multinomial_coefficient + Σ kᵢ·log(pᵢ)`.
 ///
 /// `ln_multinomial_coefficient` is `ln(n!) - Σ ln(kᵢ!)`, supplied by the caller so
-/// no factorial work hides in the kernel. Returns `None` when the counts and log
-/// probabilities have mismatched or empty lengths.
-pub fn multinomial_log_pmf<T: LazyReal>(
-    counts: &[T],
+/// no factorial work hides in the kernel. The per-category `counts` are integer-typed
+/// ([`LazyInteger`]), cast into the real surface for the weighted sum. Returns `None`
+/// when the counts and log probabilities have mismatched or empty lengths.
+pub fn multinomial_log_pmf<I, T>(
+    counts: &[I],
     log_probabilities: &[T],
     ln_multinomial_coefficient: T,
-) -> Option<T> {
+) -> Option<T>
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
     if counts.len() != log_probabilities.len() {
         return None;
     }
-    let weighted = dot_product(counts, log_probabilities)?;
+    let counts_real: Vec<T> = counts.iter().map(LazyInteger::to_real).collect();
+    let weighted = dot_product(&counts_real, log_probabilities)?;
     Some(ln_multinomial_coefficient + weighted)
 }
 
@@ -703,19 +736,35 @@ pub fn fisher_snedecor_cdf_on_support<T: LazyReal>(x: T, d1: T, d2: T) -> T {
     (d1x.clone() / (d1x + d2.clone())).beta_reg(d1 * T::half(), d2 * T::half())
 }
 
-/// Poisson CDF at integer `k`: `Q(k + 1, λ)` (regularized upper incomplete gamma).
-pub fn poisson_cdf<T: LazyReal>(k: T, rate: T) -> T {
-    rate.gamma_ur(k + T::one())
+/// Poisson CDF at integer `k`: `Q(k + 1, λ)` (regularized upper incomplete gamma). `k`
+/// is an integer count ([`LazyInteger`]).
+pub fn poisson_cdf<I, T>(k: I, rate: T) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
+    rate.gamma_ur(k.to_real() + T::one())
 }
 
-/// Binomial CDF at `k < n`: `I_{1−p}(n − k, k + 1)`.
-pub fn binomial_cdf_on_support<T: LazyReal>(successes: T, trials: T, p: T) -> T {
-    (T::one() - p).beta_reg(trials - successes.clone(), successes + T::one())
+/// Binomial CDF at `k < n`: `I_{1−p}(n − k, k + 1)`. The `successes` and `trials` counts
+/// are integer-typed ([`LazyInteger`]).
+pub fn binomial_cdf_on_support<I, T>(successes: I, trials: I, p: T) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
+    let s = successes.to_real();
+    (T::one() - p).beta_reg(trials.to_real() - s.clone(), s + T::one())
 }
 
-/// Negative-binomial CDF at `k`: `I_p(r, k + 1)`.
-pub fn negative_binomial_cdf<T: LazyReal>(failures: T, successes_until_stop: T, p: T) -> T {
-    p.beta_reg(successes_until_stop, failures + T::one())
+/// Negative-binomial CDF at `k`: `I_p(r, k + 1)`. The `failures` count is integer-typed
+/// ([`LazyInteger`]); `successes_until_stop` (`r`) stays real (continuous shape).
+pub fn negative_binomial_cdf<I, T>(failures: I, successes_until_stop: T, p: T) -> T
+where
+    I: LazyInteger<Real = T>,
+    T: LazyReal,
+{
+    p.beta_reg(successes_until_stop, failures.to_real() + T::one())
 }
 
 /// k-th order-statistic CDF of `sample_size` iid draws from a base CDF value
@@ -2322,17 +2371,17 @@ mod tests {
     fn lazy_real_discrete_kernels_match_distribution_log_masses() {
         let binomial = Binomial::new(12, 0.3).unwrap();
         close(
-            binomial_log_pmf(4.0, 8.0, 0.3, ln_binomial(12, 4)),
+            binomial_log_pmf(4_i64, 8_i64, 0.3, ln_binomial(12, 4)),
             binomial.ln_pmf(4),
             1e-12,
         );
 
         let geometric = Geometric::new(0.25).unwrap();
-        close(geometric_log_pmf(5.0, 0.25), geometric.ln_pmf(5), 1e-12);
+        close(geometric_log_pmf(5_i64, 0.25), geometric.ln_pmf(5), 1e-12);
 
         let poisson = Poisson::new(3.5).unwrap();
         close(
-            poisson_log_pmf(6.0, 3.5, ln_factorial(6)),
+            poisson_log_pmf(6_i64, 3.5, ln_factorial(6)),
             poisson.ln_pmf(6),
             1e-12,
         );
@@ -3262,18 +3311,18 @@ mod tests {
 
         // Discrete CDFs via the incomplete gamma / beta.
         let poisson = Poisson::new(3.5).unwrap();
-        close(poisson_cdf(6.0, 3.5), poisson.cdf(6), 1e-12);
+        close(poisson_cdf(6_i64, 3.5), poisson.cdf(6), 1e-12);
 
         let binomial = Binomial::new(12, 0.3).unwrap();
         close(
-            binomial_cdf_on_support(4.0, 12.0, 0.3),
+            binomial_cdf_on_support(4_i64, 12_i64, 0.3),
             binomial.cdf(4),
             1e-12,
         );
 
         let negative_binomial = NegativeBinomial::new(5.0, 0.4).unwrap();
         close(
-            negative_binomial_cdf(3.0, 5.0, 0.4),
+            negative_binomial_cdf(3_i64, 5.0, 0.4),
             negative_binomial.cdf(3),
             1e-12,
         );
@@ -3497,10 +3546,11 @@ mod tests {
         let n: u64 = counts.iter().sum();
         let ln_coefficient = ln_factorial(n) - counts.iter().map(|&k| ln_factorial(k)).sum::<f64>();
         let counts_real: Vec<f64> = counts.iter().map(|&k| k as f64).collect();
+        let counts_int: Vec<i64> = counts.iter().map(|&k| k as i64).collect();
 
         // Multinomial: ln C + Σ kᵢ·ln pᵢ.
         let log_probabilities: Vec<f64> = probabilities.iter().map(|p| p.ln()).collect();
-        let got = multinomial_log_pmf(&counts_real, &log_probabilities, ln_coefficient).unwrap();
+        let got = multinomial_log_pmf(&counts_int, &log_probabilities, ln_coefficient).unwrap();
         let expected_multinomial = ln_coefficient
             + counts_real
                 .iter()

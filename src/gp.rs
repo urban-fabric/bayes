@@ -7,16 +7,15 @@
 //! `maxwell`); applied per pair to `f64` it is the eager reference. Kernels delegate their closed
 //! forms to [`crate::lazy`]'s correlation functions and compose through [`Sum`] / [`Product`].
 //!
-//! [`neg_log_marginal_likelihood`] is the GP *fitting* objective: on a unified tensor backend
-//! (`maxwell` / `lebesgue`) the covariance assembly *and* the marginal likelihood form one
-//! differentiable graph in `θ` — markov's GP fit, compiled. The flat-`θ` shape matches the
-//! optimizer's parameter vector, so the inference engine drives `θ` blind to the backend.
+//! These kernels are **numeric-only** (scalar, `T: LazyReal`): one definition lowers
+//! elementwise onto a distance *matrix* tensor (so the covariance assembly compiles to
+//! XLA on `maxwell`) and per-pair onto `f64` (the eager reference). The matrix-coupled GP
+//! marginal-likelihood objective that consumes these covariances lives in the backend
+//! (`maxwell::dist` / `markov`), where the tensor is concrete.
 
-use euclid::array::LazyMatrix;
 use euclid::numeric::LazyReal;
 
 use crate::lazy;
-use crate::lazy_matrix::gaussian_process_log_marginal_likelihood;
 
 /// A covariance kernel `k(d; θ)`: covariance from a separation `distance` and a flat
 /// hyperparameter vector `θ` (in declaration order). Generic over `T: LazyReal`, so one
@@ -103,27 +102,6 @@ impl<A: Kernel, B: Kernel> Kernel for Product<A, B> {
         let (a, b) = theta.split_at(self.0.hyper_count());
         self.0.covariance(distance.clone(), a) * self.1.covariance(distance, b)
     }
-}
-
-/// The GP negative log marginal likelihood as a function of the kernel hyperparameters — the
-/// fitting objective. `distances` is the fixed pairwise-separation matrix, `y` the centered
-/// observations, `noise` the nugget τ², `eye` the identity (same backend). On a unified tensor
-/// backend the covariance assembly `K = k(D; θ) + τ²I` and the marginal likelihood form one
-/// graph, differentiable in `θ` and `noise` — so it compiles to XLA and runs on `maxwell`.
-pub fn neg_log_marginal_likelihood<M, K>(
-    kernel: &K,
-    distances: M,
-    y: M,
-    theta: &[M],
-    noise: M,
-    eye: M,
-) -> M
-where
-    K: Kernel,
-    M: LazyReal + LazyMatrix<Scalar = M, Vector = M>,
-{
-    let covariance = kernel.covariance(distances, theta) + noise * eye;
-    -gaussian_process_log_marginal_likelihood(y, covariance)
 }
 
 #[cfg(test)]

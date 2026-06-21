@@ -1,7 +1,8 @@
-//! Backend-neutral contracts for vector-valued distributions.
-
-use euclid::array::{LazyMatrix, LazyVector};
-use euclid::numeric::LazyReal;
+//! Numeric contracts for vector-valued distributions (`f64` host interface).
+//!
+//! The *lazy/backend-generic* multivariate contracts that referenced the container
+//! tier (`LazyMatrix`/`LazyVector`) have moved to the backend: the concrete
+//! tensor-coupled multivariate densities live in `maxwell::dist`.
 
 /// A continuous distribution over vectors: the joint density `f(x)` for `x in R^d`.
 pub trait MultivariateContinuous {
@@ -28,23 +29,4 @@ pub trait MultivariateMoments {
     fn entropy(&self) -> Option<f64> {
         None
     }
-}
-
-/// Lazy moments for backend-generic vector-valued distributions.
-pub trait LazyMultivariateMoments {
-    type Scalar: LazyReal;
-    type Vector: LazyVector<Scalar = Self::Scalar>;
-    type Covariance: LazyMatrix<Scalar = Self::Scalar, Vector = Self::Vector>;
-
-    fn mean(&self) -> Self::Vector;
-    fn covariance_lazy(&self) -> Self::Covariance;
-}
-
-/// Lazy log-density contract over a backend vector type.
-pub trait LazyMultivariateContinuous {
-    type Scalar: LazyReal;
-    type Vector: LazyVector<Scalar = Self::Scalar>;
-
-    fn dim(&self) -> usize;
-    fn log_pdf(&self, x: Self::Vector) -> Self::Scalar;
 }

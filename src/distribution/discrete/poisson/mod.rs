@@ -100,7 +100,7 @@ impl Discrete<u64> for Poisson {
         self.ln_pmf(k).exp()
     }
     fn ln_pmf(&self, k: u64) -> f64 {
-        lazy::poisson_log_pmf(k as f64, self.lambda, ln_factorial(k))
+        lazy::poisson_log_pmf(k as i64, self.lambda, ln_factorial(k))
     }
 }
 

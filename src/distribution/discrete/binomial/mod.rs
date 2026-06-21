@@ -54,9 +54,13 @@ impl Discrete<u64> for Binomial {
         if self.p >= 1.0 {
             return if k == self.n { 0.0 } else { f64::NEG_INFINITY };
         }
-        let kf = k as f64;
-        let nf = self.n as f64;
-        lazy::binomial_log_pmf(kf, nf - kf, self.p, ln_binomial(self.n, k))
+        // k ≤ n here (guarded above), so `self.n - k` is a non-negative count.
+        lazy::binomial_log_pmf(
+            k as i64,
+            (self.n - k) as i64,
+            self.p,
+            ln_binomial(self.n, k),
+        )
     }
 }
 
