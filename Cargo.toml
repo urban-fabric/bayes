@@ -1,17 +1,17 @@
-[package]
-name = "bayes"
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "Proprietary"
 authors = ["Raymond Mead"]
 repository = "https://github.com/urban-fabric/bayes"
 rust-version = "1.95"
-description = "Closed-form probability and statistics for Rust: distributions, special functions, sample statistics, stochastic processes, and conjugate Bayesian updates."
 
-[lib]
-path = "src/lib.rs"
-
-[dependencies]
+[workspace.dependencies]
+# external
 rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"
@@ -21,12 +21,24 @@ thiserror = "2.0"
 # (`maxwell::dist`). Verification that bayes' write-once closed forms run on a backend lives
 # in the *backend* crate (see maxwell's `bayes_density` test); the arrow stays backend → content.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
+# internal members
+bayes-error = { path = "crates/bayes-error" }
+bayes-core-lazy = { path = "crates/bayes-core-lazy" }
+bayes-core-ext = { path = "crates/bayes-core-ext" }
+bayes-kernels = { path = "crates/bayes-kernels" }
+bayes-dist-core = { path = "crates/bayes-dist-core" }
+bayes-distribution = { path = "crates/bayes-distribution" }
+bayes-distribution-ext = { path = "crates/bayes-distribution-ext" }
+bayes-divergence = { path = "crates/bayes-divergence" }
+bayes-statistics = { path = "crates/bayes-statistics" }
+bayes-process = { path = "crates/bayes-process" }
 
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"
+unstable_name_collisions = "allow"
 
-[lints.clippy]
+[workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"
 panic = "warn"

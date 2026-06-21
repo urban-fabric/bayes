@@ -1,0 +1,17 @@
+[package]
+name = "bayes-core-ext"
+description = "Eager distribution support traits and probability utilities for bayes."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bayes-core-lazy.workspace = true
+bayes-error.workspace = true
+euclid.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,20 @@
+[package]
+name = "bayes-distribution-ext"
+description = "Eager distribution families, CDFs, moments, sampling, combinators, conjugates, and fitting for bayes."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bayes-error.workspace = true
+bayes-kernels.workspace = true
+bayes-core-ext.workspace = true
+euclid.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+
+[lints]
+workspace = true

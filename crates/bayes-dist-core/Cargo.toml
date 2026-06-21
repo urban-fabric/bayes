@@ -1,0 +1,15 @@
+[package]
+name = "bayes-dist-core"
+description = "Compatibility facade for bayes core distribution traits."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bayes-core-ext.workspace = true
+
+[lints]
+workspace = true

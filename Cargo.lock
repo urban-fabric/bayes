@@ -12,10 +12,106 @@ checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 name = "bayes"
 version = "0.1.0"
 dependencies = [
+ "bayes-distribution-ext",
+ "bayes-divergence",
+ "bayes-error",
+ "bayes-kernels",
+ "bayes-process",
+ "bayes-statistics",
  "euclid",
  "rand",
  "rand_chacha",
+]
+
+[[package]]
+name = "bayes-core-ext"
+version = "0.1.0"
+dependencies = [
+ "bayes-core-lazy",
+ "bayes-error",
+ "euclid",
+]
+
+[[package]]
+name = "bayes-core-lazy"
+version = "0.1.0"
+dependencies = [
+ "euclid",
+]
+
+[[package]]
+name = "bayes-dist-core"
+version = "0.1.0"
+dependencies = [
+ "bayes-core-ext",
+]
+
+[[package]]
+name = "bayes-distribution"
+version = "0.1.0"
+dependencies = [
+ "bayes-core-lazy",
+ "bayes-error",
+ "bayes-kernels",
+ "euclid",
+]
+
+[[package]]
+name = "bayes-distribution-ext"
+version = "0.1.0"
+dependencies = [
+ "bayes-core-ext",
+ "bayes-error",
+ "bayes-kernels",
+ "euclid",
+ "rand",
+ "rand_chacha",
+]
+
+[[package]]
+name = "bayes-divergence"
+version = "0.1.0"
+dependencies = [
+ "bayes-distribution-ext",
+ "bayes-error",
+ "euclid",
+]
+
+[[package]]
+name = "bayes-error"
+version = "0.1.0"
+dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "bayes-kernels"
+version = "0.1.0"
+dependencies = [
+ "euclid",
+]
+
+[[package]]
+name = "bayes-process"
+version = "0.1.0"
+dependencies = [
+ "bayes-distribution-ext",
+ "bayes-error",
+ "bayes-kernels",
+ "bayes-statistics",
+ "euclid",
+ "rand",
+ "rand_chacha",
+]
+
+[[package]]
+name = "bayes-statistics"
+version = "0.1.0"
+dependencies = [
+ "bayes-distribution-ext",
+ "euclid",
+ "rand",
+ "rand_chacha",
 ]
 
 [[package]]
