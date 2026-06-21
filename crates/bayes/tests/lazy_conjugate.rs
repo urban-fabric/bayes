@@ -9,10 +9,10 @@
     clippy::panic
 )]
 
-// The lazy kernels are generic over `euclid::numeric::LazyReal`; the cross-checks
-// instantiate them at `f64` and call LazyReal methods (e.g. `ln_1p_exp`) directly.
+// The lazy kernels are generic over `euclid::numeric::Real`; the cross-checks
+// instantiate them at `f64` and call Real methods (e.g. `ln_1p_exp`) directly.
 #[allow(unused_imports)]
-use euclid::numeric::{LazyInteger, LazyNatural, LazyReal};
+use euclid::numeric::{Integer, Natural, Real};
 
 use bayes::kernels::*;
 // The scalar/lazy kernels are exercised end-to-end here against bayes' own concrete

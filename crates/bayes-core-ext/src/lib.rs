@@ -1,19 +1,20 @@
 //! Eager distribution extensions and probability utilities.
 //!
 //! This crate layers host-side statistical surfaces on top of
-//! [`bayes_core`]: fitting, constraints, and probability-vector utilities.
+//! [`bayes_core`]: fitting and probability-vector utilities.
 #![cfg_attr(test, allow(clippy::expect_used, clippy::panic, clippy::unwrap_used))]
 
-pub mod constraint;
+mod error;
 pub mod numeric;
 mod probability;
 
 pub use bayes_core::{
-    Continuous, ContinuousCdf, ContinuousDensityKernel, Discrete, DiscreteCdf, DiscreteMassKernel,
-    IntegerDiscrete, IntegerDiscreteCdf, IntegerMassKernel, Moments, Support,
+    Boundary, Constrained, Constraint, Continuous, ContinuousCdf, ContinuousDensityKernel,
+    Discrete, DiscreteCdf, DiscreteMassKernel, IntegerConstraint, IntegerDiscrete,
+    IntegerDiscreteCdf, IntegerMassKernel, Moments, NaturalConstraint, RealConstraint, Support,
 };
-pub use constraint::{Constrained, Constraint};
-use euclid::LazyReal;
+pub use error::{BayesError, StatsError};
+use euclid::Real;
 pub use probability::{
     PROBABILITY_TOLERANCE, brier_score, is_probability_vector,
     is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_with_tolerance,
@@ -23,6 +24,6 @@ pub use probability::{
 };
 
 /// Fit a distribution's parameters from a sample.
-pub trait Estimate<R: LazyReal = f64>: Sized {
+pub trait Estimate<R: Real = f64>: Sized {
     fn from_sample(data: &[R]) -> Option<Self>;
 }

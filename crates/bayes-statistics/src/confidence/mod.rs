@@ -16,7 +16,7 @@
 //! support) and carry a *guaranteed* bound — each backed by a machine-checked theorem in
 //! riemann `RiemannLean/Bayes/Inequalities.lean`.
 
-use euclid::LazyReal;
+use euclid::Real;
 use std::f64::consts::SQRT_2;
 
 mod chi_squared;

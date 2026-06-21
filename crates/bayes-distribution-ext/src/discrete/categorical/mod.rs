@@ -2,7 +2,7 @@ use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{Discrete, DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
 
 /// The categorical distribution over the integer categories `{0, …, k-1}` with
@@ -139,11 +139,6 @@ impl Moments for Categorical {
             .map(|&pi| pi * pi.ln())
             .sum::<f64>()
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }

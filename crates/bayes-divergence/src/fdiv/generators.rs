@@ -1,5 +1,5 @@
 use super::*;
-use euclid::LazyReal;
+use euclid::Real;
 
 /// `f(t) = t ln t` — the **Kullback–Leibler** generator. `D_f = Σ pᵢ ln(pᵢ/qᵢ)`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

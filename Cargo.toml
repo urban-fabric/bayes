@@ -16,17 +16,15 @@ rand = "0.10"
 rand_chacha = "0.10"
 thiserror = "2.0"
 # bayes is **numeric-only**: it writes scalar-generic closed forms over `euclid::numeric`
-# (`LazyReal`/`LazyComplex`) plus host-`f64` statistics. It does not depend on the container
+# (`Real`/`Complex`) plus host-`f64` statistics. It does not depend on the container
 # tier — the matrix-coupled multivariate densities now live concretely in the backend
 # (`maxwell::dist`). Verification that bayes' write-once closed forms run on a backend lives
 # in the *backend* crate (see maxwell's `bayes_density` test); the arrow stays backend → content.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 # internal members
-bayes-error = { path = "crates/bayes-error" }
 bayes-core = { path = "crates/bayes-core" }
 bayes-core-ext = { path = "crates/bayes-core-ext" }
 bayes-kernels = { path = "crates/bayes-kernels" }
-bayes-dist-core = { path = "crates/bayes-dist-core" }
 bayes-distribution = { path = "crates/bayes-distribution" }
 bayes-distribution-ext = { path = "crates/bayes-distribution-ext" }
 bayes-divergence = { path = "crates/bayes-divergence" }
@@ -54,7 +52,7 @@ lto = "thin"
 codegen-units = 1
 debug = true
 
-# TEMPORARY (offline dev, multi-repo LazyScalar rollout): build against the local
+# TEMPORARY (offline dev, multi-repo numeric rollout): build against the local
 # euclid sibling so the scalar-generic array contracts (real+complex) are visible.
 # Reconcile to git revs before landing.
 [patch."ssh://git@github.com/urban-fabric/euclid.git"]

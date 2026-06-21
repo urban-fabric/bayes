@@ -4,7 +4,7 @@
 //! absolute derivative of the *inverse* (the Jacobian term in the change of
 //! variables). All maps here are strictly monotone, so the density is well-defined.
 
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 
 /// A strictly monotone, invertible map `g: ℝ → S`.
 pub trait Bijector {

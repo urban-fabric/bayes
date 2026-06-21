@@ -3,7 +3,7 @@ use super::*;
 // --- closed-form Rényi divergences `D_α` (α ≠ 1) ---
 
 /// Bernoulli Rényi: `ln(p₀^α p₁^{1−α} + (1−p₀)^α (1−p₁)^{1−α}) / (α−1)`.
-pub fn renyi_bernoulli<T: LazyReal>(p_self: T, p_other: T, alpha: T) -> T {
+pub fn renyi_bernoulli<T: Real>(p_self: T, p_other: T, alpha: T) -> T {
     let one = T::one();
     let one_minus_alpha = one.clone() - alpha.clone();
     let term =
@@ -14,7 +14,7 @@ pub fn renyi_bernoulli<T: LazyReal>(p_self: T, p_other: T, alpha: T) -> T {
 
 /// Gaussian Rényi interior (`σ_α² = α s₁² + (1−α)s₀² > 0`):
 /// `α(m₀−m₁)²/(2σ_α²) + ((1−α)ln s₀ + α ln s₁ − ½ln σ_α²)/(α−1)`.
-pub fn renyi_normal_on_support<T: LazyReal>(
+pub fn renyi_normal_on_support<T: Real>(
     mean_self: T,
     std_self: T,
     mean_other: T,
@@ -34,7 +34,7 @@ pub fn renyi_normal_on_support<T: LazyReal>(
 }
 
 /// Gamma Rényi interior (`a_α, b_α > 0`), via `ln_gamma`.
-pub fn renyi_gamma_on_support<T: LazyReal>(
+pub fn renyi_gamma_on_support<T: Real>(
     shape_self: T,
     rate_self: T,
     shape_other: T,
@@ -55,7 +55,7 @@ pub fn renyi_gamma_on_support<T: LazyReal>(
 /// von Mises Rényi interior:
 /// `(ln I₀(R_α) − α ln I₀(κ₀) − (1−α) ln I₀(κ₁)) / (α−1)`,
 /// `R_α = √((ακ₀)² + ((1−α)κ₁)² + 2α(1−α)κ₀κ₁ cos Δµ)`.
-pub fn renyi_von_mises<T: LazyReal>(
+pub fn renyi_von_mises<T: Real>(
     mean_self: T,
     kappa_self: T,
     mean_other: T,
@@ -77,7 +77,7 @@ pub fn renyi_von_mises<T: LazyReal>(
 /// Binomial Rényi for a matched trial count `n`: `n ·` the per-trial Bernoulli
 /// Rényi, `n · ln(p₀^α p₁^{1−α} + (1−p₀)^α (1−p₁)^{1−α}) / (α−1)`. A differing trial
 /// count is the caller's out-of-family branch.
-pub fn renyi_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T, alpha: T) -> T {
+pub fn renyi_binomial<T: Real>(trials: T, p_self: T, p_other: T, alpha: T) -> T {
     let one = T::one();
     let one_minus_alpha = one.clone() - alpha.clone();
     let term =
@@ -90,7 +90,7 @@ pub fn renyi_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T, alpha: T) -
 /// (finite when `w = (1−p₀)^α (1−p₁)^{1−α} < 1`):
 /// `r · (α ln p₀ + (1−α) ln p₁ − ln(1 − w)) / (α−1)`. The convergence test is the
 /// caller's branch.
-pub fn renyi_negative_binomial_on_support<T: LazyReal>(
+pub fn renyi_negative_binomial_on_support<T: Real>(
     successes: T,
     p_self: T,
     p_other: T,
@@ -108,7 +108,7 @@ pub fn renyi_negative_binomial_on_support<T: LazyReal>(
 /// `la = α λ₀ + (1−α) λ₁ > 0` and `aa = α λ₀/µ₀² + (1−α) λ₁/µ₁² > 0`):
 /// `[½(α ln λ₀ + (1−α) ln λ₁) + α λ₀/µ₀ + (1−α) λ₁/µ₁ − ½ ln la − √(aa·la)] / (α−1)`.
 /// The convergence test is the caller's branch.
-pub fn renyi_wald_on_support<T: LazyReal>(
+pub fn renyi_wald_on_support<T: Real>(
     mean_self: T,
     shape_self: T,
     mean_other: T,
@@ -132,7 +132,7 @@ pub fn renyi_wald_on_support<T: LazyReal>(
 /// Uniform Rényi interior: `ln(overlap · w₀^{−α} · w₁^{−(1−α)}) / (α−1)`, `w = b − a`.
 /// The `+∞` boundary (`α>1` outside containment, or disjoint support) is the caller's
 /// branch.
-pub fn renyi_uniform_on_support<T: LazyReal>(
+pub fn renyi_uniform_on_support<T: Real>(
     lo_self: T,
     hi_self: T,
     lo_other: T,
@@ -152,7 +152,7 @@ pub fn renyi_uniform_on_support<T: LazyReal>(
 
 /// Discrete-uniform Rényi interior: `ln(overlap · n₀^{−α} · n₁^{−(1−α)}) / (α−1)`,
 /// integer overlap and `n = b − a + 1`. The `+∞` boundary is the caller's branch.
-pub fn renyi_discrete_uniform_on_support<T: LazyReal>(
+pub fn renyi_discrete_uniform_on_support<T: Real>(
     lo_self: T,
     hi_self: T,
     lo_other: T,
@@ -173,6 +173,6 @@ pub fn renyi_discrete_uniform_on_support<T: LazyReal>(
 // --- closed-form total variation ---
 
 /// Bernoulli total variation: `|p₀ − p₁|`.
-pub fn total_variation_bernoulli<T: LazyReal>(p_self: T, p_other: T) -> T {
+pub fn total_variation_bernoulli<T: Real>(p_self: T, p_other: T) -> T {
     (p_self - p_other).abs()
 }

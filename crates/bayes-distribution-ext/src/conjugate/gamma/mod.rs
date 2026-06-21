@@ -2,8 +2,8 @@
 
 use super::{Conjugate, Pair};
 use crate::{Gamma, Lomax};
-use bayes_error::BayesError;
-use euclid::{LazyNatural, LazyReal};
+use bayes_core_ext::BayesError;
+use euclid::{Natural, Real};
 
 mod exponential;
 mod poisson;

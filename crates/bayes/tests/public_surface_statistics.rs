@@ -16,8 +16,8 @@ use bayes::{
     Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Conjugate, Constraint,
     Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDistributionExt, ContinuousFn, Discrete,
     DiscreteDistributionExt, DiscreteFn, Ecdf, Exponential, ExponentialFamily, Gamma,
-    GammaExponential, GammaPoisson, LazyReal, MeanVar, Mixture, Moments, Normal, OrderStatistic,
-    Poisson, SufficientStatistic, Uniform, histogram,
+    GammaExponential, GammaPoisson, MeanVar, Mixture, Moments, Normal, OrderStatistic, Poisson,
+    Real, SufficientStatistic, Uniform, histogram,
 };
 
 fn close(a: f64, b: f64, tol: f64) {

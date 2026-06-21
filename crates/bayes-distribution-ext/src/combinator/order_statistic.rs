@@ -1,6 +1,6 @@
 use crate::{Beta, Continuous, ContinuousCdf, Support};
-use bayes_error::BayesError;
-use euclid::LazyNatural;
+use bayes_core_ext::BayesError;
+use euclid::Natural;
 
 fn log_sum_exp(xs: &[f64]) -> Option<f64> {
     let (&first, rest) = xs.split_first()?;

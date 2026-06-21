@@ -1,12 +1,13 @@
 use std::f64::consts::{E, TAU};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::Real;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Normal {
@@ -130,7 +131,7 @@ pub fn standard_normal_polar<R: Rng + ?Sized>(rng: &mut R) -> f64 {
     }
 }
 
-impl<T: LazyReal> Support<T> for Normal {
+impl<T: Real> Support<T> for Normal {
     fn min(&self) -> T {
         T::neg_infinity()
     }
@@ -139,7 +140,7 @@ impl<T: LazyReal> Support<T> for Normal {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Normal {
+impl<T: Real> ContinuousCdf<T> for Normal {
     fn cdf(&self, x: T) -> T {
         kernels::normal_cdf(x, T::scalar(self.mean), T::scalar(self.std_dev))
     }
@@ -180,11 +181,6 @@ impl Moments for Normal {
     fn mode(&self) -> f64 {
         self.mean
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -198,3 +194,26 @@ impl Estimate for Normal {
 
 #[cfg(test)]
 mod tests;
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Normal {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let (mean, std_dev) = self.params();
+        kernels::normal_log_pdf(x, T::scalar(mean), T::scalar(std_dev))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for Normal {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
+    }
+}

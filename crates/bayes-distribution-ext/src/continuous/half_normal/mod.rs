@@ -1,16 +1,14 @@
 use std::f64::consts::{PI, SQRT_2};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use rand::Rng;
 use rand::distr::Distribution;
 
 use super::normal::standard_normal_polar;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
-
-#[cfg(test)]
-use crate::Continuous;
+use euclid::{Compare, Real};
 
 /// The half-normal distribution with scale `σ > 0`, support `[0, ∞)` — the
 /// distribution of `|Z|` for `Z ~ N(0, σ²)`.
@@ -47,7 +45,7 @@ impl Distribution<f64> for HalfNormal {
     }
 }
 
-impl<T: LazyReal> Support<T> for HalfNormal {
+impl<T: Real> Support<T> for HalfNormal {
     fn min(&self) -> T {
         T::zero()
     }
@@ -56,7 +54,7 @@ impl<T: LazyReal> Support<T> for HalfNormal {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for HalfNormal {
+impl<T: Real> ContinuousCdf<T> for HalfNormal {
     fn cdf(&self, x: T) -> T {
         kernels::half_normal_cdf(x, T::scalar(self.scale))
     }
@@ -81,11 +79,6 @@ impl Moments for HalfNormal {
     fn entropy(&self) -> f64 {
         0.5 * (PI * self.scale * self.scale / 2.0).ln() + 0.5
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -124,5 +117,32 @@ mod tests {
             close(h.cdf(h.inverse_cdf(p)), p, 1e-9);
         }
         close(h.mean(), 2.0 * (2.0 / PI).sqrt(), 1e-12);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for HalfNormal {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::half_normal_log_pdf_on_support(x, T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for HalfNormal
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.ge(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

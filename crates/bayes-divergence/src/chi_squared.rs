@@ -6,7 +6,7 @@ use crate::{
     Bernoulli, Binomial, Categorical, ChiSquared, DiscreteUniform, Exponential, Gamma, HalfNormal,
     InverseGamma, LogNormal, NegativeBinomial, Normal, Poisson, Uniform, VonMises, Wald,
 };
-use euclid::LazyReal;
+use euclid::Real;
 
 /// The **χ² (Pearson) divergence** `χ²(p ‖ q) = ∫ (p − q)²/q = ∫ p²/q − 1`, in
 /// `[0, ∞]`. The `f`-divergence for `f(t) = (t − 1)²`, and an upper bound on KL:

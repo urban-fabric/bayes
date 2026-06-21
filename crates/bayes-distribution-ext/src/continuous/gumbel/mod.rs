@@ -1,12 +1,13 @@
 use std::f64::consts::PI;
 
+use crate::{Continuous, ContinuousDensityKernel};
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::Real;
 
 /// Euler–Mascheroni constant.
 const EULER_GAMMA: f64 = 0.577_215_664_901_532_9;
@@ -56,7 +57,7 @@ impl Distribution<f64> for Gumbel {
     }
 }
 
-impl<T: LazyReal> Support<T> for Gumbel {
+impl<T: Real> Support<T> for Gumbel {
     fn min(&self) -> T {
         T::neg_infinity()
     }
@@ -65,7 +66,7 @@ impl<T: LazyReal> Support<T> for Gumbel {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Gumbel {
+impl<T: Real> ContinuousCdf<T> for Gumbel {
     fn cdf(&self, x: T) -> T {
         kernels::gumbel_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
@@ -94,11 +95,6 @@ impl Moments for Gumbel {
     fn entropy(&self) -> f64 {
         self.scale.ln() + EULER_GAMMA + 1.0
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -126,5 +122,27 @@ mod tests {
         close(g.mean(), 1.0 + 2.0 * EULER_GAMMA, 1e-12);
         close(g.mode(), 1.0, 1e-12);
         close(g.cdf(1.0), (-1.0f64).exp(), 1e-12);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Gumbel {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::gumbel_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for Gumbel {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
     }
 }

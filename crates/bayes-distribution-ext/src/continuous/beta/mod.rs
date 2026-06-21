@@ -2,13 +2,11 @@ use rand::Rng;
 use rand::distr::Distribution;
 
 use super::gamma::sample_standard_gamma;
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
-
-#[cfg(test)]
-use crate::Continuous;
+use euclid::{Boolean, Compare, Real};
 
 /// The beta distribution on `(0, 1)` with shape parameters `α, β > 0`. Density
 /// `f(x) = x^{α-1}(1-x)^{β-1} / B(α, β)`.
@@ -47,7 +45,7 @@ impl Distribution<f64> for Beta {
     }
 }
 
-impl<T: LazyReal> Support<T> for Beta {
+impl<T: Real> Support<T> for Beta {
     fn min(&self) -> T {
         T::zero()
     }
@@ -56,7 +54,7 @@ impl<T: LazyReal> Support<T> for Beta {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Beta {
+impl<T: Real> ContinuousCdf<T> for Beta {
     fn cdf(&self, x: T) -> T {
         kernels::beta_cdf_on_unit(
             x.clamp(T::zero(), T::one()),
@@ -97,11 +95,6 @@ impl Moments for Beta {
         a.ln_beta(b) - (a - 1.0) * a.digamma() - (b - 1.0) * b.digamma()
             + (a + b - 2.0) * (a + b).digamma()
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -149,5 +142,35 @@ mod tests {
         let n = 60_000;
         let s: f64 = (0..n).map(|_| b.sample(&mut rng)).sum();
         close(s / n as f64, b.mean(), 0.01);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Beta {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let alpha = T::scalar(self.alpha());
+        let beta = T::scalar(self.beta());
+        kernels::beta_log_pdf_on_unit(x, alpha.clone(), beta.clone(), alpha.ln_beta(beta))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Beta
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let one = T::one();
+        let valid = x.gt(&zero).and(&x.lt(&one));
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

@@ -8,14 +8,14 @@ use super::*;
 
 /// Beta-Bernoulli posterior-predictive log-probability for a relaxed label
 /// `y ∈ [0, 1]`: `y·ln(α/(α+β)) + (1−y)·ln(β/(α+β))`.
-pub fn beta_bernoulli_log_predictive<T: LazyReal>(y: T, alpha: T, beta: T) -> T {
+pub fn beta_bernoulli_log_predictive<T: Real>(y: T, alpha: T, beta: T) -> T {
     let total = alpha.clone() + beta.clone();
     y.clone() * (alpha / total.clone()).ln() + (T::one() - y) * (beta / total).ln()
 }
 
 /// Beta-Bernoulli log marginal likelihood for `s` successes and `f` failures:
 /// `ln B(α+s, β+f) − ln B(α, β)`.
-pub fn beta_bernoulli_log_marginal_likelihood<T: LazyReal>(
+pub fn beta_bernoulli_log_marginal_likelihood<T: Real>(
     alpha: T,
     beta: T,
     successes: T,
@@ -28,7 +28,7 @@ pub fn beta_bernoulli_log_marginal_likelihood<T: LazyReal>(
 /// Gamma-Poisson (negative-binomial) posterior-predictive log-mass for a `count`
 /// over `exposure`:
 /// `ln Γ(α+k) − ln Γ(α) − ln k! + α·ln β + k·ln e − (α+k)·ln(β+e)`.
-pub fn gamma_poisson_log_predictive<T: LazyReal>(count: T, shape: T, rate: T, exposure: T) -> T {
+pub fn gamma_poisson_log_predictive<T: Real>(count: T, shape: T, rate: T, exposure: T) -> T {
     (shape.clone() + count.clone()).ln_gamma()
         - shape.clone().ln_gamma()
         - (count.clone() + T::one()).ln_gamma()
@@ -39,7 +39,7 @@ pub fn gamma_poisson_log_predictive<T: LazyReal>(count: T, shape: T, rate: T, ex
 
 /// Gamma-Exponential posterior-predictive log-density (a Lomax) on `x ≥ 0`:
 /// `ln α + α·ln β − (α+1)·ln(β + x)`.
-pub fn gamma_exponential_log_predictive<T: LazyReal>(x: T, shape: T, rate: T) -> T {
+pub fn gamma_exponential_log_predictive<T: Real>(x: T, shape: T, rate: T) -> T {
     shape.clone().ln() + shape.clone() * rate.clone().ln() - (shape + T::one()) * (rate + x).ln()
 }
 
@@ -49,7 +49,7 @@ pub fn gamma_exponential_log_predictive<T: LazyReal>(x: T, shape: T, rate: T) ->
 /// The Gaussian integral from completing the square in `µ`:
 /// `−½n·ln(2π σ²) + ½(ln λ₀ − ln λₙ) − ½·quad`, with `λ₀ = 1/τ₀²`, `λₙ = λ₀ + n/σ²`,
 /// `ηₙ = λ₀µ₀ + Σx/σ²`, and `quad = Σx²/σ² + λ₀µ₀² − ηₙ²/λₙ`.
-pub fn normal_known_variance_log_marginal_likelihood<T: LazyReal>(
+pub fn normal_known_variance_log_marginal_likelihood<T: Real>(
     count: T,
     sum: T,
     sum_sq: T,
@@ -74,7 +74,7 @@ pub fn normal_known_variance_log_marginal_likelihood<T: LazyReal>(
 /// `ln_factorial_sum = Σ ln kᵢ!` is the data-combinatorial term and is caller
 /// supplied (like the `ln_binomial` in [`binomial_log_pmf`]). For Poisson exposure
 /// offsets, pass `n = Σ eᵢ` and add the caller's `Σ kᵢ·ln eᵢ` to the result.
-pub fn gamma_poisson_log_marginal_likelihood<T: LazyReal>(
+pub fn gamma_poisson_log_marginal_likelihood<T: Real>(
     shape: T,
     rate: T,
     count_sum: T,
@@ -92,7 +92,7 @@ pub fn gamma_poisson_log_marginal_likelihood<T: LazyReal>(
 ///
 /// The same form carries the right-censored/exposure case: pass the failure count
 /// for `n` and the total exposure for `sum`.
-pub fn gamma_exponential_log_marginal_likelihood<T: LazyReal>(
+pub fn gamma_exponential_log_marginal_likelihood<T: Real>(
     shape: T,
     rate: T,
     count_n: T,
@@ -108,7 +108,7 @@ pub fn gamma_exponential_log_marginal_likelihood<T: LazyReal>(
 /// `ln C(trials, successes) + ln B(α+successes, β+failures) − ln B(α, β)`.
 ///
 /// `ln_binomial = ln C(trials, successes)` is caller supplied.
-pub fn beta_binomial_log_predictive<T: LazyReal>(
+pub fn beta_binomial_log_predictive<T: Real>(
     alpha: T,
     beta: T,
     successes: T,
@@ -127,7 +127,7 @@ pub fn beta_binomial_log_predictive<T: LazyReal>(
 /// `(λ, λµ, 2α, 2β+λµ²)`: `λₙ = λ₀+n`, `αₙ = α₀+n/2`, `λµₙ = λ₀µ₀+Σx`,
 /// `2βₙ = (2β₀+λ₀µ₀²+Σx²) − λµₙ²/λₙ`. This is also the **Normal-Gamma** evidence —
 /// the precision-parametrized twin shares the identical closed form.
-pub fn normal_inverse_gamma_log_marginal_likelihood<T: LazyReal>(
+pub fn normal_inverse_gamma_log_marginal_likelihood<T: Real>(
     count: T,
     sum: T,
     sum_sq: T,

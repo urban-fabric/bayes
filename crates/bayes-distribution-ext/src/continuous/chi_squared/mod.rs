@@ -2,9 +2,11 @@ use rand::Rng;
 use rand::distr::Distribution;
 
 use super::gamma::Gamma;
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
-use euclid::LazyReal;
+use bayes_core_ext::BayesError;
+use bayes_kernels as kernels;
+use euclid::{Compare, Real};
 
 /// The chi-squared distribution with `k > 0` degrees of freedom — equivalently
 /// `Gamma(shape = k/2, rate = 1/2)`. Support `(0, ∞)`.
@@ -45,7 +47,7 @@ impl Distribution<f64> for ChiSquared {
     }
 }
 
-impl<T: LazyReal> Support<T> for ChiSquared {
+impl<T: Real> Support<T> for ChiSquared {
     fn min(&self) -> T {
         T::zero()
     }
@@ -54,7 +56,7 @@ impl<T: LazyReal> Support<T> for ChiSquared {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for ChiSquared {
+impl<T: Real> ContinuousCdf<T> for ChiSquared {
     fn cdf(&self, x: T) -> T {
         self.gamma.cdf(x)
     }
@@ -84,11 +86,6 @@ impl Moments for ChiSquared {
         let h = self.freedom / 2.0;
         h + std::f64::consts::LN_2 + h.ln_gamma() + (1.0 - h) * h.digamma()
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -128,5 +125,33 @@ mod tests {
                 1e-12,
             );
         }
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for ChiSquared {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let half_freedom = T::scalar(0.5 * self.freedom());
+        kernels::chi_squared_log_pdf_on_support(x, half_freedom.clone(), half_freedom.ln_gamma())
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for ChiSquared
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

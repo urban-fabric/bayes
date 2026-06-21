@@ -1,10 +1,10 @@
 //! Euclid-generic closed-form probability kernels.
 //!
-//! This module is the `LazyReal`/`LazyComplex` companion to the concrete `f64`
+//! This module is the `Real`/`Complex` companion to the concrete `f64`
 //! distribution spine. The functions here are pure closed-form kernels: they do
 //! not validate parameters, check support membership, sample, branch on CDFs, or
 //! perform eager special-function work. Scalar constants are lifted through
-//! `LazyReal::scalar`; callers provide precomputed special-function values such
+//! `Real::scalar`; callers provide precomputed special-function values such
 //! as `ln Gamma(shape)` or `ln B(alpha, beta)`.
 //!
 //! That shape is intentional. Euclid's lazy traits are for tensor/expression
@@ -14,7 +14,7 @@
 
 pub mod primitives;
 
-use euclid::numeric::{LazyInteger, LazyReal};
+use euclid::numeric::{Integer, Real};
 
 pub use crate::primitives::{
     complex_normal_log_prob_with_normalizer, complex_residual_norm_sqr, normal_log_kernel,
@@ -22,24 +22,24 @@ pub use crate::primitives::{
 };
 
 /// Evaluate `exp(ln_density)`.
-pub fn density_from_log<T: LazyReal>(ln_density: T) -> T {
+pub fn density_from_log<T: Real>(ln_density: T) -> T {
     ln_density.exp()
 }
 
 /// Square a lazy scalar.
-pub fn square<T: LazyReal>(x: T) -> T {
+pub fn square<T: Real>(x: T) -> T {
     x.clone() * x
 }
 
 /// `ln I₀(x) = ln I₀ᵉ(x) + |x|` — the overflow-free Bessel log shared by the von Mises
-/// kernels, spelled over the [`LazyReal::ln_bessel_i0`] method.
-fn ln_i0<T: LazyReal>(x: T) -> T {
+/// kernels, spelled over the [`Real::ln_bessel_i0`] method.
+fn ln_i0<T: Real>(x: T) -> T {
     x.ln_bessel_i0()
 }
 
 /// `H² = (1 − BC).max(0)` — squared Hellinger from a Bhattacharyya coefficient.
 /// Shared by the per-family Hellinger kernels and the categorical reduction.
-fn hellinger_sq_from_bc<T: LazyReal>(bc: T) -> T {
+fn hellinger_sq_from_bc<T: Real>(bc: T) -> T {
     (T::one() - bc).max(T::zero())
 }
 

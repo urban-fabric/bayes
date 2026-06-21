@@ -1,12 +1,13 @@
 use std::f64::consts::PI;
 
+use crate::{Continuous, ContinuousDensityKernel};
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::Real;
 
 /// The Cauchy (Lorentz) distribution with location `x₀` and scale `γ > 0`. It has
 /// **no finite mean or variance** — the canonical example of [`Moments`] returning
@@ -55,7 +56,7 @@ impl Distribution<f64> for Cauchy {
     }
 }
 
-impl<T: LazyReal> Support<T> for Cauchy {
+impl<T: Real> Support<T> for Cauchy {
     fn min(&self) -> T {
         T::neg_infinity()
     }
@@ -64,7 +65,7 @@ impl<T: LazyReal> Support<T> for Cauchy {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Cauchy {
+impl<T: Real> ContinuousCdf<T> for Cauchy {
     fn cdf(&self, x: T) -> T {
         kernels::cauchy_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
@@ -93,11 +94,6 @@ impl Moments for Cauchy {
 
     fn variance(&self) -> f64 {
         f64::NAN
-    }
-
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
     }
 
     fn std_dev(&self) -> f64 {
@@ -133,5 +129,27 @@ mod tests {
         assert!(c.mean().is_nan());
         assert!(c.variance().is_nan());
         assert_eq!(c.median(), 1.0);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Cauchy {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::cauchy_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for Cauchy {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
     }
 }

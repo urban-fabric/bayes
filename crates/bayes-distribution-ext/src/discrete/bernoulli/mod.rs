@@ -1,9 +1,10 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
-use crate::{DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
-use euclid::{LazyCompare, LazyNatural, LazyReal};
+use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use bayes_kernels as kernels;
+use euclid::{Boolean, Compare, Element, Natural, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bernoulli {
@@ -40,7 +41,7 @@ impl Distribution<bool> for Bernoulli {
     }
 }
 
-impl<K: LazyNatural> Support<K> for Bernoulli {
+impl<K: Natural> Support<K> for Bernoulli {
     fn min(&self) -> K {
         K::zero()
     }
@@ -51,8 +52,8 @@ impl<K: LazyNatural> Support<K> for Bernoulli {
 
 impl<K> DiscreteCdf<K> for Bernoulli
 where
-    K: LazyNatural + LazyCompare,
-    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+    K: Natural + Compare,
+    K::Real: Compare<Mask = <K as Compare>::Mask>,
 {
     fn cdf(&self, k: K) -> K::Real {
         // `1 − p` at `k = 0`, else `1`.
@@ -89,11 +90,6 @@ impl Moments for Bernoulli {
         let q = 1.0 - self.p;
         -self.p.xlogy(self.p) - q.xlogy(q)
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -109,3 +105,45 @@ impl Moments for Bernoulli {
 
 #[cfg(test)]
 mod tests;
+
+// Mass kernel and discrete distribution traits.
+impl<N: Natural> DiscreteMassKernel<N> for Bernoulli {
+    fn ln_pmf_kernel(&self, k: N) -> N::Real {
+        kernels::bernoulli_log_pmf(k.to_real(), N::Real::scalar(self.p()))
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<N> Discrete<N> for Bernoulli
+where
+    N: Natural + Compare,
+    N::Real: Compare<Mask = <N as Compare>::Mask>,
+{
+    fn pmf(&self, k: N) -> N::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: N) -> N::Real {
+        let zero_count = N::zero();
+        let one_count = N::one();
+        let zero = N::Real::zero();
+
+        if self.p() <= 0.0 {
+            let valid = k.eq(&zero_count);
+            return <N::Real as Compare>::select(&valid, zero, N::Real::neg_infinity());
+        }
+
+        if self.p() >= 1.0 {
+            let valid = k.eq(&one_count);
+            return <N::Real as Compare>::select(&valid, zero, N::Real::neg_infinity());
+        }
+
+        let is_zero = k.eq(&zero_count);
+        let is_one = k.eq(&one_count);
+        let valid = is_zero.or(&is_one);
+        <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
+    }
+}

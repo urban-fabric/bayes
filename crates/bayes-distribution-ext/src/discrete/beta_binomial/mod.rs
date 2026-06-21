@@ -3,8 +3,10 @@ use rand::distr::Distribution;
 
 use crate::continuous::Beta;
 use crate::discrete::Binomial;
-use crate::{Discrete, DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
+use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use bayes_kernels as kernels;
+use euclid::{Compare, Natural, Real};
 
 /// The **beta-binomial** distribution: a binomial whose success probability is
 /// itself `Beta(α, β)`-distributed — equivalently, the marginal of `K | p ~
@@ -118,11 +120,6 @@ impl Moments for BetaBinomial {
             f64::NAN
         }
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -191,5 +188,39 @@ mod tests {
         let n = 60_000;
         let s: u64 = (0..n).map(|_| bb.sample(&mut rng)).sum();
         close(s as f64 / n as f64, bb.mean(), 0.03);
+    }
+}
+
+// Mass kernel and discrete distribution traits.
+impl<N: Natural> DiscreteMassKernel<N> for BetaBinomial {
+    fn ln_pmf_kernel(&self, k: N) -> N::Real {
+        let n = N::from_u64(self.trials());
+        let k_real = k.to_real();
+        let n_real = n.to_real();
+        let alpha = N::Real::scalar(self.alpha());
+        let beta = N::Real::scalar(self.beta());
+        let ln_beta_posterior =
+            (k_real.clone() + alpha.clone()).ln_beta(n_real - k_real + beta.clone());
+        kernels::beta_binomial_log_pmf(n.ln_binomial(&k), ln_beta_posterior, alpha.ln_beta(beta))
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<N> Discrete<N> for BetaBinomial
+where
+    N: Natural + Compare,
+    N::Real: Compare<Mask = <N as Compare>::Mask>,
+{
+    fn pmf(&self, k: N) -> N::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: N) -> N::Real {
+        let n = N::from_u64(self.trials());
+        let valid = k.le(&n);
+        <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
     }
 }

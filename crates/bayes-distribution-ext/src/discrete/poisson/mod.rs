@@ -1,9 +1,9 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
-use crate::{DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
-use euclid::{LazyCompare, LazyNatural, LazyReal};
+use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use euclid::{Compare, Element, Natural, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Poisson {
@@ -93,7 +93,7 @@ fn atkinson_pa<R: Rng + ?Sized>(rng: &mut R, lambda: f64) -> u64 {
     }
 }
 
-impl<K: LazyNatural> Support<K> for Poisson {
+impl<K: Natural> Support<K> for Poisson {
     fn min(&self) -> K {
         K::zero()
     }
@@ -104,8 +104,8 @@ impl<K: LazyNatural> Support<K> for Poisson {
 
 impl<K> DiscreteCdf<K> for Poisson
 where
-    K: LazyNatural + LazyCompare,
-    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+    K: Natural + Compare,
+    K::Real: Compare<Mask = <K as Compare>::Mask>,
 {
     fn cdf(&self, k: K) -> K::Real {
         K::Real::scalar(self.lambda).gamma_ur(k.to_real() + K::Real::one())
@@ -134,11 +134,6 @@ impl Moments for Poisson {
     fn mode(&self) -> f64 {
         self.lambda.floor()
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -154,3 +149,25 @@ impl Moments for Poisson {
 
 #[cfg(test)]
 mod tests;
+
+// Mass kernel and discrete distribution traits.
+impl<N: Natural> DiscreteMassKernel<N> for Poisson {
+    fn ln_pmf_kernel(&self, k: N) -> N::Real {
+        let lambda = N::Real::scalar(self.lambda());
+        k.to_real() * lambda.clone().ln() - lambda - k.ln_factorial()
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<N: Natural> Discrete<N> for Poisson {
+    fn pmf(&self, k: N) -> N::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k)
+    }
+}

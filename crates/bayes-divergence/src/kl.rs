@@ -11,7 +11,7 @@ use crate::{
     Frechet, Gamma, Geometric, Gumbel, HalfNormal, InverseGamma, Laplace, LogNormal, Moments,
     NegativeBinomial, Normal, Pareto, Poisson, Rayleigh, Uniform, VonMises, Wald, Weibull,
 };
-use euclid::LazyReal;
+use euclid::Real;
 
 /// Closed-form Kullback–Leibler divergence `D_KL(self ‖ other)`, in nats.
 ///

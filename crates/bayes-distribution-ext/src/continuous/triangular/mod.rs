@@ -2,9 +2,9 @@ use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::Real;
 
 /// The triangular distribution on `[lo, hi]` with mode `mode ∈ [lo, hi]` — a
 /// simple bounded distribution with a single peak.
@@ -60,7 +60,7 @@ impl Continuous for Triangular {
     }
 }
 
-impl<T: LazyReal> Support<T> for Triangular {
+impl<T: Real> Support<T> for Triangular {
     fn min(&self) -> T {
         T::scalar(self.lo)
     }
@@ -69,7 +69,7 @@ impl<T: LazyReal> Support<T> for Triangular {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Triangular {
+impl<T: Real> ContinuousCdf<T> for Triangular {
     fn cdf(&self, x: T) -> T {
         kernels::triangular_cdf(
             x,
@@ -103,11 +103,6 @@ impl Moments for Triangular {
     fn entropy(&self) -> f64 {
         0.5 + ((self.hi - self.lo) / 2.0).ln()
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }

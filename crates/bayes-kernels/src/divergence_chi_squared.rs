@@ -6,19 +6,19 @@ use super::*;
 // (`+∞` otherwise) is the caller's branch.
 
 /// Bernoulli χ²: `(p₀−p₁)² / (p₁(1−p₁))`.
-pub fn chi_squared_bernoulli<T: LazyReal>(p_self: T, p_other: T) -> T {
+pub fn chi_squared_bernoulli<T: Real>(p_self: T, p_other: T) -> T {
     let diff = p_self - p_other.clone();
     diff.clone() * diff / (p_other.clone() * (T::one() - p_other))
 }
 
 /// Poisson χ²: `exp((λ₀−λ₁)²/λ₁) − 1`.
-pub fn chi_squared_poisson<T: LazyReal>(rate_self: T, rate_other: T) -> T {
+pub fn chi_squared_poisson<T: Real>(rate_self: T, rate_other: T) -> T {
     let diff = rate_self - rate_other.clone();
     (diff.clone() * diff / rate_other).exp() - T::one()
 }
 
 /// Gaussian χ² interior (`2s₁² > s₀²`): `s₁²/(s₀·√d)·exp((m₀−m₁)²/d) − 1`, `d=2s₁²−s₀²`.
-pub fn chi_squared_normal_on_support<T: LazyReal>(
+pub fn chi_squared_normal_on_support<T: Real>(
     mean_self: T,
     std_self: T,
     mean_other: T,
@@ -31,13 +31,13 @@ pub fn chi_squared_normal_on_support<T: LazyReal>(
 }
 
 /// Exponential χ² interior (`2λ₀ > λ₁`): `λ₀²/(λ₁(2λ₀−λ₁)) − 1`.
-pub fn chi_squared_exponential_on_support<T: LazyReal>(rate_self: T, rate_other: T) -> T {
+pub fn chi_squared_exponential_on_support<T: Real>(rate_self: T, rate_other: T) -> T {
     let (l0, l1) = (rate_self, rate_other);
     l0.clone() * l0.clone() / (l1.clone() * (T::two() * l0 - l1)) - T::one()
 }
 
 /// Gamma χ² interior (`2a₀>a₁`, `2b₀>b₁`), via `ln_gamma`.
-pub fn chi_squared_gamma_on_support<T: LazyReal>(
+pub fn chi_squared_gamma_on_support<T: Real>(
     shape_self: T,
     rate_self: T,
     shape_other: T,
@@ -56,7 +56,7 @@ pub fn chi_squared_gamma_on_support<T: LazyReal>(
 
 /// von Mises χ² (always finite): `I₀(R)·I₀(κ₁)/I₀(κ₀)² − 1`,
 /// `R = √(4κ₀² + κ₁² − 4κ₀κ₁ cos Δµ)`.
-pub fn chi_squared_von_mises<T: LazyReal>(
+pub fn chi_squared_von_mises<T: Real>(
     mean_self: T,
     kappa_self: T,
     mean_other: T,
@@ -72,7 +72,7 @@ pub fn chi_squared_von_mises<T: LazyReal>(
 
 /// Binomial χ² for a matched trial count `n`: `(1 + χ²_Bernoulli)^n − 1`, always
 /// finite. A differing trial count is the caller's out-of-family branch.
-pub fn chi_squared_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+pub fn chi_squared_binomial<T: Real>(trials: T, p_self: T, p_other: T) -> T {
     let diff = p_self - p_other.clone();
     let chi_bernoulli = diff.clone() * diff / (p_other.clone() * (T::one() - p_other));
     (trials * (T::one() + chi_bernoulli).ln()).exp() - T::one()
@@ -81,11 +81,7 @@ pub fn chi_squared_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T 
 /// Negative-binomial χ² interior for a matched number of successes `r`
 /// (finite when `(1−p₀)² < 1−p₁`): `exp(r·(2 ln p₀ − ln p₁ − ln(1 − z))) − 1`,
 /// `z = (1−p₀)²/(1−p₁)`. The convergence test is the caller's branch.
-pub fn chi_squared_negative_binomial_on_support<T: LazyReal>(
-    successes: T,
-    p_self: T,
-    p_other: T,
-) -> T {
+pub fn chi_squared_negative_binomial_on_support<T: Real>(successes: T, p_self: T, p_other: T) -> T {
     let one = T::one();
     let q_self = one.clone() - p_self.clone();
     let z = q_self.clone() * q_self / (one.clone() - p_other.clone());
@@ -95,7 +91,7 @@ pub fn chi_squared_negative_binomial_on_support<T: LazyReal>(
 /// Wald / inverse-Gaussian χ² interior (mean µ, shape λ; finite when `2λ₀ > λ₁` and
 /// `2λ₀/µ₀² > λ₁/µ₁²`): `exp(ln λ₀ − ½ln λ₁ + 2λ₀/µ₀ − λ₁/µ₁ − ½ln la − √(aa·la)) − 1`,
 /// `la = 2λ₀ − λ₁`, `aa = 2λ₀/µ₀² − λ₁/µ₁²`. The convergence test is the caller's branch.
-pub fn chi_squared_wald_on_support<T: LazyReal>(
+pub fn chi_squared_wald_on_support<T: Real>(
     mean_self: T,
     shape_self: T,
     mean_other: T,
@@ -114,11 +110,11 @@ pub fn chi_squared_wald_on_support<T: LazyReal>(
 
 /// Uniform χ² on nested support: `w₁/w₀ − 1`, `w = b − a`. The containment test is
 /// the caller's branch.
-pub fn chi_squared_uniform_on_support<T: LazyReal>(width_self: T, width_other: T) -> T {
+pub fn chi_squared_uniform_on_support<T: Real>(width_self: T, width_other: T) -> T {
     width_other / width_self - T::one()
 }
 
 /// Discrete-uniform χ² on nested support: `n₁/n₀ − 1`, `n` the support count.
-pub fn chi_squared_discrete_uniform_on_support<T: LazyReal>(count_self: T, count_other: T) -> T {
+pub fn chi_squared_discrete_uniform_on_support<T: Real>(count_self: T, count_other: T) -> T {
     count_other / count_self - T::one()
 }

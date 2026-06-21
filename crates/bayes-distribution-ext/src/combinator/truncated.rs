@@ -2,8 +2,8 @@ use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousCdf, Support};
-use bayes_error::BayesError;
-use euclid::{LazyBool, LazyReal};
+use bayes_core_ext::BayesError;
+use euclid::{Boolean, Real};
 
 /// A continuous distribution **truncated** to the interval `[lo, hi]` and
 /// renormalized: density `f(x) / (F(hi) − F(lo))` on the interval, zero outside.
@@ -51,7 +51,7 @@ impl<D: ContinuousCdf> Truncated<D> {
 
 impl<T, D> Continuous<T> for Truncated<D>
 where
-    T: LazyReal,
+    T: Real,
     D: Continuous<T>,
 {
     fn pdf(&self, x: T) -> T {
@@ -68,7 +68,7 @@ where
     }
 }
 
-impl<T: LazyReal, D> Support<T> for Truncated<D> {
+impl<T: Real, D> Support<T> for Truncated<D> {
     fn min(&self) -> T {
         T::scalar(self.lo)
     }
@@ -79,7 +79,7 @@ impl<T: LazyReal, D> Support<T> for Truncated<D> {
 
 impl<T, D> ContinuousCdf<T> for Truncated<D>
 where
-    T: LazyReal,
+    T: Real,
     D: ContinuousCdf<T>,
 {
     fn cdf(&self, x: T) -> T {

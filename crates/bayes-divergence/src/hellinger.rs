@@ -7,7 +7,7 @@ use crate::{
     Bernoulli, Beta, Binomial, ChiSquared, DiscreteUniform, Exponential, Gamma, HalfNormal,
     InverseGamma, LogNormal, NegativeBinomial, Normal, Poisson, Uniform, VonMises, Wald,
 };
-use euclid::LazyReal;
+use euclid::Real;
 
 /// `H² = 1 − BC` clamped to `[0, ∞)` — the `max` only absorbs `O(ε)` rounding,
 /// since `BC ≤ 1` is proved (`bhattacharyya_le_one`).

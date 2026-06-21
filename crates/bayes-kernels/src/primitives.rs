@@ -1,8 +1,8 @@
 //! Scalar-generic probability primitives.
 //!
 //! The kernel-level closed forms are written over Euclid's lazy analysis traits:
-//! [`LazyReal`] for real-valued formulas and [`LazyComplex`] for complex-valued
-//! residuals. Scalar constants come from [`LazyReal::scalar`] and its helper
+//! [`Real`] for real-valued formulas and [`Complex`] for complex-valued
+//! residuals. Scalar constants come from [`Real::scalar`] and its helper
 //! methods, while precomputed special-function normalizers remain caller inputs.
 //! Concrete callers such as `f64`/`f32` satisfy the same lazy formulas through
 //! [`euclid::numeric::Real`].
@@ -11,11 +11,11 @@
 //! [`Normal`](crate::Normal)) remain the semantic authority, and their scalar
 //! methods are parity-tested against these generic primitives.
 
-use euclid::numeric::{LazyComplex, LazyReal};
+use euclid::numeric::{Complex, Real};
 
 /// Gaussian quadratic log-kernel `-½·((x-µ)/σ)²`, written over the lazy real
 /// analysis surface.
-pub fn normal_log_kernel<T: LazyReal>(x: T, mu: T, sigma: T) -> T {
+pub fn normal_log_kernel<T: Real>(x: T, mu: T, sigma: T) -> T {
     let z = (x - mu) / sigma;
     -(T::half() * z.clone() * z)
 }
@@ -24,20 +24,20 @@ pub fn normal_log_kernel<T: LazyReal>(x: T, mu: T, sigma: T) -> T {
 /// written over the lazy real analysis surface with a supplied normalizer.
 ///
 /// `half_log_2pi` is `0.5 * ln(2π)`.
-pub fn normal_log_prob_with_normalizer<T: LazyReal>(x: T, mu: T, sigma: T, half_log_2pi: T) -> T {
+pub fn normal_log_prob_with_normalizer<T: Real>(x: T, mu: T, sigma: T, half_log_2pi: T) -> T {
     let log_sigma = sigma.ln();
     normal_log_kernel(x, mu, sigma) - log_sigma - half_log_2pi
 }
 
 /// Gaussian log-density `ln N(x | µ, σ) = -½·((x-µ)/σ)² − ln σ − ½·ln(2π)`,
 /// with constants supplied from the lazy real tier.
-pub fn normal_log_prob<T: LazyReal>(x: T, mu: T, sigma: T) -> T {
+pub fn normal_log_prob<T: Real>(x: T, mu: T, sigma: T) -> T {
     normal_log_prob_with_normalizer(x, mu, sigma, T::half_ln_tau())
 }
 
 /// Backwards-compatible spelling for callers that already precompute both
 /// constants.
-pub fn normal_log_prob_with_constants<T: LazyReal>(
+pub fn normal_log_prob_with_constants<T: Real>(
     x: T,
     mu: T,
     sigma: T,
@@ -51,16 +51,16 @@ pub fn normal_log_prob_with_constants<T: LazyReal>(
 
 /// Squared complex residual `|z - µ|²`, written over the lazy complex analysis
 /// surface.
-pub fn complex_residual_norm_sqr<T: LazyComplex>(z: T, mu: T) -> T::RealPart {
+pub fn complex_residual_norm_sqr<T: Complex>(z: T, mu: T) -> T::RealPart {
     (z - mu).norm_sqr()
 }
 
 /// Circular complex-normal log-density kernel
-/// `-|z-µ|² / variance - log(π·variance)`, written over [`LazyComplex`].
+/// `-|z-µ|² / variance - log(π·variance)`, written over [`Complex`].
 ///
 /// `log_pi_variance` is supplied by the caller because it is usually cached with
 /// the complex variance parameter.
-pub fn complex_normal_log_prob_with_normalizer<T: LazyComplex>(
+pub fn complex_normal_log_prob_with_normalizer<T: Complex>(
     z: T,
     mu: T,
     variance: T::RealPart,

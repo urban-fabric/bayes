@@ -2,7 +2,7 @@
 
 use super::{Conjugate, Pair};
 use crate::{Bernoulli, Beta, BetaBinomial};
-use euclid::{LazyNatural, LazyReal};
+use euclid::{Natural, Real};
 
 /// **Beta–Bernoulli.** A `Beta(α, β)` prior on a Bernoulli success probability;
 /// posterior `Beta(α + #successes, β + #failures)`.

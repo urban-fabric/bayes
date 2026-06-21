@@ -5,8 +5,8 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use bayes_core_ext::BayesError;
 use bayes_distribution_ext::Exponential;
-use bayes_error::BayesError;
 
 /// A homogeneous Poisson process with constant `rate λ > 0`.
 #[derive(Clone, Copy, Debug, PartialEq)]

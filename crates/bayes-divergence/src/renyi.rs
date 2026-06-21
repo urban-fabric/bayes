@@ -8,7 +8,7 @@ use crate::{
     Bernoulli, Binomial, Categorical, ChiSquared, DiscreteUniform, Gamma, HalfNormal, InverseGamma,
     LogNormal, NegativeBinomial, Normal, Uniform, VonMises, Wald,
 };
-use euclid::LazyReal;
+use euclid::Real;
 
 /// Tolerance for snapping `α` to the KL limit (`α = 1`).
 const ALPHA_KL: f64 = 1e-12;

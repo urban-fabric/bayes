@@ -5,10 +5,16 @@
 //! conveniences such as fitting and sampling.
 #![cfg_attr(test, allow(clippy::expect_used, clippy::panic, clippy::unwrap_used))]
 
-use euclid::{LazyElement, LazyInteger, LazyNatural, LazyReal};
+pub mod constraint;
+
+pub use constraint::{
+    Boundary, Constrained, Constraint, IntegerConstraint, NaturalConstraint, RealConstraint,
+};
+
+use euclid::{Element, Integer, Natural, Real};
 
 /// Continuous probability density, the PDF `f(x)`.
-pub trait Continuous<T: LazyReal = f64> {
+pub trait Continuous<T: Real = f64> {
     /// The density at `x`.
     fn pdf(&self, x: T) -> T;
 
@@ -21,11 +27,11 @@ pub trait Continuous<T: LazyReal = f64> {
 /// This companion to [`Continuous`] intentionally does not perform support
 /// checks or host-`bool` branching. It is the closed-form algebra for points
 /// already known to lie on the continuous support.
-pub trait ContinuousDensityKernel<T: LazyReal = f64> {
-    /// `ln f(x)` over a [`LazyReal`] substrate.
+pub trait ContinuousDensityKernel<T: Real = f64> {
+    /// `ln f(x)` over a [`Real`] substrate.
     fn ln_pdf_kernel(&self, x: T) -> T;
 
-    /// `f(x) = exp(ln f(x))` over the same [`LazyReal`] substrate.
+    /// `f(x) = exp(ln f(x))` over the same [`Real`] substrate.
     fn pdf_kernel(&self, x: T) -> T;
 }
 
@@ -34,13 +40,16 @@ pub trait ContinuousDensityKernel<T: LazyReal = f64> {
 /// Undefined or unavailable summaries are represented as `NaN`, so formulas can
 /// remain value-level and lazy backends can express parameter-dependent existence
 /// with `select` rather than host-side `Option` branching.
-pub trait Moments<R: LazyReal = f64> {
+pub trait Moments<R: Real = f64> {
     fn mean(&self) -> R;
 
     fn variance(&self) -> R;
 
     /// The raw second moment `E[X^2] = Var(X) + E[X]^2`.
-    fn moment2(&self) -> R;
+    fn moment2(&self) -> R {
+        let mean = self.mean();
+        self.variance() + mean.clone() * mean
+    }
 
     fn std_dev(&self) -> R;
 
@@ -65,13 +74,13 @@ pub trait Support<X = f64> {
 }
 
 /// Cumulative distribution, survival, and inverse for a continuous distribution.
-pub trait ContinuousCdf<X: LazyReal = f64>: Support<X> {
+pub trait ContinuousCdf<X: Real = f64>: Support<X> {
     /// `P(X <= x)`.
     fn cdf(&self, x: X) -> X;
 
     /// Survival `P(X > x) = 1 - cdf(x)`.
     fn sf(&self, x: X) -> X {
-        <X as LazyElement>::one() - self.cdf(x)
+        <X as Element>::one() - self.cdf(x)
     }
 
     /// The quantile / inverse CDF.
@@ -89,13 +98,13 @@ pub trait ContinuousCdf<X: LazyReal = f64>: Support<X> {
 
     /// The inverse survival function.
     fn isf(&self, p: X) -> X {
-        self.inverse_cdf(<X as LazyElement>::one() - p)
+        self.inverse_cdf(<X as Element>::one() - p)
     }
 }
 
 /// Cumulative distribution, survival, and inverse for a natural-count discrete
 /// distribution.
-pub trait DiscreteCdf<K: LazyNatural = u64>: Support<K> {
+pub trait DiscreteCdf<K: Natural = u64>: Support<K> {
     /// `P(X <= k)`.
     fn cdf(&self, k: K) -> K::Real;
 
@@ -104,7 +113,7 @@ pub trait DiscreteCdf<K: LazyNatural = u64>: Support<K> {
     where
         K: Copy,
     {
-        <K::Real as LazyElement>::one() - self.cdf(k)
+        <K::Real as Element>::one() - self.cdf(k)
     }
 
     /// The smallest `k` with `cdf(k) >= p`.
@@ -125,13 +134,13 @@ pub trait DiscreteCdf<K: LazyNatural = u64>: Support<K> {
 
     /// The inverse survival function.
     fn isf(&self, p: K::Real) -> K {
-        self.inverse_cdf(<K::Real as LazyElement>::one() - p)
+        self.inverse_cdf(<K::Real as Element>::one() - p)
     }
 }
 
 /// Cumulative distribution, survival, and inverse for a signed-integer discrete
 /// distribution.
-pub trait IntegerDiscreteCdf<K: LazyInteger = i64>: Support<K> {
+pub trait IntegerDiscreteCdf<K: Integer = i64>: Support<K> {
     /// `P(X <= k)`.
     fn cdf(&self, k: K) -> K::Real;
 
@@ -140,7 +149,7 @@ pub trait IntegerDiscreteCdf<K: LazyInteger = i64>: Support<K> {
     where
         K: Copy,
     {
-        <K::Real as LazyElement>::one() - self.cdf(k)
+        <K::Real as Element>::one() - self.cdf(k)
     }
 
     /// The smallest `k` with `cdf(k) >= p`.
@@ -161,12 +170,12 @@ pub trait IntegerDiscreteCdf<K: LazyInteger = i64>: Support<K> {
 
     /// The inverse survival function.
     fn isf(&self, p: K::Real) -> K {
-        self.inverse_cdf(<K::Real as LazyElement>::one() - p)
+        self.inverse_cdf(<K::Real as Element>::one() - p)
     }
 }
 
 /// Discrete probability mass, the PMF `P(X = k)` over natural counts.
-pub trait Discrete<K: LazyNatural = u64> {
+pub trait Discrete<K: Natural = u64> {
     /// The mass at `k`.
     fn pmf(&self, k: K) -> K::Real;
 
@@ -176,7 +185,7 @@ pub trait Discrete<K: LazyNatural = u64> {
 
 /// Signed-integer discrete probability mass for distributions whose support
 /// lives on `Z` rather than `N`.
-pub trait IntegerDiscrete<K: LazyInteger = i64> {
+pub trait IntegerDiscrete<K: Integer = i64> {
     /// The mass at `k`.
     fn pmf(&self, k: K) -> K::Real;
 
@@ -186,10 +195,10 @@ pub trait IntegerDiscrete<K: LazyInteger = i64> {
 
 /// Lazy-real discrete mass formula on a natural-count support.
 ///
-/// Counts are represented by [`LazyNatural`] so formulas can use exact
-/// combinatorial helpers before crossing into the associated [`LazyReal`]
+/// Counts are represented by [`Natural`] so formulas can use exact
+/// combinatorial helpers before crossing into the associated [`Real`]
 /// analysis surface.
-pub trait DiscreteMassKernel<K: LazyNatural = u64> {
+pub trait DiscreteMassKernel<K: Natural = u64> {
     /// `ln P(X = k)` over a lazy natural count substrate.
     fn ln_pmf_kernel(&self, k: K) -> K::Real;
 
@@ -198,7 +207,7 @@ pub trait DiscreteMassKernel<K: LazyNatural = u64> {
 }
 
 /// Lazy-real signed-integer mass formula on an integer support.
-pub trait IntegerMassKernel<K: LazyInteger = i64> {
+pub trait IntegerMassKernel<K: Integer = i64> {
     /// `ln P(X = k)` over a lazy integer substrate.
     fn ln_pmf_kernel(&self, k: K) -> K::Real;
 

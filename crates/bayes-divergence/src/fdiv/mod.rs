@@ -52,7 +52,7 @@
 //! `+∞` where it does not (KL, χ²).
 
 use crate::validate_row_stochastic;
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 
 /// A convex **generator** `f : (0, ∞) → ℝ` with `f(1) = 0`, defining the
 /// f-divergence `D_f(p ‖ q) = Σ qᵢ f(pᵢ/qᵢ)` via [`f_divergence`].

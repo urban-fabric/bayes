@@ -1,10 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::{Compare, Real};
 
 /// The Pareto distribution with `scale x_m > 0` (the minimum) and `shape α > 0`,
 /// support `[x_m, ∞)`. Density `f(x) = α x_mᵅ / x^{α+1}` for `x ≥ x_m`.
@@ -42,7 +43,7 @@ impl Distribution<f64> for Pareto {
     }
 }
 
-impl<T: LazyReal> Support<T> for Pareto {
+impl<T: Real> Support<T> for Pareto {
     fn min(&self) -> T {
         T::scalar(self.scale)
     }
@@ -51,7 +52,7 @@ impl<T: LazyReal> Support<T> for Pareto {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Pareto {
+impl<T: Real> ContinuousCdf<T> for Pareto {
     fn cdf(&self, x: T) -> T {
         kernels::pareto_cdf(x, T::scalar(self.scale), T::scalar(self.shape))
     }
@@ -89,11 +90,6 @@ impl Moments for Pareto {
     fn entropy(&self) -> f64 {
         (self.scale / self.shape).ln() + 1.0 / self.shape + 1.0
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -141,5 +137,32 @@ mod tests {
         close(p.mean(), 3.0 * 2.0 / 2.0, 1e-12);
         assert!(Pareto::new(1.0, 1.5).unwrap().variance().is_nan());
         assert!(Pareto::new(1.0, 0.8).unwrap().mean().is_nan());
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Pareto {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::pareto_log_pdf_on_support(x, T::scalar(self.scale()), T::scalar(self.shape()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Pareto
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let min = T::scalar(self.scale());
+        let valid = x.ge(&min);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

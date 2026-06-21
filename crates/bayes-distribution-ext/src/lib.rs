@@ -19,12 +19,12 @@ pub mod continuous;
 pub mod discrete;
 pub mod exponential_family;
 pub mod functional;
+#[cfg(test)]
 mod kernel_impls;
 pub mod transformed;
 
 // Re-export the whole trait spine + foundation modules so in-crate `crate::<Spine>`
 // paths resolve and downstream `use bayes_distribution_ext::*` gets the full contract.
-pub use bayes_core_ext::constraint;
 pub use bayes_core_ext::*;
 
 pub use combinator::{Mixture, OrderStatistic, Truncated};

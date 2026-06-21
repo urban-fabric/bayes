@@ -2,13 +2,11 @@ use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::normal::standard_normal_polar;
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
-
-#[cfg(test)]
-use crate::Continuous;
+use euclid::{Compare, Real};
 
 /// The gamma distribution with `shape (k) > 0` and `rate (β) > 0` (mean `k/β`),
 /// support `(0, ∞)`. Density `f(x) = βᵏ x^{k-1} e^{-βx} / Γ(k)`.
@@ -94,7 +92,7 @@ impl Distribution<f64> for Gamma {
     }
 }
 
-impl<T: LazyReal> Support<T> for Gamma {
+impl<T: Real> Support<T> for Gamma {
     fn min(&self) -> T {
         T::zero()
     }
@@ -103,7 +101,7 @@ impl<T: LazyReal> Support<T> for Gamma {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Gamma {
+impl<T: Real> ContinuousCdf<T> for Gamma {
     fn cdf(&self, x: T) -> T {
         kernels::gamma_cdf(x, T::scalar(self.shape), T::scalar(self.rate))
     }
@@ -137,11 +135,6 @@ impl Moments for Gamma {
             0.0
         }
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -217,10 +210,10 @@ mod tests {
 
     #[test]
     fn cdf_trait_is_generic_over_lazyreal() {
-        // The eager CDF/quantile surface now runs on any `LazyReal` carrier, not just
+        // The eager CDF/quantile surface now runs on any `Real` carrier, not just
         // `f64` — demonstrated on `f32` (a second host carrier) through a generic bound.
         // The quantile path also exercises the `while_loop` bisection on `f32`.
-        fn roundtrip<T: LazyReal, D: ContinuousCdf<T>>(d: &D, p: T) -> T {
+        fn roundtrip<T: Real, D: ContinuousCdf<T>>(d: &D, p: T) -> T {
             d.cdf(d.inverse_cdf(p))
         }
         let g = Gamma::new(2.5, 1.0).unwrap();
@@ -228,5 +221,38 @@ mod tests {
         assert!((r32 - 0.4).abs() < 1e-3, "f32 roundtrip {r32}");
         let r64: f64 = roundtrip(&g, 0.4_f64);
         assert!((r64 - 0.4).abs() < 1e-8);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Gamma {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let shape = T::scalar(self.shape());
+        kernels::gamma_log_pdf_on_support(
+            x,
+            shape.clone(),
+            T::scalar(self.rate()),
+            shape.ln_gamma(),
+        )
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Gamma
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

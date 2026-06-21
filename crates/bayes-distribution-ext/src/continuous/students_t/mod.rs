@@ -1,17 +1,15 @@
 use std::f64::consts::PI;
 
+use crate::{Continuous, ContinuousDensityKernel};
 use rand::Rng;
 use rand::distr::Distribution;
 
 use super::chi_squared::ChiSquared;
 use crate::normal::standard_normal_polar;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
-
-#[cfg(test)]
-use crate::Continuous;
+use euclid::Real;
 
 /// Student's t-distribution with `ν > 0` degrees of freedom and an optional
 /// **location** `μ` and **scale** `σ > 0`: `X = μ + σ·T`, where `T` is the standard
@@ -119,7 +117,7 @@ impl Distribution<f64> for StudentT {
     }
 }
 
-impl<T: LazyReal> Support<T> for StudentT {
+impl<T: Real> Support<T> for StudentT {
     fn min(&self) -> T {
         T::neg_infinity()
     }
@@ -128,7 +126,7 @@ impl<T: LazyReal> Support<T> for StudentT {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for StudentT {
+impl<T: Real> ContinuousCdf<T> for StudentT {
     fn cdf(&self, x: T) -> T {
         kernels::students_t_cdf(
             x,
@@ -174,11 +172,6 @@ impl Moments for StudentT {
     fn mode(&self) -> f64 {
         self.location
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -240,5 +233,37 @@ mod tests {
         close(affine.location(), -0.5, 1e-12);
         close(affine.scale(), 3.0, 1e-12);
         assert!(ls.affine(0.0, 1.0).is_err());
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for StudentT {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let freedom = T::scalar(self.freedom());
+        let log_normalizer = T::half() * (freedom.clone() * T::pi()).ln()
+            + (freedom.clone() * T::half()).ln_gamma()
+            - ((freedom.clone() + T::one()) * T::half()).ln_gamma();
+        kernels::student_t_log_pdf(
+            x,
+            T::scalar(self.location()),
+            T::scalar(self.scale()),
+            freedom,
+            log_normalizer,
+        )
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for StudentT {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
     }
 }

@@ -1,13 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
-
-#[cfg(test)]
-use crate::Continuous;
+use euclid::{Compare, Real};
 
 /// The exponential distribution with rate `λ > 0` (mean `1/λ`), support `[0, ∞)`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,7 +41,7 @@ impl Distribution<f64> for Exponential {
     }
 }
 
-impl<T: LazyReal> Support<T> for Exponential {
+impl<T: Real> Support<T> for Exponential {
     fn min(&self) -> T {
         T::zero()
     }
@@ -52,7 +50,7 @@ impl<T: LazyReal> Support<T> for Exponential {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Exponential {
+impl<T: Real> ContinuousCdf<T> for Exponential {
     fn cdf(&self, x: T) -> T {
         kernels::exponential_cdf(x, T::scalar(self.rate))
     }
@@ -91,11 +89,6 @@ impl Moments for Exponential {
     fn mode(&self) -> f64 {
         0.0
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -128,5 +121,32 @@ mod tests {
         close(e.mean(), 0.5, 1e-12);
         close(e.variance(), 0.25, 1e-12);
         close(e.median(), std::f64::consts::LN_2 / 2.0, 1e-12);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Exponential {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::exponential_log_pdf_on_support(x, T::scalar(self.rate()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Exponential
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.ge(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

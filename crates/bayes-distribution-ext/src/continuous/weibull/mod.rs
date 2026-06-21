@@ -1,10 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::{Compare, Real};
 
 /// The Weibull distribution with `scale λ > 0` and `shape k > 0`, support `[0, ∞)`.
 /// Density `f(x) = (k/λ)(x/λ)^{k-1} exp(-(x/λ)^k)`.
@@ -42,7 +43,7 @@ impl Distribution<f64> for Weibull {
     }
 }
 
-impl<T: LazyReal> Support<T> for Weibull {
+impl<T: Real> Support<T> for Weibull {
     fn min(&self) -> T {
         T::zero()
     }
@@ -51,7 +52,7 @@ impl<T: LazyReal> Support<T> for Weibull {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Weibull {
+impl<T: Real> ContinuousCdf<T> for Weibull {
     fn cdf(&self, x: T) -> T {
         kernels::weibull_cdf(x, T::scalar(self.scale), T::scalar(self.shape))
     }
@@ -89,11 +90,6 @@ impl Moments for Weibull {
         let (k, l) = (self.shape, self.scale);
         EULER_GAMMA * (1.0 - 1.0 / k) + (l / k).ln() + 1.0
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -135,5 +131,32 @@ mod tests {
         let n = 60_000;
         let s: f64 = (0..n).map(|_| w.sample(&mut rng)).sum();
         close(s / n as f64, w.mean(), 0.02);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Weibull {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::weibull_log_pdf_on_support(x, T::scalar(self.scale()), T::scalar(self.shape()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Weibull
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.ge(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

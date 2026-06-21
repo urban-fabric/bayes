@@ -1,10 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::{Compare, Real};
 
 /// The Fréchet (type-II generalized extreme value) distribution with shape
 /// `α > 0` and scale `s > 0`, support `(0, ∞)`. CDF `F(x) = exp(−(x/s)^{−α})`; the
@@ -87,11 +88,6 @@ impl Moments for Frechet {
     fn mode(&self) -> f64 {
         self.scale * (self.shape / (self.shape + 1.0)).powf(1.0 / self.shape)
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -142,5 +138,32 @@ mod tests {
         let mut xs: Vec<f64> = (0..n).map(|_| d.sample(&mut rng)).collect();
         xs.sort_by(f64::total_cmp);
         close(xs[n / 2], d.median(), 0.03);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Frechet {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::frechet_log_pdf_on_support(x, T::scalar(self.scale()), T::scalar(self.shape()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Frechet
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

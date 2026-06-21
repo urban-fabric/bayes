@@ -9,8 +9,8 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bayes-error.workspace = true
 euclid.workspace = true
+bayes-core-ext.workspace = true
 bayes-kernels.workspace = true
 bayes-distribution-ext.workspace = true
 bayes-divergence.workspace = true

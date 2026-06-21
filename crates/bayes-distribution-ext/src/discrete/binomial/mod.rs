@@ -1,9 +1,9 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
-use crate::{Discrete, DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
-use euclid::{LazyBool, LazyCompare, LazyNatural, LazyReal};
+use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use euclid::{Boolean, Compare, Element, Natural, Real};
 
 /// The binomial distribution: the number of successes in `n` independent trials,
 /// each with success probability `p ∈ [0, 1]`. Support `{0, …, n}`.
@@ -35,7 +35,7 @@ impl Distribution<u64> for Binomial {
     }
 }
 
-impl<K: LazyNatural> Support<K> for Binomial {
+impl<K: Natural> Support<K> for Binomial {
     fn min(&self) -> K {
         K::zero()
     }
@@ -46,8 +46,8 @@ impl<K: LazyNatural> Support<K> for Binomial {
 
 impl<K> DiscreteCdf<K> for Binomial
 where
-    K: LazyNatural + LazyCompare,
-    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+    K: Natural + Compare,
+    K::Real: Compare<Mask = <K as Compare>::Mask>,
 {
     fn cdf(&self, k: K) -> K::Real {
         // `1` at or above `n`, else the regularized incomplete beta `I_{1−p}(n−k, k+1)`.
@@ -96,11 +96,6 @@ impl Moments for Binomial {
         }
         h
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -141,5 +136,49 @@ mod tests {
         let b = Binomial::new(5, 0.4).unwrap();
         close(b.pmf(0_u64), 0.6f64.powi(5), 1e-12);
         close(b.pmf(5_u64), 0.4f64.powi(5), 1e-12);
+    }
+}
+
+// Mass kernel and discrete distribution traits.
+impl<N: Natural> DiscreteMassKernel<N> for Binomial {
+    fn ln_pmf_kernel(&self, k: N) -> N::Real {
+        let n = N::from_u64(self.trials());
+        let p = N::Real::scalar(self.p());
+        let k_real = k.to_real();
+        let failures = n.to_real() - k_real.clone();
+        n.ln_binomial(&k) + k_real * p.clone().ln() + failures * (N::Real::one() - p).ln()
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<N> Discrete<N> for Binomial
+where
+    N: Natural + Compare,
+    N::Real: Compare<Mask = <N as Compare>::Mask>,
+{
+    fn pmf(&self, k: N) -> N::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: N) -> N::Real {
+        let zero_count = N::zero();
+        let n = N::from_u64(self.trials());
+        let zero = N::Real::zero();
+
+        if self.p() <= 0.0 {
+            let valid = k.eq(&zero_count);
+            return <N::Real as Compare>::select(&valid, zero, N::Real::neg_infinity());
+        }
+
+        if self.p() >= 1.0 {
+            let valid = k.eq(&n);
+            return <N::Real as Compare>::select(&valid, zero, N::Real::neg_infinity());
+        }
+
+        let valid = k.le(&n);
+        <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
     }
 }

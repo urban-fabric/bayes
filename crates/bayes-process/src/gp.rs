@@ -1,24 +1,24 @@
 //! Gaussian-process kernels and the GP marginal-likelihood objective.
 //!
 //! The [`Kernel`] contract defines a covariance as a function of a (pre-computed) separation and
-//! a flat hyperparameter vector `θ`, **generic over the backend scalar** `T: LazyReal`. The same
+//! a flat hyperparameter vector `θ`, **generic over the backend scalar** `T: Real`. The same
 //! kernel therefore lowers two ways from one definition: applied to a whole distance *matrix*
 //! tensor it builds the covariance in one elementwise op (so it compiles to XLA / runs on
 //! `maxwell`); applied per pair to `f64` it is the eager reference. Kernels delegate their closed
 //! forms to `bayes_kernels` correlation functions and compose through [`Sum`] / [`Product`].
 //!
-//! These kernels are **numeric-only** (scalar, `T: LazyReal`): one definition lowers
+//! These kernels are **numeric-only** (scalar, `T: Real`): one definition lowers
 //! elementwise onto a distance *matrix* tensor (so the covariance assembly compiles to
 //! XLA on `maxwell`) and per-pair onto `f64` (the eager reference). The matrix-coupled GP
 //! marginal-likelihood objective that consumes these covariances lives in the backend
 //! (`maxwell::dist` / `markov`), where the tensor is concrete.
 
-use euclid::numeric::LazyReal;
+use euclid::numeric::Real;
 
 use bayes_kernels as kernels;
 
 /// A covariance kernel `k(d; θ)`: covariance from a separation `distance` and a flat
-/// hyperparameter vector `θ` (in declaration order). Generic over `T: LazyReal`, so one
+/// hyperparameter vector `θ` (in declaration order). Generic over `T: Real`, so one
 /// definition lowers elementwise on a distance tensor (XLA) and per pair on `f64` (eager).
 ///
 /// Not object-safe (the `covariance` method is generic); kernels compose by *type*
@@ -27,7 +27,7 @@ pub trait Kernel {
     /// How many hyperparameters this kernel consumes from `θ`.
     fn hyper_count(&self) -> usize;
     /// Covariance `k(distance; θ)`.
-    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T;
+    fn covariance<T: Real>(&self, distance: T, theta: &[T]) -> T;
 }
 
 /// Squared-exponential (RBF) kernel; `θ = [length_scale, variance]`.
@@ -37,7 +37,7 @@ impl Kernel for Rbf {
     fn hyper_count(&self) -> usize {
         2
     }
-    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T {
+    fn covariance<T: Real>(&self, distance: T, theta: &[T]) -> T {
         theta[1].clone() * kernels::squared_exponential_correlation(distance, theta[0].clone())
     }
 }
@@ -49,7 +49,7 @@ impl Kernel for Exponential {
     fn hyper_count(&self) -> usize {
         2
     }
-    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T {
+    fn covariance<T: Real>(&self, distance: T, theta: &[T]) -> T {
         theta[1].clone() * kernels::exponential_correlation(distance, theta[0].clone())
     }
 }
@@ -61,7 +61,7 @@ impl Kernel for Matern52 {
     fn hyper_count(&self) -> usize {
         2
     }
-    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T {
+    fn covariance<T: Real>(&self, distance: T, theta: &[T]) -> T {
         theta[1].clone() * kernels::matern_52_correlation(distance, theta[0].clone())
     }
 }
@@ -73,7 +73,7 @@ impl Kernel for Matern32 {
     fn hyper_count(&self) -> usize {
         2
     }
-    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T {
+    fn covariance<T: Real>(&self, distance: T, theta: &[T]) -> T {
         theta[1].clone() * kernels::matern_32_correlation(distance, theta[0].clone())
     }
 }
@@ -85,7 +85,7 @@ impl<A: Kernel, B: Kernel> Kernel for Sum<A, B> {
     fn hyper_count(&self) -> usize {
         self.0.hyper_count() + self.1.hyper_count()
     }
-    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T {
+    fn covariance<T: Real>(&self, distance: T, theta: &[T]) -> T {
         let (a, b) = theta.split_at(self.0.hyper_count());
         self.0.covariance(distance.clone(), a) + self.1.covariance(distance, b)
     }
@@ -98,7 +98,7 @@ impl<A: Kernel, B: Kernel> Kernel for Product<A, B> {
     fn hyper_count(&self) -> usize {
         self.0.hyper_count() + self.1.hyper_count()
     }
-    fn covariance<T: LazyReal>(&self, distance: T, theta: &[T]) -> T {
+    fn covariance<T: Real>(&self, distance: T, theta: &[T]) -> T {
         let (a, b) = theta.split_at(self.0.hyper_count());
         self.0.covariance(distance.clone(), a) * self.1.covariance(distance, b)
     }

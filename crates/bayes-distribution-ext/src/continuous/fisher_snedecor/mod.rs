@@ -2,10 +2,11 @@ use rand::Rng;
 use rand::distr::Distribution;
 
 use super::chi_squared::ChiSquared;
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::{Compare, Real};
 
 /// The F (Fisher–Snedecor) distribution with numerator/denominator degrees of
 /// freedom `d1, d2 > 0`, support `(0, ∞)` — the ratio of two scaled χ².
@@ -49,7 +50,7 @@ impl Distribution<f64> for FisherSnedecor {
     }
 }
 
-impl<T: LazyReal> Support<T> for FisherSnedecor {
+impl<T: Real> Support<T> for FisherSnedecor {
     fn min(&self) -> T {
         T::zero()
     }
@@ -58,7 +59,7 @@ impl<T: LazyReal> Support<T> for FisherSnedecor {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for FisherSnedecor {
+impl<T: Real> ContinuousCdf<T> for FisherSnedecor {
     fn cdf(&self, x: T) -> T {
         kernels::fisher_snedecor_cdf(x, T::scalar(self.d1), T::scalar(self.d2))
     }
@@ -90,11 +91,6 @@ impl Moments for FisherSnedecor {
             0.0
         }
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -134,5 +130,37 @@ mod tests {
         close(f.mean(), 10.0 / 8.0, 1e-12);
         assert!(FisherSnedecor::new(5.0, 2.0).unwrap().mean().is_nan());
         close(f.inverse_cdf(0.95), 3.325_835, 1e-3);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for FisherSnedecor {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let d1 = T::scalar(self.d1());
+        let d2 = T::scalar(self.d2());
+        let half_d1 = d1.clone() * T::half();
+        let half_d2 = d2.clone() * T::half();
+        let ln_beta = half_d1.clone().ln_beta(half_d2.clone());
+        kernels::fisher_snedecor_log_pdf_on_support(x, d1, d2, half_d1, half_d2, ln_beta)
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for FisherSnedecor
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

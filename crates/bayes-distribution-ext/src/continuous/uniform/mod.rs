@@ -1,10 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::{Boolean, Compare, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Uniform {
@@ -63,7 +64,7 @@ impl Distribution<f64> for Uniform {
     }
 }
 
-impl<T: LazyReal> Support<T> for Uniform {
+impl<T: Real> Support<T> for Uniform {
     fn min(&self) -> T {
         T::scalar(self.lo)
     }
@@ -72,7 +73,7 @@ impl<T: LazyReal> Support<T> for Uniform {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Uniform {
+impl<T: Real> ContinuousCdf<T> for Uniform {
     fn cdf(&self, x: T) -> T {
         kernels::uniform_cdf(x, T::scalar(self.lo), T::scalar(self.width))
     }
@@ -104,11 +105,6 @@ impl Moments for Uniform {
     fn median(&self) -> f64 {
         self.lo + self.width / 2.0
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -131,3 +127,31 @@ impl Estimate for Uniform {
 
 #[cfg(test)]
 mod tests;
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Uniform {
+    fn ln_pdf_kernel(&self, _x: T) -> T {
+        kernels::uniform_log_pdf_on_support(T::scalar(self.hi() - self.lo()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Uniform
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let lo = T::scalar(self.lo());
+        let hi = T::scalar(self.hi());
+        let valid = x.ge(&lo).and(&x.le(&hi));
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}

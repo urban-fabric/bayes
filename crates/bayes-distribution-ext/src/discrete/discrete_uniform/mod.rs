@@ -1,8 +1,10 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
-use crate::{IntegerDiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
+use crate::{IntegerDiscrete, IntegerDiscreteCdf, IntegerMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use bayes_kernels as kernels;
+use euclid::{Boolean, Compare, Integer, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DiscreteUniform {
@@ -90,11 +92,6 @@ impl Moments for DiscreteUniform {
     fn entropy(&self) -> f64 {
         self.n().ln()
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -110,3 +107,33 @@ impl Moments for DiscreteUniform {
 
 #[cfg(test)]
 mod tests;
+
+// Mass kernel and discrete distribution traits.
+impl<I: Integer> IntegerMassKernel<I> for DiscreteUniform {
+    fn ln_pmf_kernel(&self, _k: I) -> I::Real {
+        kernels::discrete_uniform_log_pmf_on_support(I::Real::scalar(
+            (self.hi() - self.lo()) as f64,
+        ))
+    }
+
+    fn pmf_kernel(&self, k: I) -> I::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<I> IntegerDiscrete<I> for DiscreteUniform
+where
+    I: Integer + Compare,
+    I::Real: Compare<Mask = <I as Compare>::Mask>,
+{
+    fn pmf(&self, k: I) -> I::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: I) -> I::Real {
+        let lo = I::from_i64(self.lo());
+        let hi = I::from_i64(self.hi());
+        let valid = k.ge(&lo).and(&k.lt(&hi));
+        <I::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), I::Real::neg_infinity())
+    }
+}

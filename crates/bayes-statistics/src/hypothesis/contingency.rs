@@ -2,7 +2,7 @@
 //! exact**, the **exact binomial** test, and **McNemar's** test.
 
 use super::{TestResult, binomial_two_sided_p_value, chi2_upper, nan_result};
-use euclid::LazyNatural;
+use euclid::Natural;
 
 fn valid_table(table: &[Vec<f64>]) -> Option<(usize, usize)> {
     let r = table.len();

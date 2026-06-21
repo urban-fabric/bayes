@@ -1,10 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::Real;
 
 /// The logistic distribution with `location` `μ` and `scale` `s > 0`, support
 /// `(-∞, ∞)`. Density `f(x) = e^{-z} / (s(1 + e^{-z})²)` with `z = (x − μ)/s`; the
@@ -53,7 +54,7 @@ impl Distribution<f64> for Logistic {
     }
 }
 
-impl<T: LazyReal> Support<T> for Logistic {
+impl<T: Real> Support<T> for Logistic {
     fn min(&self) -> T {
         T::neg_infinity()
     }
@@ -62,7 +63,7 @@ impl<T: LazyReal> Support<T> for Logistic {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Logistic {
+impl<T: Real> ContinuousCdf<T> for Logistic {
     fn cdf(&self, x: T) -> T {
         kernels::logistic_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
@@ -99,11 +100,6 @@ impl Moments for Logistic {
     fn mode(&self) -> f64 {
         self.location
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -144,5 +140,27 @@ mod tests {
         let n = 80_000;
         let s: f64 = (0..n).map(|_| d.sample(&mut rng)).sum();
         close(s / n as f64, d.mean(), 0.05);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Logistic {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::logistic_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for Logistic {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
     }
 }

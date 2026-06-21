@@ -3,12 +3,9 @@ use rand::distr::Distribution;
 
 use super::poisson::Poisson;
 use crate::continuous::Gamma;
-use crate::{DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
-use euclid::{LazyCompare, LazyNatural, LazyReal};
-
-#[cfg(test)]
-use crate::Discrete;
+use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use euclid::{Compare, Element, Natural, Real};
 
 /// The negative binomial distribution: the number of failures before the `r`-th
 /// success in independent `Bernoulli(p)` trials (`r > 0` may be real — the
@@ -67,7 +64,7 @@ impl Distribution<u64> for NegativeBinomial {
     }
 }
 
-impl<K: LazyNatural> Support<K> for NegativeBinomial {
+impl<K: Natural> Support<K> for NegativeBinomial {
     fn min(&self) -> K {
         K::zero()
     }
@@ -78,8 +75,8 @@ impl<K: LazyNatural> Support<K> for NegativeBinomial {
 
 impl<K> DiscreteCdf<K> for NegativeBinomial
 where
-    K: LazyNatural + LazyCompare,
-    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+    K: Natural + Compare,
+    K::Real: Compare<Mask = <K as Compare>::Mask>,
 {
     fn cdf(&self, k: K) -> K::Real {
         K::Real::scalar(self.p).beta_reg(K::Real::scalar(self.r), k.to_real() + K::Real::one())
@@ -107,11 +104,6 @@ impl Moments for NegativeBinomial {
             0.0
         }
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -160,5 +152,41 @@ mod tests {
         let n = 60_000;
         let s: u64 = (0..n).map(|_| nb.sample(&mut rng)).sum();
         close(s as f64 / n as f64, nb.mean(), 0.05);
+    }
+}
+
+// Mass kernel and discrete distribution traits.
+impl<N: Natural> DiscreteMassKernel<N> for NegativeBinomial {
+    fn ln_pmf_kernel(&self, k: N) -> N::Real {
+        let r = N::Real::scalar(self.successes());
+        let p = N::Real::scalar(self.p());
+        let k_real = k.to_real();
+        let ln_coefficient =
+            (k_real.clone() + r.clone()).ln_gamma() - r.clone().ln_gamma() - k.ln_factorial();
+        ln_coefficient + r * p.clone().ln() + k_real * (N::Real::one() - p).ln()
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<N> Discrete<N> for NegativeBinomial
+where
+    N: Natural + Compare,
+    N::Real: Compare<Mask = <N as Compare>::Mask>,
+{
+    fn pmf(&self, k: N) -> N::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: N) -> N::Real {
+        if self.p() >= 1.0 {
+            let zero_count = N::zero();
+            let valid = k.eq(&zero_count);
+            return <N::Real as Compare>::select(&valid, N::Real::zero(), N::Real::neg_infinity());
+        }
+
+        self.ln_pmf_kernel(k)
     }
 }

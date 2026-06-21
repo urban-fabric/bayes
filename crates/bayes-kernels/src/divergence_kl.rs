@@ -12,7 +12,7 @@ use super::*;
 ///
 /// Also the LogNormal KL on the log-space `(µ, σ)`, and the HalfNormal KL with both
 /// means `0`.
-pub fn kl_normal<T: LazyReal>(mean_self: T, std_self: T, mean_other: T, std_other: T) -> T {
+pub fn kl_normal<T: Real>(mean_self: T, std_self: T, mean_other: T, std_other: T) -> T {
     let dm = mean_self - mean_other;
     (std_other.clone() / std_self.clone()).ln()
         + (std_self.clone() * std_self + dm.clone() * dm)
@@ -21,17 +21,17 @@ pub fn kl_normal<T: LazyReal>(mean_self: T, std_self: T, mean_other: T, std_othe
 }
 
 /// Exponential KL: `ln(λ₀/λ₁) + λ₁/λ₀ − 1`.
-pub fn kl_exponential<T: LazyReal>(rate_self: T, rate_other: T) -> T {
+pub fn kl_exponential<T: Real>(rate_self: T, rate_other: T) -> T {
     (rate_self.clone() / rate_other.clone()).ln() + rate_other / rate_self - T::one()
 }
 
 /// Poisson KL: `λ₀·ln(λ₀/λ₁) − λ₀ + λ₁`.
-pub fn kl_poisson<T: LazyReal>(rate_self: T, rate_other: T) -> T {
+pub fn kl_poisson<T: Real>(rate_self: T, rate_other: T) -> T {
     rate_self.clone() * (rate_self.clone() / rate_other.clone()).ln() - rate_self + rate_other
 }
 
 /// Geometric KL: `ln(p₀/p₁) + ((1−p₀)/p₀)·ln((1−p₀)/(1−p₁))`.
-pub fn kl_geometric<T: LazyReal>(p_self: T, p_other: T) -> T {
+pub fn kl_geometric<T: Real>(p_self: T, p_other: T) -> T {
     let one = T::one();
     let q_self = one.clone() - p_self.clone();
     let q_other = one - p_other.clone();
@@ -39,7 +39,7 @@ pub fn kl_geometric<T: LazyReal>(p_self: T, p_other: T) -> T {
 }
 
 /// Bernoulli KL on `0 < p < 1`: `p₀·ln(p₀/p₁) + (1−p₀)·ln((1−p₀)/(1−p₁))`.
-pub fn kl_bernoulli_on_unit<T: LazyReal>(p_self: T, p_other: T) -> T {
+pub fn kl_bernoulli_on_unit<T: Real>(p_self: T, p_other: T) -> T {
     let one = T::one();
     let q_self = one.clone() - p_self.clone();
     let q_other = one - p_other.clone();
@@ -48,7 +48,7 @@ pub fn kl_bernoulli_on_unit<T: LazyReal>(p_self: T, p_other: T) -> T {
 
 /// Negative-binomial KL for a matched number of successes `r`:
 /// `r·ln(p₀/p₁) + r·((1−p₀)/p₀)·ln((1−p₀)/(1−p₁))`.
-pub fn kl_negative_binomial<T: LazyReal>(successes: T, p_self: T, p_other: T) -> T {
+pub fn kl_negative_binomial<T: Real>(successes: T, p_self: T, p_other: T) -> T {
     let one = T::one();
     let q_self = one.clone() - p_self.clone();
     let q_other = one - p_other.clone();
@@ -59,12 +59,12 @@ pub fn kl_negative_binomial<T: LazyReal>(successes: T, p_self: T, p_other: T) ->
 /// Binomial KL for a matched trial count `n`: `n · D_KL(Bernoulli(p₀) ‖ Bernoulli(p₁))`
 /// — the binomial coefficient cancels in the log-ratio. A differing trial count is
 /// out of family and is the caller's branch.
-pub fn kl_binomial<T: LazyReal>(trials: T, p_self: T, p_other: T) -> T {
+pub fn kl_binomial<T: Real>(trials: T, p_self: T, p_other: T) -> T {
     trials * kl_bernoulli_on_unit(p_self, p_other)
 }
 
 /// Cauchy KL: `ln[((γ₀+γ₁)² + (x₀−x₁)²) / (4 γ₀ γ₁)]`.
-pub fn kl_cauchy<T: LazyReal>(loc_self: T, scale_self: T, loc_other: T, scale_other: T) -> T {
+pub fn kl_cauchy<T: Real>(loc_self: T, scale_self: T, loc_other: T, scale_other: T) -> T {
     let scale_sum = scale_self.clone() + scale_other.clone();
     let dm = loc_self - loc_other;
     ((scale_sum.clone() * scale_sum + dm.clone() * dm)
@@ -73,13 +73,13 @@ pub fn kl_cauchy<T: LazyReal>(loc_self: T, scale_self: T, loc_other: T, scale_ot
 }
 
 /// Rayleigh KL: `2·ln(σ₁/σ₀) + (σ₀/σ₁)² − 1`.
-pub fn kl_rayleigh<T: LazyReal>(scale_self: T, scale_other: T) -> T {
+pub fn kl_rayleigh<T: Real>(scale_self: T, scale_other: T) -> T {
     let ratio = scale_self.clone() / scale_other.clone();
     T::two() * (scale_other / scale_self).ln() + ratio.clone() * ratio - T::one()
 }
 
 /// Laplace KL: `ln(b₁/b₀) + (b₀·exp(−d/b₀) + d)/b₁ − 1`, `d = |m₀ − m₁|`.
-pub fn kl_laplace<T: LazyReal>(loc_self: T, scale_self: T, loc_other: T, scale_other: T) -> T {
+pub fn kl_laplace<T: Real>(loc_self: T, scale_self: T, loc_other: T, scale_other: T) -> T {
     let d = (loc_self - loc_other).abs();
     (scale_other.clone() / scale_self.clone()).ln()
         + (scale_self.clone() * (-(d.clone() / scale_self)).exp() + d) / scale_other
@@ -88,7 +88,7 @@ pub fn kl_laplace<T: LazyReal>(loc_self: T, scale_self: T, loc_other: T, scale_o
 
 /// Wald / inverse-Gaussian KL (mean µ, shape λ):
 /// `½ln(λ₀/λ₁) + λ₁(µ₀−2µ₁)/(2µ₁²) + ½λ₁(1/µ₀ + 1/λ₀) − ½`.
-pub fn kl_wald<T: LazyReal>(mean_self: T, shape_self: T, mean_other: T, shape_other: T) -> T {
+pub fn kl_wald<T: Real>(mean_self: T, shape_self: T, mean_other: T, shape_other: T) -> T {
     let one = T::one();
     T::half() * (shape_self.clone() / shape_other.clone()).ln()
         + shape_other.clone() * (mean_self.clone() - T::two() * mean_other.clone())
@@ -101,7 +101,7 @@ pub fn kl_wald<T: LazyReal>(mean_self: T, shape_self: T, mean_other: T, shape_ot
 ///
 /// Also the ChiSquared KL (shape `k/2`, rate `½`) and the InverseGamma KL (shape,
 /// rate ≡ scale), both of which reduce to this form.
-pub fn kl_gamma<T: LazyReal>(shape_self: T, rate_self: T, shape_other: T, rate_other: T) -> T {
+pub fn kl_gamma<T: Real>(shape_self: T, rate_self: T, shape_other: T, rate_other: T) -> T {
     (shape_self.clone() - shape_other.clone()) * shape_self.clone().digamma()
         - shape_self.clone().ln_gamma()
         + shape_other.clone().ln_gamma()
@@ -111,7 +111,7 @@ pub fn kl_gamma<T: LazyReal>(shape_self: T, rate_self: T, shape_other: T, rate_o
 
 /// Beta KL:
 /// `ln B(a₁,b₁) − ln B(a₀,b₀) + (a₀−a₁)ψ(a₀) + (b₀−b₁)ψ(b₀) + (a₁−a₀+b₁−b₀)ψ(a₀+b₀)`.
-pub fn kl_beta<T: LazyReal>(alpha_self: T, beta_self: T, alpha_other: T, beta_other: T) -> T {
+pub fn kl_beta<T: Real>(alpha_self: T, beta_self: T, alpha_other: T, beta_other: T) -> T {
     let sum_self = alpha_self.clone() + beta_self.clone();
     let ln_beta_self =
         alpha_self.clone().ln_gamma() + beta_self.clone().ln_gamma() - sum_self.clone().ln_gamma();
@@ -131,7 +131,7 @@ pub fn kl_beta<T: LazyReal>(alpha_self: T, beta_self: T, alpha_other: T, beta_ot
 ///  + (λ₀/λ₁)^{k₁}·Γ(1 + k₁/k₀) − 1`.
 ///
 /// Also the Frechet KL through the `x ↦ 1/x` bijection (scales inverted).
-pub fn kl_weibull<T: LazyReal>(shape_self: T, scale_self: T, shape_other: T, scale_other: T) -> T {
+pub fn kl_weibull<T: Real>(shape_self: T, scale_self: T, shape_other: T, scale_other: T) -> T {
     let (k0, l0, k1, l1) = (shape_self, scale_self, shape_other, scale_other);
     let term0 = k0.clone().ln() - k0.clone() * l0.clone().ln();
     let term1 = k1.clone().ln() - k1.clone() * l1.clone().ln();
@@ -143,7 +143,7 @@ pub fn kl_weibull<T: LazyReal>(shape_self: T, scale_self: T, shape_other: T, sca
 
 /// Gumbel KL (location µ, scale β):
 /// `ln(β₁/β₀) + γ(β₀/β₁ − 1) + (µ₀−µ₁)/β₁ + exp((µ₁−µ₀)/β₁)·Γ(1 + β₀/β₁) − 1`.
-pub fn kl_gumbel<T: LazyReal>(loc_self: T, scale_self: T, loc_other: T, scale_other: T) -> T {
+pub fn kl_gumbel<T: Real>(loc_self: T, scale_self: T, loc_other: T, scale_other: T) -> T {
     let (mu0, b0, mu1, b1) = (loc_self, scale_self, loc_other, scale_other);
     (b1.clone() / b0.clone()).ln()
         + T::euler_gamma() * (b0.clone() / b1.clone() - T::one())
@@ -154,7 +154,7 @@ pub fn kl_gumbel<T: LazyReal>(loc_self: T, scale_self: T, loc_other: T, scale_ot
 
 /// Pareto KL on nested support (`xₘ₀ ≥ xₘ₁`):
 /// `ln(α₀/α₁) + α₁·ln(xₘ₀/xₘ₁) + α₁/α₀ − 1`.
-pub fn kl_pareto_on_support<T: LazyReal>(
+pub fn kl_pareto_on_support<T: Real>(
     minimum_self: T,
     shape_self: T,
     minimum_other: T,
@@ -168,7 +168,7 @@ pub fn kl_pareto_on_support<T: LazyReal>(
 ///
 /// Reachable now that `cos` and the scaled Bessel `I₀ᵉ`/`I₁ᵉ` are on the lazy
 /// surface: `ln I₀ = ln I₀ᵉ + |·|` and `I₁/I₀ = I₁ᵉ/I₀ᵉ`.
-pub fn kl_von_mises<T: LazyReal>(mean_self: T, kappa_self: T, mean_other: T, kappa_other: T) -> T {
+pub fn kl_von_mises<T: Real>(mean_self: T, kappa_self: T, mean_other: T, kappa_other: T) -> T {
     let (mu0, k0, mu1, k1) = (mean_self, kappa_self, mean_other, kappa_other);
     let resultant = k0.clone().bessel_i1e() / k0.clone().bessel_i0e();
     ln_i0(k1.clone()) - ln_i0(k0.clone()) + resultant * (k0 - k1 * (mu0 - mu1).cos())
@@ -176,11 +176,11 @@ pub fn kl_von_mises<T: LazyReal>(mean_self: T, kappa_self: T, mean_other: T, kap
 
 /// Uniform KL on nested support (`[a₀,b₀] ⊆ [a₁,b₁]`): `ln(w₁/w₀)`, `w = b − a`. The
 /// containment test (`+∞` otherwise) is the caller's branch.
-pub fn kl_uniform_on_support<T: LazyReal>(width_self: T, width_other: T) -> T {
+pub fn kl_uniform_on_support<T: Real>(width_self: T, width_other: T) -> T {
     (width_other / width_self).ln()
 }
 
 /// Discrete-uniform KL on nested support: `ln(n₁/n₀)`, `n` the support count.
-pub fn kl_discrete_uniform_on_support<T: LazyReal>(count_self: T, count_other: T) -> T {
+pub fn kl_discrete_uniform_on_support<T: Real>(count_self: T, count_other: T) -> T {
     (count_other / count_self).ln()
 }

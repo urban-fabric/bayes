@@ -2,9 +2,9 @@ use thiserror::Error;
 
 /// Why a distribution constructor (or fit) rejected its parameters.
 ///
-/// A single shared error for the whole library; constructors return
-/// `Result<Self, BayesError>`. (Per-distribution error enums — as `statrs` uses —
-/// are deferred until a distribution needs context this can't carry.)
+/// A single shared error for the eager probability/statistics layer;
+/// constructors return `Result<Self, BayesError>`. Per-distribution error enums
+/// are deferred until a distribution needs context this cannot carry.
 #[derive(Clone, Debug, PartialEq, Error)]
 pub enum BayesError {
     #[error("probability must be in [0, 1] (got {value})")]
@@ -25,9 +25,7 @@ pub enum BayesError {
     #[error("{name}={value} exceeds the supported upper bound {max}")]
     AboveMaximum {
         name: &'static str,
-
         value: f64,
-
         max: f64,
     },
 

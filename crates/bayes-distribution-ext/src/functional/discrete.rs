@@ -2,7 +2,7 @@
 //! and quantile) into the [`Discrete`] / [`DiscreteCdf`] spine.
 
 use crate::{Discrete, DiscreteCdf, Support};
-use euclid::LazyNatural;
+use euclid::Natural;
 use std::fmt;
 
 /// A closure-backed discrete mass function over explicit support bounds.
@@ -64,7 +64,7 @@ where
 
 impl<X, P, L> Discrete<X> for DiscreteMass<X, P, L>
 where
-    X: Copy + LazyNatural<Real = f64>,
+    X: Copy + Natural<Real = f64>,
     P: Fn(X) -> f64,
     L: Fn(X) -> f64,
 {
@@ -136,7 +136,7 @@ where
 
 impl<X, P, C, Q, L> Discrete<X> for DiscreteFn<X, P, C, Q, L>
 where
-    X: Copy + LazyNatural<Real = f64>,
+    X: Copy + Natural<Real = f64>,
     P: Fn(X) -> f64,
     L: Fn(X) -> f64,
 {
@@ -151,7 +151,7 @@ where
 
 impl<X, P, C, Q, L> DiscreteCdf<X> for DiscreteFn<X, P, C, Q, L>
 where
-    X: Copy + PartialOrd + LazyNatural<Real = f64>,
+    X: Copy + PartialOrd + Natural<Real = f64>,
     C: Fn(X) -> f64,
     Q: Fn(f64) -> X,
 {

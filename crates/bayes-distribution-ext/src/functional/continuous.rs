@@ -2,7 +2,7 @@
 //! and quantile) into the [`Continuous`] / [`ContinuousCdf`] spine.
 
 use crate::{Continuous, ContinuousCdf, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use std::fmt;
 
 fn valid_scalar_support(min: f64, max: f64) -> bool {

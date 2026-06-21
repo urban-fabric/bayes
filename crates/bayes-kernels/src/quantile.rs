@@ -1,5 +1,5 @@
 use super::*;
-use euclid::numeric::LazyBool;
+use euclid::numeric::Boolean;
 
 // --- closed-form quantiles (inverse CDFs) ---
 //
@@ -9,95 +9,95 @@ use euclid::numeric::LazyBool;
 // `exp((1/shape)·ln(·))` because the lazy `powf` takes a *constant* exponent.
 
 /// Exponential quantile: `−ln(1 − p) / rate`.
-pub fn exponential_quantile<T: LazyReal>(p: T, rate: T) -> T {
+pub fn exponential_quantile<T: Real>(p: T, rate: T) -> T {
     -((T::one() - p).ln()) / rate
 }
 
 /// Logistic quantile: `location + scale · ln(p / (1 − p))`.
-pub fn logistic_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+pub fn logistic_quantile<T: Real>(p: T, location: T, scale: T) -> T {
     location + scale * (p.clone() / (T::one() - p)).ln()
 }
 
 /// Cauchy quantile: `location + scale · tan(π·(p − ½))`.
-pub fn cauchy_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+pub fn cauchy_quantile<T: Real>(p: T, location: T, scale: T) -> T {
     location + scale * (T::pi() * (p - T::half())).tan()
 }
 
 /// Laplace quantile: `location − scale · sign(q) · ln(1 − 2|q|)`, `q = p − ½`.
-pub fn laplace_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+pub fn laplace_quantile<T: Real>(p: T, location: T, scale: T) -> T {
     let q = p - T::half();
     location - scale * q.clone().signum() * (T::one() - T::two() * q.abs()).ln()
 }
 
 /// Uniform quantile: `lo + width · p`, with `width = hi − lo`.
-pub fn uniform_quantile<T: LazyReal>(p: T, lo: T, width: T) -> T {
+pub fn uniform_quantile<T: Real>(p: T, lo: T, width: T) -> T {
     lo + width * p
 }
 
 /// Weibull quantile: `scale · (−ln(1 − p))^{1/shape}`.
-pub fn weibull_quantile<T: LazyReal>(p: T, scale: T, shape: T) -> T {
+pub fn weibull_quantile<T: Real>(p: T, scale: T, shape: T) -> T {
     let base = -((T::one() - p).ln());
     scale * ((T::one() / shape) * base.ln()).exp()
 }
 
 /// Gumbel quantile: `location − scale · ln(−ln p)`.
-pub fn gumbel_quantile<T: LazyReal>(p: T, location: T, scale: T) -> T {
+pub fn gumbel_quantile<T: Real>(p: T, location: T, scale: T) -> T {
     location - scale * (-(p.ln())).ln()
 }
 
 /// Fréchet quantile: `scale · (−ln p)^{−1/shape}`.
-pub fn frechet_quantile<T: LazyReal>(p: T, scale: T, shape: T) -> T {
+pub fn frechet_quantile<T: Real>(p: T, scale: T, shape: T) -> T {
     let base = -(p.ln());
     scale * ((-(T::one() / shape)) * base.ln()).exp()
 }
 
 /// Pareto quantile: `minimum · (1 − p)^{−1/shape}`.
-pub fn pareto_quantile<T: LazyReal>(p: T, minimum: T, shape: T) -> T {
+pub fn pareto_quantile<T: Real>(p: T, minimum: T, shape: T) -> T {
     let base = T::one() - p;
     minimum * ((-(T::one() / shape)) * base.ln()).exp()
 }
 
 /// Lomax quantile: `scale · ((1 − p)^{−1/shape} − 1)`.
-pub fn lomax_quantile<T: LazyReal>(p: T, scale: T, shape: T) -> T {
+pub fn lomax_quantile<T: Real>(p: T, scale: T, shape: T) -> T {
     let base = T::one() - p;
     scale * (((-(T::one() / shape)) * base.ln()).exp() - T::one())
 }
 
 /// Rayleigh quantile: `scale · √(−2·ln(1 − p))`.
-pub fn rayleigh_quantile<T: LazyReal>(p: T, scale: T) -> T {
+pub fn rayleigh_quantile<T: Real>(p: T, scale: T) -> T {
     scale * (-T::two() * (T::one() - p).ln()).sqrt()
 }
 
 /// Normal quantile: `mean + std·√2·erf⁻¹(2p − 1)`.
-pub fn normal_quantile<T: LazyReal>(p: T, mean: T, std_dev: T) -> T {
+pub fn normal_quantile<T: Real>(p: T, mean: T, std_dev: T) -> T {
     mean + std_dev * T::sqrt_2() * (T::two() * p - T::one()).erf_inv()
 }
 
 /// Half-normal quantile: `scale·√2·erf⁻¹(p)`.
-pub fn half_normal_quantile<T: LazyReal>(p: T, scale: T) -> T {
+pub fn half_normal_quantile<T: Real>(p: T, scale: T) -> T {
     scale * T::sqrt_2() * p.erf_inv()
 }
 
 /// Log-normal quantile: the Normal quantile on the log scale, exponentiated —
 /// `exp(mean_log + σ_log·√2·erf⁻¹(2p − 1))`.
-pub fn lognormal_quantile<T: LazyReal>(p: T, mean_log: T, std_log: T) -> T {
+pub fn lognormal_quantile<T: Real>(p: T, mean_log: T, std_log: T) -> T {
     normal_quantile(p, mean_log, std_log).exp()
 }
 
 // --- iterative quantile (no elementary inverse) ---
 //
 // The families whose CDF has no closed-form inverse — Gamma, Beta, Student's t, F, Wald,
-// Inverse-Gamma — invert it by bisection. Written once over [`LazyReal`] through
-// [`LazyCompare::while_loop`], the same routine is a host `while` loop on `f64`/`f32` and a
+// Inverse-Gamma — invert it by bisection. Written once over [`Real`] through
+// [`Compare::while_loop`], the same routine is a host `while` loop on `f64`/`f32` and a
 // graph `While` on a tensor backend, so the quantile is no longer host-only.
 
-/// Inverse CDF by bisection, write-once over [`LazyReal`]. `cdf` must be monotone
+/// Inverse CDF by bisection, write-once over [`Real`]. `cdf` must be monotone
 /// non-decreasing; `lo`/`hi` are the support bounds (either may be `±∞`). An infinite end is
 /// widened geometrically into a finite bracket, then the bracket is bisected for a fixed
 /// trip count (≈ full `f64` precision). The `p ≤ 0` / `p ≥ 1` ends return `lo` / `hi`.
 pub fn inverse_cdf_bisect<T, F>(cdf: F, lo: T, hi: T, p: T) -> T
 where
-    T: LazyReal,
+    T: Real,
     F: Fn(T) -> T,
 {
     let cdf = &cdf;

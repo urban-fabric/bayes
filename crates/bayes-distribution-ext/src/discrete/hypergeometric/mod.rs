@@ -1,8 +1,9 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
-use crate::{Discrete, DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
+use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use euclid::{Boolean, Compare, Natural, Real};
 
 /// The hypergeometric distribution: the number of successes in `draws` samples
 /// taken **without replacement** from a population of `population` items
@@ -111,11 +112,6 @@ impl Moments for Hypergeometric {
         }
         d * (k / n) * ((n - k) / n) * ((n - d) / (n - 1.0))
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -167,5 +163,46 @@ mod tests {
         let n = 40_000;
         let s: u64 = (0..n).map(|_| h.sample(&mut rng)).sum();
         close(s as f64 / n as f64, h.mean(), 0.05);
+    }
+}
+
+fn ln_binomial_real<T: Real>(n: T, k: T) -> T {
+    let one = T::one();
+    let n_minus_k = n.clone() - k.clone();
+    (n + one.clone()).ln_gamma() - (k + one.clone()).ln_gamma() - (n_minus_k + one).ln_gamma()
+}
+
+// Mass kernel and discrete distribution traits.
+impl<N: Natural> DiscreteMassKernel<N> for Hypergeometric {
+    fn ln_pmf_kernel(&self, k: N) -> N::Real {
+        let population = N::Real::scalar(self.population() as f64);
+        let successes = N::Real::scalar(self.successes() as f64);
+        let draws = N::Real::scalar(self.draws() as f64);
+        let k = k.to_real();
+        ln_binomial_real(successes.clone(), k.clone())
+            + ln_binomial_real(population.clone() - successes, draws.clone() - k)
+            - ln_binomial_real(population, draws)
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<N> Discrete<N> for Hypergeometric
+where
+    N: Natural + Compare,
+    N::Real: Compare<Mask = <N as Compare>::Mask>,
+{
+    fn pmf(&self, k: N) -> N::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: N) -> N::Real {
+        let k_min =
+            N::from_u64((self.draws() + self.successes()).saturating_sub(self.population()));
+        let k_max = N::from_u64(self.draws().min(self.successes()));
+        let valid = k.ge(&k_min).and(&k.le(&k_max));
+        <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
     }
 }

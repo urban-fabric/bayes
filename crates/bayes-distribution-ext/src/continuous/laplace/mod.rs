@@ -1,13 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
-
-#[cfg(test)]
-use crate::Continuous;
+use euclid::Real;
 
 /// Sample median by linear interpolation between order statistics (the "type 7"
 /// estimator), matching `bayes_statistics::median`. Inlined here so the family
@@ -77,7 +75,7 @@ impl Distribution<f64> for Laplace {
     }
 }
 
-impl<T: LazyReal> Support<T> for Laplace {
+impl<T: Real> Support<T> for Laplace {
     fn min(&self) -> T {
         T::neg_infinity()
     }
@@ -86,7 +84,7 @@ impl<T: LazyReal> Support<T> for Laplace {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Laplace {
+impl<T: Real> ContinuousCdf<T> for Laplace {
     fn cdf(&self, x: T) -> T {
         kernels::laplace_cdf(x, T::scalar(self.location), T::scalar(self.scale))
     }
@@ -121,11 +119,6 @@ impl Moments for Laplace {
     fn mode(&self) -> f64 {
         self.location
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -161,5 +154,27 @@ mod tests {
         }
         close(l.mean(), 1.0, 1e-12);
         close(l.variance(), 8.0, 1e-12);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Laplace {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::laplace_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for Laplace {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
     }
 }

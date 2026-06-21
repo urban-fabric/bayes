@@ -17,8 +17,8 @@ use bayes::{
     Continuous, ContinuousCdf, ContinuousCdfExt, ContinuousDensityKernel,
     ContinuousDistributionExt, ContinuousFn, Discrete, DiscreteDistributionExt, DiscreteFn,
     DiscreteMassKernel, DiscreteUniform, Ecdf, Exponential, ExponentialFamily, Gamma,
-    GammaExponential, GammaPoisson, IntegerDiscrete, LazyReal, MeanVar, Mixture, Moments, Normal,
-    OrderStatistic, Poisson, SufficientStatistic, Uniform, histogram,
+    GammaExponential, GammaPoisson, IntegerDiscrete, MeanVar, Mixture, Moments, Normal,
+    OrderStatistic, Poisson, Real, SufficientStatistic, Uniform, histogram,
 };
 
 fn close(a: f64, b: f64, tol: f64) {

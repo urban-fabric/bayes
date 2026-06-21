@@ -15,7 +15,7 @@
 //! `D(self ‖ other)` convention. The `*_bc` helpers return the raw Bhattacharyya
 //! coefficient `BC = ∫√(pq)`; the caller forms `H² = 1 − BC`.
 
-use euclid::LazyReal;
+use euclid::Real;
 
 /// Euler–Mascheroni constant `γ`.
 pub(super) const EULER_GAMMA: f64 = 0.577_215_664_901_532_9;

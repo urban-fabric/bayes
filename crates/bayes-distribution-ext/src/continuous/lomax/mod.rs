@@ -1,10 +1,11 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::{Compare, Real};
 
 /// The Lomax (Pareto type II) distribution with shape `α > 0` and scale `λ > 0`,
 /// support `[0, ∞)` — a Pareto shifted to start at 0, and the heavy-tailed
@@ -44,7 +45,7 @@ impl Distribution<f64> for Lomax {
     }
 }
 
-impl<T: LazyReal> Support<T> for Lomax {
+impl<T: Real> Support<T> for Lomax {
     fn min(&self) -> T {
         T::zero()
     }
@@ -53,7 +54,7 @@ impl<T: LazyReal> Support<T> for Lomax {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for Lomax {
+impl<T: Real> ContinuousCdf<T> for Lomax {
     fn cdf(&self, x: T) -> T {
         kernels::lomax_cdf(x, T::scalar(self.shape), T::scalar(self.scale))
     }
@@ -91,11 +92,6 @@ impl Moments for Lomax {
     fn mode(&self) -> f64 {
         0.0
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -143,5 +139,32 @@ mod tests {
         let n = 200_000;
         let s: f64 = (0..n).map(|_| d.sample(&mut rng)).sum();
         close(s / n as f64, d.mean(), 0.05);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Lomax {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::lomax_log_pdf_on_support(x, T::scalar(self.shape()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Lomax
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.ge(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

@@ -55,28 +55,28 @@ pub use primitives::{
     normal_log_prob, normal_log_prob_with_constants, normal_log_prob_with_normalizer,
 };
 
-pub use bayes_error::{BayesError, StatsError};
+pub use bayes_core_ext::{BayesError, StatsError};
 pub use distribution::{
     Affine, Alpha, Bernoulli, Beta, BetaBernoulli, BetaBinomial, BetaBinomialModel, Bijector,
-    Binomial, Categorical, Cauchy, Channel, ChiSquared, ChiSquaredDivergence, ChiSquaredGen,
-    Conjugate, Constrained, Constraint, Continuous, ContinuousCdf, ContinuousCdfExt,
+    Binomial, Boundary, Categorical, Cauchy, Channel, ChiSquared, ChiSquaredDivergence,
+    ChiSquaredGen, Conjugate, Constrained, Constraint, Continuous, ContinuousCdf, ContinuousCdfExt,
     ContinuousDensity, ContinuousDensityKernel, ContinuousDistributionExt, ContinuousFn, CountSum,
     Custom, Discrete, DiscreteCdf, DiscreteDistributionExt, DiscreteFn, DiscreteMass,
     DiscreteMassKernel, DiscreteUniform, Divergence, Estimate, Exp, Exponential, ExponentialFamily,
     FGenerator, FisherSnedecor, Frechet, Gamma, GammaExponential, GammaPoisson, Geometric, Gumbel,
-    HalfNormal, HellingerDistance, Hypergeometric, IntegerDiscrete, IntegerDiscreteCdf,
-    IntegerMassKernel, InverseGamma, Jeffreys, JensenShannon, Kl, KlDivergence, Laplace, LogNormal,
-    Logistic, Lomax, MeanVar, Mixture, Moments, NaturalParams, NegativeBinomial, Normal,
-    OrderStatistic, PROBABILITY_TOLERANCE, Pareto, Poisson, Rayleigh, RenyiDivergence, ReverseKl,
-    Sigmoid, SquaredHellinger, StudentT, SufficientStatistic, Support, TotalVariation,
-    TotalVariationGen, Transformed, Trials, Triangular, Truncated, Uniform, VonMises, Wald,
-    Weibull, bhattacharyya_coefficient, brier_score, conditional_entropy, cross_entropy,
-    f_divergence, is_entropy_admissible, is_probability_vector,
-    is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_with_tolerance,
-    jensen_shannon, joint_entropy, log_loss, log_score, max_entropy, mutual_information,
-    normalize_probability_rows, normalize_probability_weights, normalized_entropy,
-    normalized_mutual_information, probability_sum, ranked_probability_score, shannon_entropy,
-    spherical_score, validate_probability_vector, validate_row_stochastic,
+    HalfNormal, HellingerDistance, Hypergeometric, IntegerConstraint, IntegerDiscrete,
+    IntegerDiscreteCdf, IntegerMassKernel, InverseGamma, Jeffreys, JensenShannon, Kl, KlDivergence,
+    Laplace, LogNormal, Logistic, Lomax, MeanVar, Mixture, Moments, NaturalConstraint,
+    NaturalParams, NegativeBinomial, Normal, OrderStatistic, PROBABILITY_TOLERANCE, Pareto,
+    Poisson, Rayleigh, RealConstraint, RenyiDivergence, ReverseKl, Sigmoid, SquaredHellinger,
+    StudentT, SufficientStatistic, Support, TotalVariation, TotalVariationGen, Transformed, Trials,
+    Triangular, Truncated, Uniform, VonMises, Wald, Weibull, bhattacharyya_coefficient,
+    brier_score, conditional_entropy, cross_entropy, f_divergence, is_entropy_admissible,
+    is_probability_vector, is_probability_vector_with_tolerance, is_row_stochastic,
+    is_row_stochastic_with_tolerance, jensen_shannon, joint_entropy, log_loss, log_score,
+    max_entropy, mutual_information, normalize_probability_rows, normalize_probability_weights,
+    normalized_entropy, normalized_mutual_information, probability_sum, ranked_probability_score,
+    shannon_entropy, spherical_score, validate_probability_vector, validate_row_stochastic,
     validate_row_stochastic_with_tolerance, variation_of_information,
 };
 
@@ -112,4 +112,4 @@ pub use rand::distr::Distribution;
 
 /// Numeric method traits from `euclid`; bring these into scope for methods such as
 /// `x.ln_gamma()`, `x.ln_beta(y)`, `n.ln_factorial()`, and `n.ln_binomial(&k)`.
-pub use euclid::{LazyNatural, LazyReal};
+pub use euclid::{Natural, Real};

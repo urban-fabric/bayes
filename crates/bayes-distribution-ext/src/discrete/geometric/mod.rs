@@ -1,12 +1,9 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
-use crate::{DiscreteCdf, Moments, Support};
-use bayes_error::BayesError;
-use euclid::{LazyCompare, LazyNatural, LazyReal};
-
-#[cfg(test)]
-use crate::Discrete;
+use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
+use bayes_core_ext::BayesError;
+use euclid::{Compare, Element, Natural, Real};
 
 /// The geometric distribution: the number of independent `Bernoulli(p)` trials up
 /// to and including the first success. Support `{1, 2, 3, …}`, `p ∈ (0, 1]`.
@@ -44,7 +41,7 @@ impl Distribution<u64> for Geometric {
     }
 }
 
-impl<K: LazyNatural> Support<K> for Geometric {
+impl<K: Natural> Support<K> for Geometric {
     fn min(&self) -> K {
         K::one()
     }
@@ -55,8 +52,8 @@ impl<K: LazyNatural> Support<K> for Geometric {
 
 impl<K> DiscreteCdf<K> for Geometric
 where
-    K: LazyNatural + LazyCompare,
-    K::Real: LazyCompare<Mask = <K as LazyCompare>::Mask>,
+    K: Natural + Compare,
+    K::Real: Compare<Mask = <K as Compare>::Mask>,
 {
     fn cdf(&self, k: K) -> K::Real {
         // `1 − (1−p)^k = 1 − exp(k·ln(1−p))`, which is `0` at `k = 0` with no branch.
@@ -91,11 +88,6 @@ impl Moments for Geometric {
     fn mode(&self) -> f64 {
         1.0
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -138,5 +130,40 @@ mod tests {
             let k: u64 = g.inverse_cdf(p);
             assert!(g.cdf(k) >= p && (k == 1 || g.cdf(k - 1) < p), "p={p} k={k}");
         }
+    }
+}
+
+// Mass kernel and discrete distribution traits.
+impl<N: Natural> DiscreteMassKernel<N> for Geometric {
+    fn ln_pmf_kernel(&self, k: N) -> N::Real {
+        let p = N::Real::scalar(self.p());
+        (k.to_real() - N::Real::one()) * (N::Real::one() - p.clone()).ln() + p.ln()
+    }
+
+    fn pmf_kernel(&self, k: N) -> N::Real {
+        self.ln_pmf_kernel(k).exp()
+    }
+}
+
+impl<N> Discrete<N> for Geometric
+where
+    N: Natural + Compare,
+    N::Real: Compare<Mask = <N as Compare>::Mask>,
+{
+    fn pmf(&self, k: N) -> N::Real {
+        self.ln_pmf(k).exp()
+    }
+
+    fn ln_pmf(&self, k: N) -> N::Real {
+        let one_count = N::one();
+        let zero = N::Real::zero();
+
+        if self.p() >= 1.0 {
+            let valid = k.eq(&one_count);
+            return <N::Real as Compare>::select(&valid, zero, N::Real::neg_infinity());
+        }
+
+        let valid = k.ge(&one_count);
+        <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
     }
 }

@@ -1,13 +1,14 @@
 use std::f64::consts::TAU;
 
+use crate::{Continuous, ContinuousDensityKernel};
 use rand::Rng;
 use rand::distr::Distribution;
 
 use super::normal::Normal;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_error::BayesError;
+use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::LazyReal;
+use euclid::{Compare, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LogNormal {
@@ -36,7 +37,7 @@ impl Distribution<f64> for LogNormal {
     }
 }
 
-impl<T: LazyReal> Support<T> for LogNormal {
+impl<T: Real> Support<T> for LogNormal {
     fn min(&self) -> T {
         T::zero()
     }
@@ -45,7 +46,7 @@ impl<T: LazyReal> Support<T> for LogNormal {
     }
 }
 
-impl<T: LazyReal> ContinuousCdf<T> for LogNormal {
+impl<T: Real> ContinuousCdf<T> for LogNormal {
     fn cdf(&self, x: T) -> T {
         kernels::lognormal_cdf(x, T::scalar(self.mu()), T::scalar(self.sigma()))
     }
@@ -75,11 +76,6 @@ impl Moments for LogNormal {
         let (mu, sigma) = (self.mu(), self.sigma());
         (mu - sigma * sigma).exp()
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
@@ -95,3 +91,30 @@ impl Moments for LogNormal {
 
 #[cfg(test)]
 mod tests;
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for LogNormal {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::lognormal_log_pdf_on_support(x, T::scalar(self.mu()), T::scalar(self.sigma()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for LogNormal
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}

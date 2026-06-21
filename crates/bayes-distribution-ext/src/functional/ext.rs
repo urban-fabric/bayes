@@ -7,8 +7,8 @@ use crate::{
     Affine, Bijector, Continuous, ContinuousCdf, Discrete, Exp, OrderStatistic, Sigmoid,
     Transformed, Truncated,
 };
-use bayes_error::BayesError;
-use euclid::{LazyNatural, LazyReal};
+use bayes_core_ext::BayesError;
+use euclid::{Natural, Real};
 
 fn ln_sub_exp_f64(a: f64, b: f64) -> f64 {
     if a < b {
@@ -144,7 +144,7 @@ impl<D> ContinuousCdfExt for D where D: ContinuousCdf + Sized {}
 /// Functional operations for any discrete distribution.
 pub trait DiscreteDistributionExt<X>: Discrete<X>
 where
-    X: Copy + LazyNatural<Real = f64>,
+    X: Copy + Natural<Real = f64>,
 {
     /// Log-likelihood `Σ ln P(X = xᵢ)`. Empty samples have log-likelihood `0`.
     fn ln_likelihood(&self, data: &[X]) -> f64 {
@@ -160,6 +160,6 @@ where
 impl<D, X> DiscreteDistributionExt<X> for D
 where
     D: Discrete<X>,
-    X: Copy + LazyNatural<Real = f64>,
+    X: Copy + Natural<Real = f64>,
 {
 }

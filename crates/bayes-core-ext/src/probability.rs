@@ -5,7 +5,7 @@
 //! validation, weight normalization, and forecast scores against an observed
 //! category.
 
-use bayes_error::BayesError;
+use crate::BayesError;
 
 /// Default tolerance for probability-vector sum checks.
 pub const PROBABILITY_TOLERANCE: f64 = 1e-9;

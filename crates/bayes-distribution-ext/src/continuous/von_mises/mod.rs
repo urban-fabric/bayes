@@ -1,14 +1,13 @@
 use std::f64::consts::{PI, TAU};
 
+use crate::{Continuous, ContinuousDensityKernel};
+use bayes_kernels as kernels;
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{Moments, Support};
-use bayes_error::BayesError;
-use euclid::LazyReal;
-
-#[cfg(test)]
-use crate::Continuous;
+use bayes_core_ext::BayesError;
+use euclid::Real;
 
 /// The von Mises distribution — the circular analogue of the Normal — with mean
 /// direction `μ` and concentration `κ > 0`, on the circle `[−π, π)`. Density
@@ -87,7 +86,7 @@ impl Distribution<f64> for VonMises {
     }
 }
 
-impl<T: LazyReal> Support<T> for VonMises {
+impl<T: Real> Support<T> for VonMises {
     fn min(&self) -> T {
         T::scalar(-PI)
     }
@@ -110,11 +109,6 @@ impl Moments for VonMises {
     }
     fn variance(&self) -> f64 {
         f64::NAN
-    }
-
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
     }
 
     fn std_dev(&self) -> f64 {
@@ -180,5 +174,29 @@ mod tests {
             ss += t.sin();
         }
         close(ss.atan2(sc), mu, 0.02);
+    }
+}
+
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for VonMises {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let kappa = T::scalar(self.kappa());
+        let log_normalizer = T::ln_tau() + kappa.clone().ln_bessel_i0();
+        kernels::von_mises_log_pdf(x, T::scalar(self.mu()), kappa, log_normalizer)
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for VonMises {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
     }
 }

@@ -92,11 +92,6 @@ impl<D: Moments> Moments for Transformed<D, Affine> {
     fn mode(&self) -> f64 {
         self.bijector.scale * self.base.mode() + self.bijector.shift
     }
-    fn moment2(&self) -> f64 {
-        let mean = self.mean();
-        self.variance() + mean * mean
-    }
-
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
     }
