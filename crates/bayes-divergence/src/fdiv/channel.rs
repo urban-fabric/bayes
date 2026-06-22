@@ -18,19 +18,18 @@ use super::*;
 /// increase the divergence between two distributions; it only ever loses
 /// discriminating information.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Channel {
+pub struct Channel<R: Real = f64> {
     /// `rows[i]` is the output distribution given input `i`; each sums to `1`.
-    rows: Vec<Vec<f64>>,
+    rows: Vec<Vec<R>>,
     outputs: usize,
 }
 
-impl Channel {
+impl Channel<f64> {
     /// Build a channel from its rows, validating that it is rectangular and
     /// row-stochastic (each row finite, non-negative, summing to `1`).
     pub fn new(rows: Vec<Vec<f64>>) -> Result<Self, BayesError> {
-        let outputs = rows.first().map(Vec::len).unwrap_or(0);
         validate_row_stochastic(&rows)?;
-        Ok(Self { rows, outputs })
+        Ok(Self::from_rows_unchecked(rows))
     }
 
     /// A deterministic **coarse-graining** channel: input `i` is sent to group
@@ -59,6 +58,33 @@ impl Channel {
             outputs: groups,
         })
     }
+}
+
+impl<R: Real> Channel<R> {
+    /// Build a channel from rows without host-side stochastic validation.
+    ///
+    /// This is the graph-friendly constructor for lazy [`Real`] carriers. The
+    /// caller is responsible for providing rectangular probability rows.
+    pub fn from_rows_unchecked(rows: Vec<Vec<R>>) -> Self {
+        let outputs = rows.first().map(Vec::len).unwrap_or(0);
+        Self { rows, outputs }
+    }
+
+    /// A deterministic coarse-graining channel over any [`Real`] carrier.
+    pub fn coarse_grain_unchecked(assignment: &[usize], groups: usize) -> Self {
+        let mut rows = Vec::with_capacity(assignment.len());
+        for &g in assignment {
+            let mut row = vec![R::zero(); groups];
+            if g < groups {
+                row[g] = R::one();
+            }
+            rows.push(row);
+        }
+        Self {
+            rows,
+            outputs: groups,
+        }
+    }
 
     /// The number of input categories (rows).
     pub fn inputs(&self) -> usize {
@@ -75,15 +101,12 @@ impl Channel {
     /// truncated to [`inputs`](Self::inputs)); the result has
     /// [`outputs`](Self::outputs) entries and is itself a probability vector
     /// when `p` is.
-    pub fn apply(&self, p: &[f64]) -> Vec<f64> {
-        let mut out = vec![0.0; self.outputs];
+    pub fn apply(&self, p: &[R]) -> Vec<R> {
+        let mut out = vec![R::zero(); self.outputs];
         for (i, row) in self.rows.iter().enumerate() {
-            let pi = p.get(i).copied().unwrap_or(0.0);
-            if pi == 0.0 {
-                continue;
-            }
-            for (k, &kik) in row.iter().enumerate() {
-                out[k] += pi * kik;
+            let pi = p.get(i).cloned().unwrap_or_else(R::zero);
+            for (k, kik) in row.iter().cloned().enumerate() {
+                out[k] = out[k].clone() + pi.clone() * kik;
             }
         }
         out

@@ -25,9 +25,16 @@ pub mod kernels {
     pub use bayes_kernels::*;
 }
 
-/// Compatibility alias for the former `bayes::lazy` namespace.
+/// Euclid-generic lazy distribution structs, divergence traits, and kernels.
 pub mod lazy {
     pub use crate::kernels::*;
+    pub use bayes_core_ext::{
+        brier_score_real, log_loss_real, log_score_real, normalize_probability_rows_real,
+        normalize_probability_weights_real, probability_sum_real, ranked_probability_score_real,
+        spherical_score_real,
+    };
+    pub use bayes_distribution::*;
+    pub use bayes_divergence::*;
 }
 
 /// Normal / complex-normal log-probability primitives.
@@ -71,13 +78,19 @@ pub use distribution::{
     Poisson, Rayleigh, RealConstraint, RenyiDivergence, ReverseKl, Sigmoid, SquaredHellinger,
     StudentT, SufficientStatistic, Support, TotalVariation, TotalVariationGen, Transformed, Trials,
     Triangular, Truncated, Uniform, VonMises, Wald, Weibull, bhattacharyya_coefficient,
-    brier_score, conditional_entropy, cross_entropy, f_divergence, is_entropy_admissible,
-    is_probability_vector, is_probability_vector_with_tolerance, is_row_stochastic,
-    is_row_stochastic_with_tolerance, jensen_shannon, joint_entropy, log_loss, log_score,
-    max_entropy, mutual_information, normalize_probability_rows, normalize_probability_weights,
-    normalized_entropy, normalized_mutual_information, probability_sum, ranked_probability_score,
-    shannon_entropy, spherical_score, validate_probability_vector, validate_row_stochastic,
-    validate_row_stochastic_with_tolerance, variation_of_information,
+    bhattacharyya_coefficient_real, brier_score, brier_score_real, conditional_entropy,
+    conditional_entropy_real, cross_entropy, cross_entropy_real, f_divergence, f_divergence_real,
+    is_entropy_admissible, is_probability_vector, is_probability_vector_with_tolerance,
+    is_row_stochastic, is_row_stochastic_with_tolerance, jensen_shannon, jensen_shannon_real,
+    joint_entropy, joint_entropy_real, log_loss, log_loss_real, log_score, log_score_real,
+    max_entropy, max_entropy_real, mutual_information, mutual_information_real,
+    normalize_probability_rows, normalize_probability_rows_real, normalize_probability_weights,
+    normalize_probability_weights_real, normalized_entropy, normalized_entropy_real,
+    normalized_mutual_information, normalized_mutual_information_real, probability_sum,
+    probability_sum_real, ranked_probability_score, ranked_probability_score_real, shannon_entropy,
+    shannon_entropy_real, spherical_score, spherical_score_real, validate_probability_vector,
+    validate_row_stochastic, validate_row_stochastic_with_tolerance, variation_of_information,
+    variation_of_information_real,
 };
 
 /// Sample statistics over data (`data.mean()`, `data.median()`, …), including
@@ -86,17 +99,22 @@ pub use distribution::{
 pub use statistics::{
     ConfidenceInterval, Ecdf, Histogram, KernelDensity, LinearRegression, RunningCovariance,
     RunningStats, SampleStats, TDigest, TestResult, VarianceDecomposition,
-    coefficient_of_variation, cohen_d, dot, effective_sample_size, eta_squared,
-    gini_mean_difference, glass_delta, hedges_g, histogram, is_effective_sample_size_admissible,
-    mcdiarmid_bound, mean_abs_deviation, mean_difference_welch_interval, mean_t_interval,
-    mean_vector, mean_z_interval, norm2, normalized_log_weights, normalized_weights, odds_ratio,
-    omega_squared, poisson_rate_interval, pooled_std_dev, proportion_agresti_coull,
+    coefficient_of_variation, coefficient_of_variation_real, cohen_d, correlation_real,
+    covariance_real, dot, dot_real, effective_sample_size, effective_sample_size_real, eta_squared,
+    geometric_mean_real, gini_mean_difference, glass_delta, harmonic_mean_real, hedges_g,
+    histogram, is_effective_sample_size_admissible, kurtosis_real, mcdiarmid_bound,
+    mean_abs_deviation, mean_abs_deviation_real, mean_difference_welch_interval, mean_real,
+    mean_t_interval, mean_vector, mean_vector_real, mean_z_interval, norm2, norm2_real,
+    normalized_log_weights, normalized_weights, normalized_weights_real, odds_ratio, omega_squared,
+    poisson_rate_interval, pooled_std_dev, population_variance_real, proportion_agresti_coull,
     proportion_clopper_pearson, proportion_difference_wald, proportion_jeffreys, proportion_wald,
-    proportion_wilson, risk_difference, risk_ratio, sample_shape, std_dev_chi_square_interval,
-    trimmed_mean, tukey_fences, tukey_outlier_flags, variance_chi_square_interval,
-    variance_decomposition, weight_sum, weighted_correlation, weighted_covariance, weighted_mean,
-    weighted_population_variance, weighted_quantile, weighted_std_dev, weighted_variance,
-    winsorized_mean, z_scores,
+    proportion_wilson, risk_difference, risk_ratio, sample_shape, skewness_real,
+    std_dev_chi_square_interval, std_dev_real, trimmed_mean, tukey_fences, tukey_outlier_flags,
+    variance_chi_square_interval, variance_decomposition, variance_real, weight_sum,
+    weight_sum_real, weighted_correlation, weighted_correlation_real, weighted_covariance,
+    weighted_covariance_real, weighted_mean, weighted_mean_real, weighted_population_variance,
+    weighted_population_variance_real, weighted_quantile, weighted_std_dev, weighted_std_dev_real,
+    weighted_variance, weighted_variance_real, winsorized_mean, z_scores, z_scores_real,
 };
 
 /// Probabilistic processes: random walks, Poisson processes, and the covariance

@@ -71,7 +71,10 @@ pub use estimation::{
 pub use hypothesis::TestResult;
 pub use inequalities::{cauchy_schwarz_moment_holds, jensen_gap_lower_bound};
 pub use kde::KernelDensity;
-pub use multivariate::{RunningCovariance, dot, mean_vector, norm2, sample_shape};
+pub use multivariate::{
+    RunningCovariance, dot, dot_real, mean_vector, mean_vector_real, norm2, norm2_real,
+    sample_shape,
+};
 pub use online::RunningStats;
 pub use order::{
     five_number_summary, iqr, median, median_abs_deviation, percentile, quantile, tukey_fences,
@@ -80,15 +83,21 @@ pub use order::{
 pub use regression::LinearRegression;
 pub use resampling::{bootstrap, jackknife, percentile_interval};
 pub use summary::{
-    coefficient_of_variation, correlation, covariance, geometric_mean, gini_mean_difference,
-    harmonic_mean, kurtosis, mean, mean_abs_deviation, population_variance, skewness, std_dev,
-    trimmed_mean, variance, winsorized_mean, z_scores,
+    coefficient_of_variation, coefficient_of_variation_real, correlation, correlation_real,
+    covariance, covariance_real, geometric_mean, geometric_mean_real, gini_mean_difference,
+    harmonic_mean, harmonic_mean_real, kurtosis, kurtosis_real, mean, mean_abs_deviation,
+    mean_abs_deviation_real, mean_real, population_variance, population_variance_real, skewness,
+    skewness_real, std_dev, std_dev_real, trimmed_mean, variance, variance_real, winsorized_mean,
+    z_scores, z_scores_real,
 };
 pub use tdigest::TDigest;
 pub use weighted::{
-    effective_sample_size, is_effective_sample_size_admissible, normalized_log_weights,
-    normalized_weights, weight_sum, weighted_correlation, weighted_covariance, weighted_mean,
-    weighted_population_variance, weighted_quantile, weighted_std_dev, weighted_variance,
+    effective_sample_size, effective_sample_size_real, is_effective_sample_size_admissible,
+    normalized_log_weights, normalized_weights, normalized_weights_real, weight_sum,
+    weight_sum_real, weighted_correlation, weighted_correlation_real, weighted_covariance,
+    weighted_covariance_real, weighted_mean, weighted_mean_real, weighted_population_variance,
+    weighted_population_variance_real, weighted_quantile, weighted_std_dev, weighted_std_dev_real,
+    weighted_variance, weighted_variance_real,
 };
 
 /// Summary + order statistics as methods on a slice of samples (`data.mean()`,

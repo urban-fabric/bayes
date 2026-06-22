@@ -16,28 +16,28 @@ pub fn exponential_correlation<T: Real>(distance: T, length_scale: T) -> T {
 
 /// Matérn-3/2 correlation `ρ = (1 + √3·d/ℓ)·exp(−√3·d/ℓ)` — once-differentiable fields.
 pub fn matern_32_correlation<T: Real>(distance: T, length_scale: T) -> T {
-    let s = T::scalar(3.0_f64.sqrt()) * (distance / length_scale);
-    (T::scalar(1.0) + s.clone()) * (-s).exp()
+    let s = T::scalar(3.0).sqrt() * (distance / length_scale);
+    (T::one() + s.clone()) * (-s).exp()
 }
 
 /// Matérn-5/2 correlation `ρ = (1 + √5·d/ℓ + 5d²/3ℓ²)·exp(−√5·d/ℓ)` — twice-differentiable.
 pub fn matern_52_correlation<T: Real>(distance: T, length_scale: T) -> T {
     let r = distance / length_scale;
-    let s = T::scalar(5.0_f64.sqrt()) * r.clone();
-    let quadratic = T::scalar(5.0 / 3.0) * square(r);
-    (T::scalar(1.0) + s.clone() + quadratic) * (-s).exp()
+    let s = T::scalar(5.0).sqrt() * r.clone();
+    let quadratic = T::scalar(5.0 / 3.0) * r.square();
+    (T::one() + s.clone() + quadratic) * (-s).exp()
 }
 
 /// Squared-exponential (RBF / Gaussian) correlation `ρ = exp(−½·(d/ℓ)²)` — Matérn ν → ∞.
 pub fn squared_exponential_correlation<T: Real>(distance: T, length_scale: T) -> T {
     let r = distance / length_scale;
-    (-(T::scalar(0.5) * square(r))).exp()
+    (-(T::half() * r.square())).exp()
 }
 
 /// Periodic correlation `ρ = exp(−2·sin²(π·Δ/p)/ℓ²)` (1-D) — for cyclic inputs of period `p`.
 pub fn periodic_correlation<T: Real>(delta: T, period: T, length_scale: T) -> T {
-    let s = ((delta / period) * T::scalar(core::f64::consts::PI)).sin();
-    (-(T::scalar(2.0) * square(s) / square(length_scale))).exp()
+    let s = ((delta / period) * T::pi()).sin();
+    (-(T::two() * s.square() / length_scale.square())).exp()
 }
 
 #[cfg(test)]

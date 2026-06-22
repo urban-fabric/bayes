@@ -22,12 +22,11 @@ use bayes::kernels::*;
 // `ito::Dirichlet` (etc.) live in ito's integration test
 // `tests/bayes_kernels_on_eager.rs`.
 use bayes::{
-    Bernoulli, Beta, BetaBernoulli, BetaBinomialModel, Binomial, Categorical, Cauchy, ChiSquared,
-    ChiSquaredDivergence, Continuous, ContinuousCdf, Discrete, DiscreteCdf, DiscreteUniform,
-    Exponential, FisherSnedecor, Frechet, Gamma, GammaExponential, GammaPoisson, Geometric, Gumbel,
-    HalfNormal, HellingerDistance, Hypergeometric, InverseGamma, KlDivergence, Laplace, LogNormal,
-    Logistic, Lomax, Moments, NegativeBinomial, Normal, OrderStatistic, Pareto, Poisson, Rayleigh,
-    RenyiDivergence, StudentT, TotalVariation, Triangular, Uniform, VonMises, Wald, Weibull,
+    ChiSquaredDivergence, HellingerDistance, KlDivergence, RenyiDivergence, TotalVariation,
+};
+use bayes_distribution::{
+    Bernoulli, Beta, Binomial, Cauchy, DiscreteUniform, Exponential, Gamma, Geometric, Gumbel,
+    Laplace, NegativeBinomial, Normal, Pareto, Poisson, Rayleigh, Uniform, VonMises, Wald, Weibull,
 };
 
 fn close(a: f64, b: f64, tol: f64) {
@@ -41,7 +40,7 @@ fn close(a: f64, b: f64, tol: f64) {
 fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
     let alpha = 0.5;
 
-    let bernoulli = (Bernoulli::new(0.3).unwrap(), Bernoulli::new(0.7).unwrap());
+    let bernoulli = (Bernoulli::new(0.3), Bernoulli::new(0.7));
     close(
         chi_squared_bernoulli(0.3, 0.7),
         bernoulli.0.chi_squared_divergence(&bernoulli.1),
@@ -58,7 +57,7 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
         1e-12,
     );
 
-    let poisson = (Poisson::new(2.5).unwrap(), Poisson::new(4.0).unwrap());
+    let poisson = (Poisson::new(2.5), Poisson::new(4.0));
     close(
         chi_squared_poisson(2.5, 4.0),
         poisson.0.chi_squared_divergence(&poisson.1),
@@ -66,10 +65,7 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
     );
 
     // χ² / Rényi interiors in their convergence region.
-    let normal = (
-        Normal::new(0.0, 1.0).unwrap(),
-        Normal::new(0.5, 1.2).unwrap(),
-    );
+    let normal = (Normal::new(0.0, 1.0), Normal::new(0.5, 1.2));
     close(
         chi_squared_normal_on_support(0.0, 1.0, 0.5, 1.2),
         normal.0.chi_squared_divergence(&normal.1),
@@ -81,17 +77,14 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
         1e-12,
     );
 
-    let exponential = (
-        Exponential::new(1.5).unwrap(),
-        Exponential::new(1.0).unwrap(),
-    );
+    let exponential = (Exponential::new(1.5), Exponential::new(1.0));
     close(
         chi_squared_exponential_on_support(1.5, 1.0),
         exponential.0.chi_squared_divergence(&exponential.1),
         1e-12,
     );
 
-    let gamma = (Gamma::new(2.5, 1.2).unwrap(), Gamma::new(3.0, 0.8).unwrap());
+    let gamma = (Gamma::new(2.5, 1.2), Gamma::new(3.0, 0.8));
     close(
         chi_squared_gamma_on_support(2.5, 1.2, 3.0, 0.8),
         gamma.0.chi_squared_divergence(&gamma.1),
@@ -104,10 +97,7 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
     );
 
     // Binomial with a matched trial count n = 12 (always finite).
-    let binomial = (
-        Binomial::new(12, 0.3).unwrap(),
-        Binomial::new(12, 0.5).unwrap(),
-    );
+    let binomial = (Binomial::new(12_u64, 0.3), Binomial::new(12_u64, 0.5));
     close(
         chi_squared_binomial(12.0, 0.3, 0.5),
         binomial.0.chi_squared_divergence(&binomial.1),
@@ -121,8 +111,8 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
 
     // Negative-binomial interiors in their convergence region (matched r = 5).
     let negbin = (
-        NegativeBinomial::new(5.0, 0.6).unwrap(),
-        NegativeBinomial::new(5.0, 0.4).unwrap(),
+        NegativeBinomial::new(5.0, 0.6),
+        NegativeBinomial::new(5.0, 0.4),
     );
     close(
         chi_squared_negative_binomial_on_support(5.0, 0.6, 0.4),
@@ -136,7 +126,7 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
     );
 
     // Wald / inverse-Gaussian interiors in their convergence region.
-    let wald = (Wald::new(1.0, 3.0).unwrap(), Wald::new(1.2, 2.0).unwrap());
+    let wald = (Wald::new(1.0, 3.0), Wald::new(1.2, 2.0));
     close(
         chi_squared_wald_on_support(1.0, 3.0, 1.2, 2.0),
         wald.0.chi_squared_divergence(&wald.1),
@@ -149,10 +139,7 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
     );
 
     // Uniform / discrete-uniform χ² and Rényi on nested support.
-    let uniform = (
-        Uniform::new(-1.0, 2.0).unwrap(),
-        Uniform::new(-2.0, 3.0).unwrap(),
-    );
+    let uniform = (Uniform::new(-1.0, 2.0), Uniform::new(-2.0, 3.0));
     close(
         chi_squared_uniform_on_support(3.0, 5.0),
         uniform.0.chi_squared_divergence(&uniform.1),
@@ -164,8 +151,8 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
         1e-12,
     );
     let du = (
-        DiscreteUniform::new(0, 3).unwrap(),
-        DiscreteUniform::new(-1, 5).unwrap(),
+        DiscreteUniform::new(0_i64, 3),
+        DiscreteUniform::new(-1_i64, 5),
     );
     close(
         chi_squared_discrete_uniform_on_support(4.0, 7.0),
@@ -183,10 +170,7 @@ fn lazy_real_chi_squared_renyi_tv_kernels_match_distribution() {
 fn lazy_real_von_mises_divergences_match_distribution() {
     // κ ≤ 15 keeps the distribution on its `i0(x).ln()` branch, so the scaled-
     // Bessel reformulation `ln I₀ᵉ + |x|` agrees to rounding.
-    let vm = (
-        VonMises::new(0.3, 2.0).unwrap(),
-        VonMises::new(0.8, 1.5).unwrap(),
-    );
+    let vm = (VonMises::new(0.3, 2.0), VonMises::new(0.8, 1.5));
     close(
         kl_von_mises(0.3, 2.0, 0.8, 1.5),
         vm.0.kl_divergence(&vm.1),
@@ -212,41 +196,35 @@ fn lazy_real_von_mises_divergences_match_distribution() {
 #[test]
 fn lazy_real_kl_kernels_match_distribution() {
     // Gaussian family (Normal / LogNormal / HalfNormal share one closed form).
-    let normal = (
-        Normal::new(0.0, 1.0).unwrap(),
-        Normal::new(1.0, 2.0).unwrap(),
-    );
+    let normal = (Normal::new(0.0, 1.0), Normal::new(1.0, 2.0));
     close(
         kl_normal(0.0, 1.0, 1.0, 2.0),
         normal.0.kl_divergence(&normal.1),
         1e-12,
     );
 
-    let exponential = (
-        Exponential::new(1.5).unwrap(),
-        Exponential::new(0.7).unwrap(),
-    );
+    let exponential = (Exponential::new(1.5), Exponential::new(0.7));
     close(
         kl_exponential(1.5, 0.7),
         exponential.0.kl_divergence(&exponential.1),
         1e-12,
     );
 
-    let poisson = (Poisson::new(2.5).unwrap(), Poisson::new(4.0).unwrap());
+    let poisson = (Poisson::new(2.5), Poisson::new(4.0));
     close(
         kl_poisson(2.5, 4.0),
         poisson.0.kl_divergence(&poisson.1),
         1e-12,
     );
 
-    let geometric = (Geometric::new(0.3).unwrap(), Geometric::new(0.6).unwrap());
+    let geometric = (Geometric::new(0.3), Geometric::new(0.6));
     close(
         kl_geometric(0.3, 0.6),
         geometric.0.kl_divergence(&geometric.1),
         1e-12,
     );
 
-    let bernoulli = (Bernoulli::new(0.3).unwrap(), Bernoulli::new(0.7).unwrap());
+    let bernoulli = (Bernoulli::new(0.3), Bernoulli::new(0.7));
     close(
         kl_bernoulli_on_unit(0.3, 0.7),
         bernoulli.0.kl_divergence(&bernoulli.1),
@@ -255,8 +233,8 @@ fn lazy_real_kl_kernels_match_distribution() {
 
     // Negative-binomial with matched successes r = 5.
     let negbin = (
-        NegativeBinomial::new(5.0, 0.4).unwrap(),
-        NegativeBinomial::new(5.0, 0.6).unwrap(),
+        NegativeBinomial::new(5.0, 0.4),
+        NegativeBinomial::new(5.0, 0.6),
     );
     close(
         kl_negative_binomial(5.0, 0.4, 0.6),
@@ -264,27 +242,21 @@ fn lazy_real_kl_kernels_match_distribution() {
         1e-12,
     );
 
-    let cauchy = (
-        Cauchy::new(0.0, 1.0).unwrap(),
-        Cauchy::new(0.5, 1.7).unwrap(),
-    );
+    let cauchy = (Cauchy::new(0.0, 1.0), Cauchy::new(0.5, 1.7));
     close(
         kl_cauchy(0.0, 1.0, 0.5, 1.7),
         cauchy.0.kl_divergence(&cauchy.1),
         1e-12,
     );
 
-    let rayleigh = (Rayleigh::new(1.2).unwrap(), Rayleigh::new(2.0).unwrap());
+    let rayleigh = (Rayleigh::new(1.2), Rayleigh::new(2.0));
     close(
         kl_rayleigh(1.2, 2.0),
         rayleigh.0.kl_divergence(&rayleigh.1),
         1e-12,
     );
 
-    let laplace = (
-        Laplace::new(0.0, 1.0).unwrap(),
-        Laplace::new(0.5, 1.7).unwrap(),
-    );
+    let laplace = (Laplace::new(0.0, 1.0), Laplace::new(0.5, 1.7));
     close(
         kl_laplace(0.0, 1.0, 0.5, 1.7),
         laplace.0.kl_divergence(&laplace.1),
@@ -292,7 +264,7 @@ fn lazy_real_kl_kernels_match_distribution() {
     );
 
     // Wald::new(mu, shape).
-    let wald = (Wald::new(1.0, 2.0).unwrap(), Wald::new(1.5, 3.0).unwrap());
+    let wald = (Wald::new(1.0, 2.0), Wald::new(1.5, 3.0));
     close(
         kl_wald(1.0, 2.0, 1.5, 3.0),
         wald.0.kl_divergence(&wald.1),
@@ -300,14 +272,14 @@ fn lazy_real_kl_kernels_match_distribution() {
     );
 
     // Gamma family (Gamma / ChiSquared / InverseGamma share one closed form).
-    let gamma = (Gamma::new(2.5, 1.2).unwrap(), Gamma::new(3.0, 0.8).unwrap());
+    let gamma = (Gamma::new(2.5, 1.2), Gamma::new(3.0, 0.8));
     close(
         kl_gamma(2.5, 1.2, 3.0, 0.8),
         gamma.0.kl_divergence(&gamma.1),
         1e-12,
     );
 
-    let beta = (Beta::new(2.0, 5.0).unwrap(), Beta::new(3.0, 4.0).unwrap());
+    let beta = (Beta::new(2.0, 5.0), Beta::new(3.0, 4.0));
     close(
         kl_beta(2.0, 5.0, 3.0, 4.0),
         beta.0.kl_divergence(&beta.1),
@@ -315,20 +287,14 @@ fn lazy_real_kl_kernels_match_distribution() {
     );
 
     // Weibull::new(scale, shape); the kernel takes (shape, scale).
-    let weibull = (
-        Weibull::new(1.4, 2.2).unwrap(),
-        Weibull::new(1.0, 1.6).unwrap(),
-    );
+    let weibull = (Weibull::new(1.4, 2.2), Weibull::new(1.0, 1.6));
     close(
         kl_weibull(2.2, 1.4, 1.6, 1.0),
         weibull.0.kl_divergence(&weibull.1),
         1e-12,
     );
 
-    let gumbel = (
-        Gumbel::new(0.0, 1.0).unwrap(),
-        Gumbel::new(0.5, 1.5).unwrap(),
-    );
+    let gumbel = (Gumbel::new(0.0, 1.0), Gumbel::new(0.5, 1.5));
     close(
         kl_gumbel(0.0, 1.0, 0.5, 1.5),
         gumbel.0.kl_divergence(&gumbel.1),
@@ -336,10 +302,7 @@ fn lazy_real_kl_kernels_match_distribution() {
     );
 
     // Pareto::new(minimum, shape) with nested support (xm0 ≥ xm1).
-    let pareto = (
-        Pareto::new(3.0, 2.0).unwrap(),
-        Pareto::new(2.0, 1.5).unwrap(),
-    );
+    let pareto = (Pareto::new(3.0, 2.0), Pareto::new(2.0, 1.5));
     close(
         kl_pareto_on_support(3.0, 2.0, 2.0, 1.5),
         pareto.0.kl_divergence(&pareto.1),
@@ -347,10 +310,7 @@ fn lazy_real_kl_kernels_match_distribution() {
     );
 
     // Binomial with a matched trial count n = 12 (n × the Bernoulli KL).
-    let binomial = (
-        Binomial::new(12, 0.3).unwrap(),
-        Binomial::new(12, 0.5).unwrap(),
-    );
+    let binomial = (Binomial::new(12_u64, 0.3), Binomial::new(12_u64, 0.5));
     close(
         kl_binomial(12.0, 0.3, 0.5),
         binomial.0.kl_divergence(&binomial.1),
@@ -358,18 +318,15 @@ fn lazy_real_kl_kernels_match_distribution() {
     );
 
     // Uniform / discrete-uniform on nested support.
-    let uniform = (
-        Uniform::new(-1.0, 2.0).unwrap(),
-        Uniform::new(-2.0, 3.0).unwrap(),
-    );
+    let uniform = (Uniform::new(-1.0, 2.0), Uniform::new(-2.0, 3.0));
     close(
         kl_uniform_on_support(3.0, 5.0),
         uniform.0.kl_divergence(&uniform.1),
         1e-12,
     );
     let du = (
-        DiscreteUniform::new(0, 3).unwrap(),
-        DiscreteUniform::new(-1, 5).unwrap(),
+        DiscreteUniform::new(0_i64, 3),
+        DiscreteUniform::new(-1_i64, 5),
     );
     close(
         kl_discrete_uniform_on_support(4.0, 7.0),

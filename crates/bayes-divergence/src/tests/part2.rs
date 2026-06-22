@@ -18,8 +18,8 @@ fn categorical_chi_squared_matches_definition_and_handles_zero_support() {
 #[test]
 fn exponential_chi_squared_converges_only_for_light_enough_denominator() {
     // Convergent case 2λ₁ > λ₂: validate against the numeric integral of p²/q.
-    let a = Exponential::new(2.0).unwrap();
-    let b = Exponential::new(1.0).unwrap();
+    let a = Exponential::new(2.0);
+    let b = Exponential::new(1.0);
     let integral = {
         let n = 200_000usize;
         let (lo, hi) = (0.0, 100.0);
@@ -35,8 +35,8 @@ fn exponential_chi_squared_converges_only_for_light_enough_denominator() {
     };
     close(a.chi_squared_divergence(&b), integral - 1.0, 2e-3);
     // Divergent case 2λ₁ ≤ λ₂: heavier-tailed numerator → +∞.
-    let c = Exponential::new(1.0).unwrap();
-    let d = Exponential::new(3.0).unwrap();
+    let c = Exponential::new(1.0_f64);
+    let d = Exponential::new(3.0_f64);
     assert!(c.chi_squared_divergence(&d).is_infinite());
 }
 
@@ -44,22 +44,22 @@ fn exponential_chi_squared_converges_only_for_light_enough_denominator() {
 fn kl_le_chi_squared_holds() {
     // The proved bound KL ≤ χ², checked on Bernoulli and Poisson pairs.
     for (p, q) in [(0.3, 0.8), (0.1, 0.2), (0.6, 0.55)] {
-        let a = Bernoulli::new(p).unwrap();
-        let b = Bernoulli::new(q).unwrap();
+        let a = Bernoulli::new(p);
+        let b = Bernoulli::new(q);
         assert!(
             a.kl_divergence(&b) <= a.chi_squared_divergence(&b) + 1e-12,
             "KL≤χ² (Bernoulli) failed: {p},{q}"
         );
     }
-    let a = Poisson::new(3.0).unwrap();
-    let b = Poisson::new(4.0).unwrap();
+    let a = Poisson::new(3.0);
+    let b = Poisson::new(4.0);
     assert!(a.kl_divergence(&b) <= a.chi_squared_divergence(&b) + 1e-12);
 }
 
 #[test]
 fn renyi_self_zero_and_limits_tie_to_the_other_divergences() {
-    let a = Bernoulli::new(0.3).unwrap();
-    let b = Bernoulli::new(0.8).unwrap();
+    let a = Bernoulli::new(0.3);
+    let b = Bernoulli::new(0.8);
     // Self-divergence is zero at any order.
     for alpha in [0.5, 1.0, 2.0, 3.0] {
         close(a.renyi_divergence(&a, alpha), 0.0, 1e-12);
@@ -93,17 +93,15 @@ fn categorical_renyi_matches_bernoulli_for_two_categories() {
         let cat = Categorical::new(&[0.7, 0.3])
             .unwrap()
             .renyi_divergence(&Categorical::new(&[0.4, 0.6]).unwrap(), alpha);
-        let bern = Bernoulli::new(0.7)
-            .unwrap()
-            .renyi_divergence(&Bernoulli::new(0.4).unwrap(), alpha);
+        let bern = Bernoulli::new(0.7).renyi_divergence(&Bernoulli::new(0.4), alpha);
         close(cat, bern, 1e-12);
     }
 }
 
 #[test]
 fn gaussian_renyi_matches_its_limits_and_the_integral() {
-    let p = Normal::new(0.0, 1.0).unwrap();
-    let q = Normal::new(1.5, 2.0).unwrap();
+    let p = Normal::new(0.0, 1.0);
+    let q = Normal::new(1.5, 2.0);
     // Self-divergence is zero at every order.
     for alpha in [0.3, 0.5, 1.0, 2.0, 3.0] {
         close(p.renyi_divergence(&p, alpha), 0.0, 1e-12);
@@ -139,17 +137,14 @@ fn gaussian_renyi_matches_its_limits_and_the_integral() {
     // Diverges when the order-α power is not integrable (σ_α² ≤ 0):
     // α = 2, σ₀ = 3, σ₁ = 1 ⇒ 2·1 − 1·9 < 0.
     assert!(
-        Normal::new(0.0, 3.0)
-            .unwrap()
-            .renyi_divergence(&Normal::new(0.0, 1.0).unwrap(), 2.0)
+        Normal::new(0.0_f64, 3.0)
+            .renyi_divergence(&Normal::new(0.0_f64, 1.0), 2.0)
             .is_infinite()
     );
     // LogNormal reuses the Normal formula on (μ, σ).
     for alpha in [0.4, 2.0] {
         close(
-            LogNormal::new(0.0, 1.0)
-                .unwrap()
-                .renyi_divergence(&LogNormal::new(1.5, 2.0).unwrap(), alpha),
+            LogNormal::new(0.0, 1.0).renyi_divergence(&LogNormal::new(1.5, 2.0), alpha),
             p.renyi_divergence(&q, alpha),
             1e-12,
         );
@@ -187,9 +182,7 @@ fn lognormal_kl_equals_underlying_normal_kl() {
     // KL is invariant under the log reparametrization, so LN(0,1)‖LN(1,1)
     // matches N(0,1)‖N(1,1) = 0.5.
     close(
-        LogNormal::new(0.0, 1.0)
-            .unwrap()
-            .kl_divergence(&LogNormal::new(1.0, 1.0).unwrap()),
+        LogNormal::new(0.0, 1.0).kl_divergence(&LogNormal::new(1.0, 1.0)),
         0.5,
         1e-12,
     );
@@ -199,17 +192,13 @@ fn lognormal_kl_equals_underlying_normal_kl() {
 fn laplace_and_geometric_kl_known_values() {
     // Laplace, same location: ln(b₂/b₁) + b₁/b₂ − 1.
     close(
-        Laplace::new(0.0, 1.0)
-            .unwrap()
-            .kl_divergence(&Laplace::new(0.0, 2.0).unwrap()),
+        Laplace::new(0.0, 1.0).kl_divergence(&Laplace::new(0.0, 2.0)),
         2.0_f64.ln() - 0.5,
         1e-12,
     );
     // Geometric: ln(p₁/p₂) + ((1−p₁)/p₁)·ln((1−p₁)/(1−p₂)) = ln(4/3).
     close(
-        Geometric::new(0.5)
-            .unwrap()
-            .kl_divergence(&Geometric::new(0.25).unwrap()),
+        Geometric::new(0.5).kl_divergence(&Geometric::new(0.25)),
         (4.0_f64 / 3.0).ln(),
         1e-12,
     );
@@ -232,9 +221,9 @@ fn categorical_kl() {
 #[test]
 fn cauchy_rayleigh_weibull_pareto_kl() {
     // Cauchy: ln[((γ₁+γ₂)² + Δ²)/(4γ₁γ₂)]; here ln(9/8).
-    let c = Cauchy::new(0.0, 1.0).unwrap();
+    let c = Cauchy::new(0.0, 1.0);
     close(
-        c.kl_divergence(&Cauchy::new(0.0, 2.0).unwrap()),
+        c.kl_divergence(&Cauchy::new(0.0, 2.0)),
         (9.0_f64 / 8.0).ln(),
         1e-12,
     );
@@ -242,35 +231,28 @@ fn cauchy_rayleigh_weibull_pareto_kl() {
 
     // Rayleigh: 2 ln(σ₂/σ₁) + (σ₁/σ₂)² − 1.
     close(
-        Rayleigh::new(1.0)
-            .unwrap()
-            .kl_divergence(&Rayleigh::new(2.0).unwrap()),
+        Rayleigh::new(1.0).kl_divergence(&Rayleigh::new(2.0)),
         2.0 * 2.0_f64.ln() - 0.75,
         1e-12,
     );
 
     // Weibull(scale, shape=1) is Exponential(rate 1/scale); the KLs agree.
     close(
-        Weibull::new(2.0, 1.0)
-            .unwrap()
-            .kl_divergence(&Weibull::new(3.0, 1.0).unwrap()),
-        Exponential::new(0.5)
-            .unwrap()
-            .kl_divergence(&Exponential::new(1.0 / 3.0).unwrap()),
+        Weibull::new(2.0, 1.0).kl_divergence(&Weibull::new(3.0, 1.0)),
+        Exponential::new(0.5).kl_divergence(&Exponential::new(1.0 / 3.0)),
         1e-12,
     );
 
     // Pareto: finite only when xₘ₁ ≥ xₘ₂.
-    let p = Pareto::new(1.0, 3.0).unwrap();
+    let p = Pareto::new(1.0, 3.0);
     close(
-        p.kl_divergence(&Pareto::new(1.0, 2.0).unwrap()),
+        p.kl_divergence(&Pareto::new(1.0, 2.0)),
         1.5_f64.ln() + 2.0 / 3.0 - 1.0,
         1e-12,
     );
     assert!(
-        Pareto::new(2.0, 2.0)
-            .unwrap()
-            .kl_divergence(&Pareto::new(3.0, 2.0).unwrap())
+        Pareto::new(2.0_f64, 2.0)
+            .kl_divergence(&Pareto::new(3.0_f64, 2.0))
             .is_infinite()
     );
 }
@@ -278,8 +260,8 @@ fn cauchy_rayleigh_weibull_pareto_kl() {
 #[test]
 fn cross_entropy_decomposes_and_handles_missing_entropy() {
     // H(p, q) = H(p) + D_KL(p ‖ q), equal to the closed form for normals.
-    let p = Normal::new(0.0, 1.0).unwrap();
-    let q = Normal::new(1.0, 1.0).unwrap();
+    let p = Normal::new(0.0, 1.0);
+    let q = Normal::new(1.0, 1.0);
     close(
         p.cross_entropy(&q),
         p.entropy() + p.kl_divergence(&q),
@@ -295,9 +277,8 @@ fn cross_entropy_decomposes_and_handles_missing_entropy() {
     assert!(p.cross_entropy(&q) > p.entropy());
     // No analytic entropy (Poisson) -> explicit `NaN`.
     assert!(
-        Poisson::new(2.0)
-            .unwrap()
-            .cross_entropy(&Poisson::new(3.0).unwrap())
+        Poisson::new(2.0_f64)
+            .cross_entropy(&Poisson::new(3.0_f64))
             .is_nan()
     );
 }

@@ -23,7 +23,10 @@
 //! - `bhattacharyya_coefficient` — `bhattacharyya_nonneg`, `bhattacharyya_le_one`
 //!   (`0 ≤ BC ≤ 1`), and `hellingerSq_eq_one_sub_bhattacharyya` (`H² = 1 − BC`).
 
-use super::{Kl, f_divergence};
+#[cfg(test)]
+use super::f_divergence;
+use super::{Kl, f_divergence_real};
+use euclid::Real;
 
 /// **Shannon entropy** `H(p) = −Σ pᵢ ln pᵢ`, in nats (with the convention
 /// `0 ln 0 = 0`). Nonnegative, and at most `ln n` over `n` categories — maximal
@@ -36,10 +39,18 @@ use super::{Kl, f_divergence};
 /// assert_eq!(shannon_entropy(&[1.0, 0.0, 0.0]), 0.0);   // a point mass ⇒ 0
 /// ```
 pub fn shannon_entropy(p: &[f64]) -> f64 {
+    shannon_entropy_real(p)
+}
+
+/// **Shannon entropy** over any [`Real`] carrier.
+///
+/// This is the numeric reduction only: validation of probability-vector shape and finiteness stays
+/// in the eager host layer.
+pub fn shannon_entropy_real<R: Real>(p: &[R]) -> R {
     -p.iter()
-        .filter(|&&pi| pi > 0.0)
-        .map(|&pi| pi * pi.ln())
-        .sum::<f64>()
+        .cloned()
+        .map(|pi| pi.clone().xlogy(pi))
+        .fold(R::zero(), |sum, term| sum + term)
 }
 
 /// **Maximum entropy** over `support_size` outcomes: `ln(n)`, the entropy of the
@@ -54,10 +65,15 @@ pub fn shannon_entropy(p: &[f64]) -> f64 {
 /// assert!(shannon_entropy(&[0.7, 0.2, 0.1]) <= max_entropy(3) + 1e-12);
 /// ```
 pub fn max_entropy(support_size: usize) -> f64 {
+    max_entropy_real(support_size)
+}
+
+/// **Maximum entropy** over `support_size` outcomes in any [`Real`] carrier.
+pub fn max_entropy_real<R: Real>(support_size: usize) -> R {
     if support_size <= 1 {
-        return 0.0;
+        return R::zero();
     }
-    (support_size as f64).ln()
+    R::scalar(support_size as f64).ln()
 }
 
 /// **Normalized entropy** (the Shannon *equitability* / efficiency index):
@@ -73,14 +89,18 @@ pub fn max_entropy(support_size: usize) -> f64 {
 /// assert_eq!(normalized_entropy(&[1.0, 0.0, 0.0]), 0.0);         // point mass ⇒ 0
 /// ```
 pub fn normalized_entropy(p: &[f64]) -> f64 {
+    normalized_entropy_real(p)
+}
+
+/// **Normalized entropy** over any [`Real`] carrier.
+pub fn normalized_entropy_real<R: Real>(p: &[R]) -> R {
     if p.is_empty() {
-        return f64::NAN;
+        return R::nan();
     }
-    let ceiling = max_entropy(p.len());
-    if ceiling <= 0.0 {
-        return 0.0;
+    if p.len() <= 1 {
+        return R::zero();
     }
-    shannon_entropy(p) / ceiling
+    shannon_entropy_real(p) / max_entropy_real(p.len())
 }
 
 /// **Maximum-entropy admissibility check**: whether a computed entropy respects the
@@ -110,21 +130,21 @@ pub fn is_entropy_admissible(entropy: f64, support_size: usize) -> bool {
 /// assert!((lhs - rhs).abs() < 1e-12);   // H(p,q) = H(p) + KL(p‖q)
 /// ```
 pub fn cross_entropy(p: &[f64], q: &[f64]) -> f64 {
+    cross_entropy_real(p, q)
+}
+
+/// **Cross-entropy** over any [`Real`] carrier.
+///
+/// The shorter vector is zero-padded, matching [`cross_entropy`].
+pub fn cross_entropy_real<R: Real>(p: &[R], q: &[R]) -> R {
     let n = p.len().max(q.len());
     (0..n)
         .map(|i| {
-            let pi = p.get(i).copied().unwrap_or(0.0);
-            if pi <= 0.0 {
-                return 0.0;
-            }
-            let qi = q.get(i).copied().unwrap_or(0.0);
-            if qi > 0.0 {
-                -pi * qi.ln()
-            } else {
-                f64::INFINITY
-            }
+            let pi = p.get(i).cloned().unwrap_or_else(R::zero);
+            let qi = q.get(i).cloned().unwrap_or_else(R::zero);
+            -(pi.xlogy(qi))
         })
-        .sum()
+        .fold(R::zero(), |sum, term| sum + term)
 }
 
 /// The **Jensen–Shannon divergence** `JS(p, q) = ½ KL(p ‖ m) + ½ KL(q ‖ m)` with
@@ -143,11 +163,20 @@ pub fn cross_entropy(p: &[f64], q: &[f64]) -> f64 {
 /// assert_eq!(jensen_shannon(&[0.3, 0.7], &[0.3, 0.7]), 0.0);   // self ⇒ 0
 /// ```
 pub fn jensen_shannon(p: &[f64], q: &[f64]) -> f64 {
+    jensen_shannon_real(p, q)
+}
+
+/// The **Jensen-Shannon divergence** over any [`Real`] carrier.
+pub fn jensen_shannon_real<R: Real>(p: &[R], q: &[R]) -> R {
     let n = p.len().max(q.len());
-    let m: Vec<f64> = (0..n)
-        .map(|i| 0.5 * (p.get(i).copied().unwrap_or(0.0) + q.get(i).copied().unwrap_or(0.0)))
+    let m: Vec<R> = (0..n)
+        .map(|i| {
+            R::half()
+                * (p.get(i).cloned().unwrap_or_else(R::zero)
+                    + q.get(i).cloned().unwrap_or_else(R::zero))
+        })
         .collect();
-    0.5 * f_divergence(p, &m, &Kl) + 0.5 * f_divergence(q, &m, &Kl)
+    R::half() * f_divergence_real(p, &m, &Kl) + R::half() * f_divergence_real(q, &m, &Kl)
 }
 
 /// The **Bhattacharyya coefficient** `BC(p, q) = Σ √(pᵢ qᵢ)` — the affinity
@@ -168,14 +197,19 @@ pub fn jensen_shannon(p: &[f64], q: &[f64]) -> f64 {
 /// assert!((h2 - (1.0 - bc)).abs() < 1e-12);   // H² = 1 − BC
 /// ```
 pub fn bhattacharyya_coefficient(p: &[f64], q: &[f64]) -> f64 {
+    bhattacharyya_coefficient_real(p, q)
+}
+
+/// The **Bhattacharyya coefficient** over any [`Real`] carrier.
+pub fn bhattacharyya_coefficient_real<R: Real>(p: &[R], q: &[R]) -> R {
     let n = p.len().max(q.len());
     (0..n)
         .map(|i| {
-            let pi = p.get(i).copied().unwrap_or(0.0);
-            let qi = q.get(i).copied().unwrap_or(0.0);
-            (pi * qi).max(0.0).sqrt()
+            let pi = p.get(i).cloned().unwrap_or_else(R::zero);
+            let qi = q.get(i).cloned().unwrap_or_else(R::zero);
+            (pi * qi).max(R::zero()).sqrt()
         })
-        .sum()
+        .fold(R::zero(), |sum, term| sum + term)
 }
 
 #[cfg(test)]
@@ -291,9 +325,7 @@ mod tests {
         // Two-category vector agrees with Bernoulli (category 0 = "success").
         close(
             jensen_shannon(&[0.7, 0.3], &[0.4, 0.6]),
-            Bernoulli::new(0.7)
-                .unwrap()
-                .js_divergence(&Bernoulli::new(0.4).unwrap()),
+            Bernoulli::new(0.7).js_divergence(&Bernoulli::new(0.4)),
             1e-12,
         );
     }

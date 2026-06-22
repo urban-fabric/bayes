@@ -135,6 +135,7 @@ fn moment2_matches_closed_form_second_moment() {
 #[test]
 fn closed_form_entropies_match_known_values() {
     use bayes::{Beta, Binomial, Discrete, Divergence, Geometric, KlDivergence};
+    use bayes_distribution::{Beta as LazyBeta, Moments as _};
     let ln2 = std::f64::consts::LN_2;
 
     // Bernoulli(½) = 1 bit = ln 2 nats; Beta(1,1) is uniform on (0,1) → 0;
@@ -172,8 +173,8 @@ fn closed_form_entropies_match_known_values() {
     let _ = b.pmf(5_u64); // Discrete in scope
 
     // The entropy fill unlocks cross_entropy for these families.
-    let p = Beta::new(2.0, 3.0).unwrap();
-    let q = Beta::new(3.0, 2.0).unwrap();
+    let p = LazyBeta::new(2.0, 3.0);
+    let q = LazyBeta::new(3.0, 2.0);
     assert_close(
         "Beta cross-entropy",
         p.cross_entropy(&q),

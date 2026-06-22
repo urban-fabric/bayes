@@ -73,7 +73,10 @@ fn renyi_num(p: &impl Continuous, q: &impl Continuous, lo: f64, hi: f64, n: usiz
 /// The three Rényi-limit identities, exact between the closed forms.
 fn check_renyi_limits<D>(a: &D, b: &D)
 where
-    D: KlDivergence + HellingerDistance + ChiSquaredDivergence + RenyiDivergence,
+    D: KlDivergence<Output = f64>
+        + HellingerDistance<Output = f64>
+        + ChiSquaredDivergence<Output = f64>
+        + RenyiDivergence<Output = f64>,
 {
     close(a.renyi_divergence(b, 1.0), a.kl_divergence(b), 1e-9);
     close(

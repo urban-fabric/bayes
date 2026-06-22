@@ -40,8 +40,8 @@ where
     }
 
     fn ln_pmf(&self, k: N) -> N::Real {
-        let zero_count = N::zero();
-        let one_count = N::one();
+        let zero_count = N::from_u64(0);
+        let one_count = N::from_u64(1);
         let zero = N::Real::zero();
         let p = self.p();
 

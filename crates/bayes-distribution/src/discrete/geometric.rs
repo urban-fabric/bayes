@@ -41,7 +41,7 @@ where
     }
 
     fn ln_pmf(&self, k: N) -> N::Real {
-        let one_count = N::one();
+        let one_count = N::from_u64(1);
         let zero = N::Real::zero();
         let p = self.p();
 

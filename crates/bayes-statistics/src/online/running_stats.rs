@@ -2,53 +2,68 @@
 //! skewness, kurtosis, and extrema, via Welford's running-moment recurrences
 //! (Terriberry's extension to the third and fourth moments).
 
-/// A running accumulator of summary statistics over a stream of `f64` values.
+use euclid::{Compare, Real};
+
+/// A running accumulator of summary statistics over a stream of [`Real`] values.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RunningStats {
+pub struct RunningStats<R: Real = f64> {
     n: u64,
-    mean: f64,
-    m2: f64,
-    m3: f64,
-    m4: f64,
-    min: f64,
-    max: f64,
+    mean: R,
+    m2: R,
+    m3: R,
+    m4: R,
+    min: R,
+    max: R,
 }
 
-impl Default for RunningStats {
+impl<R> Default for RunningStats<R>
+where
+    R: Real + Compare,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl RunningStats {
+impl<R> RunningStats<R>
+where
+    R: Real + Compare,
+{
     pub fn new() -> Self {
         Self {
             n: 0,
-            mean: 0.0,
-            m2: 0.0,
-            m3: 0.0,
-            m4: 0.0,
-            min: f64::INFINITY,
-            max: f64::NEG_INFINITY,
+            mean: R::zero(),
+            m2: R::zero(),
+            m3: R::zero(),
+            m4: R::zero(),
+            min: R::infinity(),
+            max: R::neg_infinity(),
         }
     }
 
     /// Absorb one observation.
-    pub fn push(&mut self, x: f64) {
-        let n1 = self.n as f64;
+    pub fn push(&mut self, x: R) {
+        let n1 = R::scalar(self.n as f64);
         self.n += 1;
-        let n = self.n as f64;
-        let delta = x - self.mean;
-        let delta_n = delta / n;
-        let delta_n2 = delta_n * delta_n;
-        let term1 = delta * delta_n * n1;
-        self.mean += delta_n;
-        self.m4 += term1 * delta_n2 * (n * n - 3.0 * n + 3.0) + 6.0 * delta_n2 * self.m2
-            - 4.0 * delta_n * self.m3;
-        self.m3 += term1 * delta_n * (n - 2.0) - 3.0 * delta_n * self.m2;
-        self.m2 += term1;
-        self.min = self.min.min(x);
-        self.max = self.max.max(x);
+        let n = R::scalar(self.n as f64);
+        let delta = x.clone() - self.mean.clone();
+        let delta_n = delta.clone() / n.clone();
+        let delta_n2 = delta_n.clone() * delta_n.clone();
+        let term1 = delta.clone() * delta_n.clone() * n1;
+        self.mean = self.mean.clone() + delta_n.clone();
+        self.m4 = self.m4.clone()
+            + term1.clone()
+                * delta_n2.clone()
+                * (n.clone() * n.clone() - R::scalar(3.0) * n.clone() + R::scalar(3.0))
+            + R::scalar(6.0) * delta_n2 * self.m2.clone()
+            - R::scalar(4.0) * delta_n.clone() * self.m3.clone();
+        self.m3 = self.m3.clone() + term1.clone() * delta_n.clone() * (n - R::scalar(2.0))
+            - R::scalar(3.0) * delta_n.clone() * self.m2.clone();
+        self.m2 = self.m2.clone() + term1;
+        let new_min = x.lt(&self.min);
+        let new_max = x.gt(&self.max);
+        self.min = R::select(&new_min, x.clone(), self.min.clone());
+        self.max = R::select(&new_max, x, self.max.clone());
     }
 
     /// Combine another accumulator into this one (for parallel/streamed reduction),
@@ -63,101 +78,145 @@ impl RunningStats {
             return;
         }
         if self.n == 0 {
-            *self = *other;
+            *self = other.clone();
             return;
         }
-        let (na, nb) = (self.n as f64, other.n as f64);
-        let n = na + nb;
-        let delta = other.mean - self.mean;
-        let delta2 = delta * delta;
-        let delta3 = delta2 * delta;
-        let delta4 = delta2 * delta2;
-        let mean = self.mean + delta * nb / n;
-        let m2 = self.m2 + other.m2 + delta2 * na * nb / n;
-        let m3 = self.m3
-            + other.m3
-            + delta3 * na * nb * (na - nb) / (n * n)
-            + 3.0 * delta * (na * other.m2 - nb * self.m2) / n;
-        let m4 = self.m4
-            + other.m4
-            + delta4 * na * nb * (na * na - na * nb + nb * nb) / (n * n * n)
-            + 6.0 * delta2 * (na * na * other.m2 + nb * nb * self.m2) / (n * n)
-            + 4.0 * delta * (na * other.m3 - nb * self.m3) / n;
+        let (na, nb) = (R::scalar(self.n as f64), R::scalar(other.n as f64));
+        let n = na.clone() + nb.clone();
+        let delta = other.mean.clone() - self.mean.clone();
+        let delta2 = delta.clone() * delta.clone();
+        let delta3 = delta2.clone() * delta.clone();
+        let delta4 = delta2.clone() * delta2.clone();
+        let mean = self.mean.clone() + delta.clone() * nb.clone() / n.clone();
+        let m2 = self.m2.clone()
+            + other.m2.clone()
+            + delta2.clone() * na.clone() * nb.clone() / n.clone();
+        let m3 = self.m3.clone()
+            + other.m3.clone()
+            + delta3 * na.clone() * nb.clone() * (na.clone() - nb.clone())
+                / (n.clone() * n.clone())
+            + R::scalar(3.0)
+                * delta.clone()
+                * (na.clone() * other.m2.clone() - nb.clone() * self.m2.clone())
+                / n.clone();
+        let m4 = self.m4.clone()
+            + other.m4.clone()
+            + delta4
+                * na.clone()
+                * nb.clone()
+                * (na.clone() * na.clone() - na.clone() * nb.clone() + nb.clone() * nb.clone())
+                / (n.clone() * n.clone() * n.clone())
+            + R::scalar(6.0)
+                * delta2
+                * (na.clone() * na.clone() * other.m2.clone()
+                    + nb.clone() * nb.clone() * self.m2.clone())
+                / (n.clone() * n.clone())
+            + R::scalar(4.0) * delta * (na.clone() * other.m3.clone() - nb * self.m3.clone()) / n;
+        let other_min = other.min.lt(&self.min);
+        let other_max = other.max.gt(&self.max);
         *self = Self {
             n: self.n + other.n,
             mean,
             m2,
             m3,
             m4,
-            min: self.min.min(other.min),
-            max: self.max.max(other.max),
+            min: R::select(&other_min, other.min.clone(), self.min.clone()),
+            max: R::select(&other_max, other.max.clone(), self.max.clone()),
         };
     }
 
     pub fn count(&self) -> u64 {
         self.n
     }
-    pub fn mean(&self) -> f64 {
-        if self.n == 0 { f64::NAN } else { self.mean }
+    pub fn mean(&self) -> R {
+        if self.n == 0 {
+            R::nan()
+        } else {
+            self.mean.clone()
+        }
     }
     /// Unbiased sample variance (`n-1`).
-    pub fn variance(&self) -> f64 {
+    pub fn variance(&self) -> R {
         if self.n < 2 {
-            f64::NAN
+            R::nan()
         } else {
-            self.m2 / (self.n as f64 - 1.0)
+            self.m2.clone() / R::scalar(self.n as f64 - 1.0)
         }
     }
     /// Population (biased) variance (`n`).
-    pub fn population_variance(&self) -> f64 {
+    pub fn population_variance(&self) -> R {
         if self.n == 0 {
-            f64::NAN
+            R::nan()
         } else {
-            self.m2 / self.n as f64
+            self.m2.clone() / R::scalar(self.n as f64)
         }
     }
-    pub fn std_dev(&self) -> f64 {
+    pub fn std_dev(&self) -> R {
         self.variance().sqrt()
     }
     /// Population skewness (third standardized moment).
-    pub fn skewness(&self) -> f64 {
-        if self.n < 2 || self.m2 <= 0.0 {
-            return f64::NAN;
+    pub fn skewness(&self) -> R {
+        if self.n < 2 {
+            return R::nan();
         }
-        (self.n as f64).sqrt() * self.m3 / self.m2.powf(1.5)
+        let positive = self.m2.gt(&R::zero());
+        let value = R::scalar(self.n as f64).sqrt() * self.m3.clone()
+            / self.m2.clone().powf(R::scalar(1.5));
+        R::select(&positive, value, R::nan())
     }
     /// Excess kurtosis (fourth standardized moment − 3).
-    pub fn kurtosis(&self) -> f64 {
-        if self.n < 2 || self.m2 <= 0.0 {
-            return f64::NAN;
+    pub fn kurtosis(&self) -> R {
+        if self.n < 2 {
+            return R::nan();
         }
-        self.n as f64 * self.m4 / (self.m2 * self.m2) - 3.0
+        let positive = self.m2.gt(&R::zero());
+        let value = R::scalar(self.n as f64) * self.m4.clone()
+            / (self.m2.clone() * self.m2.clone())
+            - R::scalar(3.0);
+        R::select(&positive, value, R::nan())
     }
-    pub fn min(&self) -> f64 {
-        if self.n == 0 { f64::NAN } else { self.min }
+    pub fn min(&self) -> R {
+        if self.n == 0 {
+            R::nan()
+        } else {
+            self.min.clone()
+        }
     }
-    pub fn max(&self) -> f64 {
-        if self.n == 0 { f64::NAN } else { self.max }
+    pub fn max(&self) -> R {
+        if self.n == 0 {
+            R::nan()
+        } else {
+            self.max.clone()
+        }
     }
 }
 
-impl Extend<f64> for RunningStats {
-    fn extend<I: IntoIterator<Item = f64>>(&mut self, iter: I) {
+impl<R> Extend<R> for RunningStats<R>
+where
+    R: Real + Compare,
+{
+    fn extend<I: IntoIterator<Item = R>>(&mut self, iter: I) {
         for x in iter {
             self.push(x);
         }
     }
 }
 
-impl FromIterator<f64> for RunningStats {
-    fn from_iter<I: IntoIterator<Item = f64>>(iter: I) -> Self {
+impl<R> FromIterator<R> for RunningStats<R>
+where
+    R: Real + Compare,
+{
+    fn from_iter<I: IntoIterator<Item = R>>(iter: I) -> Self {
         let mut s = Self::new();
         s.extend(iter);
         s
     }
 }
 
-impl std::iter::Sum for RunningStats {
+impl<R> std::iter::Sum for RunningStats<R>
+where
+    R: Real + Compare,
+{
     /// Reduce a collection of partial accumulators into one by [`merge`](Self::merge)
     /// — the map-reduce path: build a `RunningStats` per shard, then `.sum()` them.
     /// Because `merge` equals a single pass over the pooled data (`riemann`'s
@@ -228,7 +287,7 @@ mod tests {
 
     #[test]
     fn extrema_and_empty() {
-        let mut rs = RunningStats::new();
+        let mut rs: RunningStats = RunningStats::new();
         assert!(rs.mean().is_nan());
         rs.extend([3.0, -1.0, 7.0, 2.0]);
         assert_eq!(rs.min(), -1.0);

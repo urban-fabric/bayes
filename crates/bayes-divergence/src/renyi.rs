@@ -1,260 +1,263 @@
-//! **Rényi divergence** of order `α` — the one-parameter family interpolating
-//! KL (`α→1`), Hellinger (`α=½`), and χ² (`α=2`).
+//! **Renyi divergence** of order `alpha` - the one-parameter family interpolating
+//! KL (`alpha -> 1`), Hellinger (`alpha = 1/2`), and chi-squared (`alpha = 2`).
 
 use super::KlDivergence;
-use super::families::{gamma_renyi, gaussian_renyi};
-use super::kl_term;
 use crate::{
     Bernoulli, Binomial, Categorical, ChiSquared, DiscreteUniform, Gamma, HalfNormal, InverseGamma,
     LogNormal, NegativeBinomial, Normal, Uniform, VonMises, Wald,
 };
-use euclid::Real;
+use bayes_kernels as kernels;
+use euclid::{Boolean, Compare, Element, Integer, Natural, Real};
 
-/// Tolerance for snapping `α` to the KL limit (`α = 1`).
-const ALPHA_KL: f64 = 1e-12;
-
-/// The **Rényi divergence** of order `α`,
-/// `D_α(p ‖ q) = 1/(α−1) · ln Σ pᵢ^α qᵢ^{1−α}` — the one-parameter family that
-/// interpolates the others: `α → 1` is KL (returned exactly at `α = 1`),
-/// `α = ½` is `−2 ln BC = −2 ln(1 − H²)` (Hellinger), and `α = 2` is
-/// `ln(1 + χ²)`. Monotone non-decreasing in `α`. Implemented in closed form
-/// wherever `∫ pᵅ q¹⁻ᵅ` is analytic — the Gaussian, gamma, directional,
-/// inverse-Gaussian, and uniform families, plus the finite-support discretes.
-pub trait RenyiDivergence {
-    /// `D_α(self ‖ other)`, in nats. `α > 0`; `α = 1` returns the KL limit.
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64;
+fn alpha_is_kl<R: Real>(alpha: &R) -> R::Mask {
+    (alpha.clone() - R::one()).abs().lt(&R::scalar(1e-12))
 }
 
-impl RenyiDivergence for Bernoulli {
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        let (p, q) = (self.p(), other.p());
-        if (alpha - 1.0).abs() < 1e-12 {
-            return kl_term(p, q) + kl_term(1.0 - p, 1.0 - q);
-        }
-        let s = p.powf(alpha) * q.powf(1.0 - alpha)
-            + (1.0 - p).powf(alpha) * (1.0 - q).powf(1.0 - alpha);
-        s.ln() / (alpha - 1.0)
+/// The **Renyi divergence** of order `alpha`,
+/// `D_alpha(p || q) = ln integral p^alpha q^(1-alpha) / (alpha - 1)`.
+pub trait RenyiDivergence {
+    type Output: Real;
+
+    /// `D_alpha(self || other)`, in nats. `alpha > 0`; `alpha = 1` returns KL.
+    fn renyi_divergence(&self, other: &Self, alpha: Self::Output) -> Self::Output;
+}
+
+impl<R: Real> RenyiDivergence for Bernoulli<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let value = kernels::renyi_bernoulli(self.p(), other.p(), alpha);
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for Categorical {
+impl<R> RenyiDivergence for Categorical<R>
+where
+    R: Real + Compare,
+{
+    type Output = R;
+
     /// Categories present in only one distribution are treated as `0` in the other.
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
         let (pa, pb) = (self.probabilities(), other.probabilities());
         let n = pa.len().max(pb.len());
-        let at = |i: usize, v: &[f64]| v.get(i).copied().unwrap_or(0.0);
-        if (alpha - 1.0).abs() < 1e-12 {
-            return (0..n).map(|i| kl_term(at(i, pa), at(i, pb))).sum();
-        }
-        let s: f64 = (0..n)
+        let is_kl = alpha_is_kl(&alpha);
+        let s = (0..n)
             .map(|i| {
-                let (a, b) = (at(i, pa), at(i, pb));
-                if a > 0.0 {
-                    a.powf(alpha) * b.powf(1.0 - alpha)
-                } else {
-                    0.0
-                }
+                let a = pa.get(i).cloned().unwrap_or_else(R::zero);
+                let b = pb.get(i).cloned().unwrap_or_else(R::zero);
+                let a_positive = a.gt(&R::zero());
+                let base_a = R::select(&a_positive, a, R::one());
+                R::select(
+                    &a_positive,
+                    base_a.powf(alpha.clone()) * b.powf(R::one() - alpha.clone()),
+                    R::zero(),
+                )
             })
-            .sum();
-        s.ln() / (alpha - 1.0)
+            .fold(R::zero(), |acc, x| acc + x);
+        let value = s.ln() / (alpha - R::one());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for Normal {
-    /// The closed-form Gaussian Rényi divergence
-    /// `D_α = α(μ₀−μ₁)²/(2σ_α²) + [(1−α)ln σ₀ + α ln σ₁ − ln σ_α]/(α−1)`,
-    /// `σ_α² = α σ₁² + (1−α) σ₀²`; `α = 1` returns the KL limit, and `+∞` when the
-    /// order-`α` integral diverges (`σ_α² ≤ 0`).
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        let (m0, s0) = self.params();
-        let (m1, s1) = other.params();
-        gaussian_renyi(m0, s0, m1, s1, alpha)
+impl<R: Real> RenyiDivergence for Normal<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let (m1, s1) = self.params();
+        let (m2, s2) = other.params();
+        let one_minus_alpha = R::one() - alpha.clone();
+        let var_alpha =
+            alpha.clone() * s2.clone() * s2.clone() + one_minus_alpha * s1.clone() * s1.clone();
+        let finite = var_alpha.gt(&R::zero());
+        let value = kernels::renyi_normal_on_support(m1, s1, m2, s2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for LogNormal {
-    /// A log-normal is a normal in log-space and Rényi divergence is invariant
-    /// under that monotone reparametrization, so this is the [`Normal`] formula
-    /// on `(μ, σ)`.
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        gaussian_renyi(self.mu(), self.sigma(), other.mu(), other.sigma(), alpha)
+impl<R: Real> RenyiDivergence for LogNormal<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let (s1, s2) = (self.sigma(), other.sigma());
+        let one_minus_alpha = R::one() - alpha.clone();
+        let var_alpha =
+            alpha.clone() * s2.clone() * s2.clone() + one_minus_alpha * s1.clone() * s1.clone();
+        let finite = var_alpha.gt(&R::zero());
+        let value = kernels::renyi_normal_on_support(self.mu(), s1, other.mu(), s2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for HalfNormal {
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        gaussian_renyi(0.0, self.scale(), 0.0, other.scale(), alpha)
+impl<R: Real> RenyiDivergence for HalfNormal<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let (s1, s2) = (self.scale(), other.scale());
+        let one_minus_alpha = R::one() - alpha.clone();
+        let var_alpha =
+            alpha.clone() * s2.clone() * s2.clone() + one_minus_alpha * s1.clone() * s1.clone();
+        let finite = var_alpha.gt(&R::zero());
+        let value = kernels::renyi_normal_on_support(R::zero(), s1, R::zero(), s2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for Gamma {
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        gamma_renyi(
-            self.shape(),
-            self.rate(),
-            other.shape(),
-            other.rate(),
-            alpha,
-        )
+impl<R: Real> RenyiDivergence for Gamma<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let (a1, b1) = (self.shape(), self.rate());
+        let (a2, b2) = (other.shape(), other.rate());
+        let one_minus_alpha = R::one() - alpha.clone();
+        let a_alpha = alpha.clone() * a1.clone() + one_minus_alpha.clone() * a2.clone();
+        let b_alpha = alpha.clone() * b1.clone() + one_minus_alpha * b2.clone();
+        let finite = a_alpha.gt(&R::zero()).and(&b_alpha.gt(&R::zero()));
+        let value = kernels::renyi_gamma_on_support(a1, b1, a2, b2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for ChiSquared {
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        gamma_renyi(0.5 * self.freedom(), 0.5, 0.5 * other.freedom(), 0.5, alpha)
+impl<R: Real> RenyiDivergence for ChiSquared<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let a1 = R::half() * self.freedom();
+        let a2 = R::half() * other.freedom();
+        let one_minus_alpha = R::one() - alpha.clone();
+        let a_alpha = alpha.clone() * a1.clone() + one_minus_alpha * a2.clone();
+        let finite = a_alpha.gt(&R::zero());
+        let value = kernels::renyi_gamma_on_support(a1, R::half(), a2, R::half(), alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for InverseGamma {
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        gamma_renyi(
-            self.shape(),
-            self.scale(),
-            other.shape(),
-            other.scale(),
-            alpha,
-        )
+impl<R: Real> RenyiDivergence for InverseGamma<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let (a1, b1) = (self.shape(), self.scale());
+        let (a2, b2) = (other.shape(), other.scale());
+        let one_minus_alpha = R::one() - alpha.clone();
+        let a_alpha = alpha.clone() * a1.clone() + one_minus_alpha.clone() * a2.clone();
+        let b_alpha = alpha.clone() * b1.clone() + one_minus_alpha * b2.clone();
+        let finite = a_alpha.gt(&R::zero()).and(&b_alpha.gt(&R::zero()));
+        let value = kernels::renyi_gamma_on_support(a1, b1, a2, b2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for VonMises {
-    /// `D_α = [ln I₀(R_α) − α ln I₀(κ₁) − (1−α) ln I₀(κ₂)] / (α−1)`, with
-    /// `R_α = |α κ₁∠μ₁ + (1−α) κ₂∠μ₂|`. Always finite (compact support).
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        let (mu1, k1) = (self.mu(), self.kappa());
-        let (mu2, k2) = (other.mu(), other.kappa());
-        let r_alpha = ((alpha * k1).powi(2)
-            + ((1.0 - alpha) * k2).powi(2)
-            + 2.0 * alpha * (1.0 - alpha) * k1 * k2 * (mu1 - mu2).cos())
-        .sqrt();
-        (r_alpha.ln_bessel_i0() - alpha * k1.ln_bessel_i0() - (1.0 - alpha) * k2.ln_bessel_i0())
-            / (alpha - 1.0)
+impl<R: Real> RenyiDivergence for VonMises<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let value =
+            kernels::renyi_von_mises(self.mu(), self.kappa(), other.mu(), other.kappa(), alpha);
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for Wald {
-    /// Inverse-Gaussian Rényi divergence via `∫ x^{−3/2} e^{−Ax−B/x}`. `+∞` when
-    /// the order-`α` integral diverges (`α λ₁ + (1−α) λ₂ ≤ 0` or the `x`-coefficient
-    /// turns non-positive).
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
+impl<R: Real> RenyiDivergence for Wald<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
         let (m1, l1) = (self.mu(), self.shape());
         let (m2, l2) = (other.mu(), other.shape());
-        let la = alpha * l1 + (1.0 - alpha) * l2;
-        let aa = alpha * l1 / (m1 * m1) + (1.0 - alpha) * l2 / (m2 * m2);
-        if la <= 0.0 || aa <= 0.0 {
-            return f64::INFINITY;
-        }
-        let ln_int = 0.5 * (alpha * l1.ln() + (1.0 - alpha) * l2.ln())
-            + alpha * l1 / m1
-            + (1.0 - alpha) * l2 / m2
-            - 0.5 * la.ln()
-            - (aa * la).sqrt();
-        ln_int / (alpha - 1.0)
+        let one_minus_alpha = R::one() - alpha.clone();
+        let la = alpha.clone() * l1.clone() + one_minus_alpha.clone() * l2.clone();
+        let aa = alpha.clone() * l1.clone() / (m1.clone() * m1.clone())
+            + one_minus_alpha * l2.clone() / (m2.clone() * m2.clone());
+        let finite = la.gt(&R::zero()).and(&aa.gt(&R::zero()));
+        let value = kernels::renyi_wald_on_support(m1, l1, m2, l2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for Uniform {
-    /// `D_α = ln(|overlap| · w₁^{−α} w₂^{−(1−α)}) / (α−1)`. For `α > 1`, `+∞` unless
-    /// `[a₁,b₁] ⊆ [a₂,b₂]`; disjoint supports give `+∞` at every order.
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
+impl<R: Real> RenyiDivergence for Uniform<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
         let (a1, b1) = (self.lo(), self.hi());
         let (a2, b2) = (other.lo(), other.hi());
-        let contained = a1 >= a2 && b1 <= b2;
-        if alpha > 1.0 && !contained {
-            return f64::INFINITY;
-        }
-        let overlap = (b1.min(b2) - a1.max(a2)).max(0.0);
-        if overlap <= 0.0 {
-            return f64::INFINITY;
-        }
-        let s = overlap * (b1 - a1).powf(-alpha) * (b2 - a2).powf(-(1.0 - alpha));
-        s.ln() / (alpha - 1.0)
+        let contained = a1.ge(&a2).and(&b1.le(&b2));
+        let support_ok = alpha.le(&R::one()).or(&contained);
+        let overlap = (b1.clone().min(b2.clone()) - a1.clone().max(a2.clone())).max(R::zero());
+        let finite = support_ok.and(&overlap.gt(&R::zero()));
+        let value = kernels::renyi_uniform_on_support(a1, b1, a2, b2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for DiscreteUniform {
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        let (a1, b1) = (self.lo(), self.hi());
-        let (a2, b2) = (other.lo(), other.hi());
-        let contained = a1 >= a2 && b1 <= b2;
-        if alpha > 1.0 && !contained {
-            return f64::INFINITY;
-        }
-        let overlap = (b1.min(b2) - a1.max(a2) + 1).max(0) as f64;
-        if overlap <= 0.0 {
-            return f64::INFINITY;
-        }
-        let n1 = (b1 - a1 + 1) as f64;
-        let n2 = (b2 - a2 + 1) as f64;
-        let s = overlap * n1.powf(-alpha) * n2.powf(-(1.0 - alpha));
-        s.ln() / (alpha - 1.0)
+impl<I> RenyiDivergence for DiscreteUniform<I>
+where
+    I: Integer + Compare,
+    I::Real: Compare<Mask = <I as Compare>::Mask>,
+{
+    type Output = I::Real;
+
+    fn renyi_divergence(&self, other: &Self, alpha: I::Real) -> I::Real {
+        let is_kl = alpha_is_kl(&alpha);
+        let (a1, b1) = (self.lo().to_real(), self.hi().to_real());
+        let (a2, b2) = (other.lo().to_real(), other.hi().to_real());
+        let contained = a1.ge(&a2).and(&b1.le(&b2));
+        let support_ok = alpha.le(&I::Real::one()).or(&contained);
+        let overlap = (b1.clone().min(b2.clone()) - a1.clone().max(a2.clone()) + I::Real::one())
+            .max(I::Real::zero());
+        let finite = support_ok.and(&overlap.gt(&I::Real::zero()));
+        let value = kernels::renyi_discrete_uniform_on_support(a1, b1, a2, b2, alpha);
+        let value = <I::Real as Compare>::select(&finite, value, I::Real::infinity());
+        <I::Real as Compare>::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for Binomial {
-    /// `n ×` the per-trial Bernoulli Rényi divergence, for matched trial counts;
-    /// differing counts are treated as out-of-family (`+∞`).
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        if self.trials() != other.trials() {
-            return f64::INFINITY;
-        }
-        let (p, q) = (self.p(), other.p());
-        let s = p.powf(alpha) * q.powf(1.0 - alpha)
-            + (1.0 - p).powf(alpha) * (1.0 - q).powf(1.0 - alpha);
-        self.trials() as f64 * s.ln() / (alpha - 1.0)
+impl<N> RenyiDivergence for Binomial<N>
+where
+    N: Natural + Compare,
+    N::Real: Compare<Mask = <N as Compare>::Mask>,
+{
+    type Output = N::Real;
+
+    fn renyi_divergence(&self, other: &Self, alpha: N::Real) -> N::Real {
+        let is_kl = alpha_is_kl(&alpha);
+        let same_trials = self.trials().eq(&other.trials());
+        let value = kernels::renyi_binomial(self.trials().to_real(), self.p(), other.p(), alpha);
+        let value = <N::Real as Compare>::select(&same_trials, value, N::Real::infinity());
+        <N::Real as Compare>::select(&is_kl, self.kl_divergence(other), value)
     }
 }
 
-impl RenyiDivergence for NegativeBinomial {
-    /// `D_α = r·[α ln p₁ + (1−α) ln p₂ − ln(1 − w)]/(α−1)`,
-    /// `w = (1−p₁)^α (1−p₂)^{1−α}`, for matched successes `r`. `+∞` when `w ≥ 1`
-    /// (the order-`α` series diverges) or `r` differs.
-    fn renyi_divergence(&self, other: &Self, alpha: f64) -> f64 {
-        if (alpha - 1.0).abs() < ALPHA_KL {
-            return self.kl_divergence(other);
-        }
-        if self.successes() != other.successes() {
-            return f64::INFINITY;
-        }
-        let r = self.successes();
+impl<R: Real> RenyiDivergence for NegativeBinomial<R> {
+    type Output = R;
+
+    fn renyi_divergence(&self, other: &Self, alpha: R) -> R {
+        let is_kl = alpha_is_kl(&alpha);
+        let successes = self.successes();
+        let same_successes = successes.eq(&other.successes());
         let (p1, p2) = (self.p(), other.p());
-        let w = (1.0 - p1).powf(alpha) * (1.0 - p2).powf(1.0 - alpha);
-        if w >= 1.0 {
-            return f64::INFINITY;
-        }
-        r * (alpha * p1.ln() + (1.0 - alpha) * p2.ln() - (1.0 - w).ln()) / (alpha - 1.0)
+        let one_minus_alpha = R::one() - alpha.clone();
+        let w = (alpha.clone() * (R::one() - p1.clone()).ln()).exp()
+            * (one_minus_alpha * (R::one() - p2.clone()).ln()).exp();
+        let finite = same_successes.and(&w.lt(&R::one()));
+        let value = kernels::renyi_negative_binomial_on_support(successes, p1, p2, alpha);
+        let value = R::select(&finite, value, R::infinity());
+        R::select(&is_kl, self.kl_divergence(other), value)
     }
 }

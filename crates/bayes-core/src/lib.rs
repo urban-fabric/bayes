@@ -6,9 +6,21 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::panic, clippy::unwrap_used))]
 
 pub mod constraint;
+mod error;
+mod probability;
 
 pub use constraint::{
     Boundary, Constrained, Constraint, IntegerConstraint, NaturalConstraint, RealConstraint,
+};
+pub use error::{BayesError, StatsError};
+pub use probability::{
+    PROBABILITY_TOLERANCE, brier_score, brier_score_real, is_probability_vector,
+    is_probability_vector_with_tolerance, is_row_stochastic, is_row_stochastic_with_tolerance,
+    log_loss, log_loss_real, log_score, log_score_real, normalize_probability_rows,
+    normalize_probability_rows_real, normalize_probability_weights,
+    normalize_probability_weights_real, probability_sum, probability_sum_real,
+    ranked_probability_score, ranked_probability_score_real, spherical_score, spherical_score_real,
+    validate_probability_vector, validate_row_stochastic, validate_row_stochastic_with_tolerance,
 };
 
 use euclid::{Element, Integer, Natural, Real};

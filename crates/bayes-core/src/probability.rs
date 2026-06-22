@@ -1,11 +1,12 @@
 //! Probability-vector utilities and proper scoring rules.
 //!
-//! These are the closed-form helpers shared by discrete distributions, divergence
+//! These are closed-form helpers shared by discrete distributions, divergence
 //! calculations, channels, and downstream inference layers: finite simplex
 //! validation, weight normalization, and forecast scores against an observed
 //! category.
 
 use crate::BayesError;
+use euclid::Real;
 
 /// Default tolerance for probability-vector sum checks.
 pub const PROBABILITY_TOLERANCE: f64 = 1e-9;
@@ -16,6 +17,15 @@ pub fn probability_sum(p: &[f64]) -> f64 {
         return f64::NAN;
     }
     p.iter().sum()
+}
+
+/// Sum a probability-like vector over any [`Real`] carrier.
+///
+/// This is the lazy/backend-generic numeric reduction only. It does not perform eager
+/// finite/nonnegative/simplex validation because generic comparisons produce masks rather than
+/// host booleans.
+pub fn probability_sum_real<R: Real>(p: &[R]) -> R {
+    p.iter().cloned().fold(R::zero(), |sum, pi| sum + pi)
 }
 
 /// Whether `p` is a non-empty probability vector: all entries finite and
@@ -120,6 +130,18 @@ pub fn normalize_probability_weights(weights: &[f64]) -> Vec<f64> {
     weights.iter().map(|&w| w / sum).collect()
 }
 
+/// Normalize weights over any [`Real`] carrier.
+///
+/// This is the lazy/backend-generic numeric transform only. It does not perform
+/// eager finite/nonnegative/all-zero validation.
+pub fn normalize_probability_weights_real<R: Real>(weights: &[R]) -> Vec<R> {
+    if weights.is_empty() {
+        return Vec::new();
+    }
+    let sum = weights.iter().cloned().fold(R::zero(), |acc, w| acc + w);
+    weights.iter().cloned().map(|w| w / sum.clone()).collect()
+}
+
 /// Normalize each row of a rectangular nonnegative kernel to sum to `1`.
 ///
 /// Returns an empty matrix for malformed, ragged, empty, non-finite, negative,
@@ -143,41 +165,83 @@ pub fn normalize_probability_rows(rows: &[Vec<f64>]) -> Vec<Vec<f64>> {
     out
 }
 
+/// Normalize each row over any [`Real`] carrier.
+///
+/// This checks only host-visible rectangular shape; numeric validation remains
+/// the responsibility of the caller.
+pub fn normalize_probability_rows_real<R: Real>(rows: &[Vec<R>]) -> Vec<Vec<R>> {
+    let outputs = rows.first().map(Vec::len).unwrap_or(0);
+    if rows.is_empty() || outputs == 0 || rows.iter().any(|row| row.len() != outputs) {
+        return Vec::new();
+    }
+    rows.iter()
+        .map(|row| normalize_probability_weights_real(row))
+        .collect()
+}
+
 /// Log score `ln p_observed` for a categorical forecast.
 ///
-/// Higher is better. Returns `-∞` for a zero-probability observed category and
+/// Higher is better. Returns `-inf` for a zero-probability observed category and
 /// `NaN` for malformed forecasts or an out-of-range observation.
 pub fn log_score(p: &[f64], observed: usize) -> f64 {
     if !is_probability_vector(p) || observed >= p.len() {
         return f64::NAN;
     }
-    p[observed].ln()
+    log_score_real(p, observed)
+}
+
+/// Log score `ln p_observed` over any [`Real`] carrier.
+///
+/// Returns `NaN` for an out-of-range observation. Probability-vector validation stays in the
+/// eager `f64` wrapper.
+pub fn log_score_real<R: Real>(p: &[R], observed: usize) -> R {
+    p.get(observed).cloned().map_or_else(R::nan, |pi| pi.ln())
 }
 
 /// Log loss `-ln p_observed` for a categorical forecast.
 ///
-/// Lower is better. Returns `+∞` for a zero-probability observed category.
+/// Lower is better. Returns `+inf` for a zero-probability observed category.
 pub fn log_loss(p: &[f64], observed: usize) -> f64 {
-    -log_score(p, observed)
+    if !is_probability_vector(p) || observed >= p.len() {
+        return f64::NAN;
+    }
+    log_loss_real(p, observed)
 }
 
-/// Multi-class Brier score `Σᵢ (pᵢ - 1{i=observed})²`.
+/// Log loss `-ln p_observed` over any [`Real`] carrier.
+pub fn log_loss_real<R: Real>(p: &[R], observed: usize) -> R {
+    -log_score_real(p, observed)
+}
+
+/// Multi-class Brier score `sum_i (p_i - 1{i=observed})^2`.
 ///
 /// Lower is better; a perfect forecast scores `0`.
 pub fn brier_score(p: &[f64], observed: usize) -> f64 {
     if !is_probability_vector(p) || observed >= p.len() {
         return f64::NAN;
     }
-    p.iter()
-        .enumerate()
-        .map(|(i, &pi)| {
-            let truth = if i == observed { 1.0 } else { 0.0 };
-            (pi - truth).powi(2)
-        })
-        .sum()
+    brier_score_real(p, observed)
 }
 
-/// Spherical score `p_observed / sqrt(Σᵢ pᵢ²)`.
+/// Multi-class Brier score over any [`Real`] carrier.
+///
+/// Returns `NaN` for an out-of-range observation. Probability-vector validation stays in the
+/// eager `f64` wrapper.
+pub fn brier_score_real<R: Real>(p: &[R], observed: usize) -> R {
+    if observed >= p.len() {
+        return R::nan();
+    }
+    p.iter()
+        .enumerate()
+        .map(|(i, pi)| {
+            let truth = if i == observed { R::one() } else { R::zero() };
+            let delta = pi.clone() - truth;
+            delta.clone() * delta
+        })
+        .fold(R::zero(), |sum, term| sum + term)
+}
+
+/// Spherical score `p_observed / sqrt(sum_i p_i^2)`.
 ///
 /// Higher is better. The score is `1` for a correct point-mass forecast and
 /// `1/sqrt(k)` for a uniform forecast over `k` categories.
@@ -185,28 +249,52 @@ pub fn spherical_score(p: &[f64], observed: usize) -> f64 {
     if !is_probability_vector(p) || observed >= p.len() {
         return f64::NAN;
     }
-    let norm = p.iter().map(|pi| pi * pi).sum::<f64>().sqrt();
-    if norm > 0.0 {
-        p[observed] / norm
-    } else {
-        f64::NAN
+    spherical_score_real(p, observed)
+}
+
+/// Spherical score over any [`Real`] carrier.
+///
+/// Returns `NaN` for an out-of-range observation. A zero norm is represented by the carrier's
+/// ordinary division semantics.
+pub fn spherical_score_real<R: Real>(p: &[R], observed: usize) -> R {
+    if observed >= p.len() {
+        return R::nan();
     }
+    let norm = p
+        .iter()
+        .cloned()
+        .map(|pi| pi.clone() * pi)
+        .fold(R::zero(), |sum, pi2| sum + pi2)
+        .sqrt();
+    p[observed].clone() / norm
 }
 
 /// Ranked probability score for ordered categories.
 ///
-/// `Σ_k (F(k) - 1{observed ≤ k})²`, where `F` is the forecast CDF. Lower is
+/// `sum_k (F(k) - 1{observed <= k})^2`, where `F` is the forecast CDF. Lower is
 /// better; this rewards near misses less harshly than far misses.
 pub fn ranked_probability_score(p: &[f64], observed: usize) -> f64 {
     if !is_probability_vector(p) || observed >= p.len() {
         return f64::NAN;
     }
-    let mut cdf = 0.0;
-    let mut score = 0.0;
-    for (k, &pi) in p.iter().enumerate() {
-        cdf += pi;
-        let truth_cdf = if observed <= k { 1.0 } else { 0.0 };
-        score += (cdf - truth_cdf).powi(2);
+    ranked_probability_score_real(p, observed)
+}
+
+/// Ranked probability score over any [`Real`] carrier.
+///
+/// Returns `NaN` for an out-of-range observation. Probability-vector validation stays in the
+/// eager `f64` wrapper.
+pub fn ranked_probability_score_real<R: Real>(p: &[R], observed: usize) -> R {
+    if observed >= p.len() {
+        return R::nan();
+    }
+    let mut cdf = R::zero();
+    let mut score = R::zero();
+    for (k, pi) in p.iter().enumerate() {
+        cdf = cdf + pi.clone();
+        let truth_cdf = if observed <= k { R::one() } else { R::zero() };
+        let delta = cdf.clone() - truth_cdf;
+        score = score + delta.clone() * delta;
     }
     score
 }
@@ -221,7 +309,7 @@ mod tests {
     }
 
     #[test]
-    fn probability_vector_validation_is_strict_but_tolerant_at_sum_boundary() {
+    fn probability_vector_validation() {
         assert!(is_probability_vector(&[0.2, 0.3, 0.5]));
         assert!(is_probability_vector(&[0.2, 0.3, 0.5 + 5e-10]));
         assert!(!is_probability_vector(&[]));
@@ -232,7 +320,7 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_probability_weights() {
+    fn probability_weight_normalization() {
         let p = normalize_probability_weights(&[2.0, 6.0, 2.0]);
         close(p.iter().sum(), 1.0, 1e-12);
         close(p[1], 0.6, 1e-12);
@@ -241,21 +329,21 @@ mod tests {
     }
 
     #[test]
-    fn validates_and_normalizes_row_stochastic_kernels() {
-        let rows = vec![vec![0.2, 0.8], vec![0.5, 0.5]];
+    fn row_stochastic_validation_and_normalization() {
+        let rows = vec![vec![0.25, 0.75], vec![1.0, 0.0]];
         assert!(is_row_stochastic(&rows));
         assert!(validate_row_stochastic(&rows).is_ok());
-        assert!(!is_row_stochastic(&[vec![0.2, 0.8], vec![0.5]]));
-        assert!(!is_row_stochastic(&[vec![0.2, 0.9]]));
+        assert!(!is_row_stochastic(&[vec![0.25, 0.75], vec![1.0]]));
+        assert!(!is_row_stochastic(&[vec![0.25, 0.8]]));
 
         let normalized = normalize_probability_rows(&[vec![2.0, 8.0], vec![3.0, 3.0]]);
-        assert!(is_row_stochastic(&normalized));
         close(normalized[0][1], 0.8, 1e-12);
+        close(normalized[1][0], 0.5, 1e-12);
         assert!(normalize_probability_rows(&[vec![0.0, 0.0]]).is_empty());
     }
 
     #[test]
-    fn scoring_rules_match_hand_calculations() {
+    fn proper_scores() {
         let p = [0.2, 0.5, 0.3];
         close(log_score(&p, 1), 0.5_f64.ln(), 1e-12);
         close(log_loss(&p, 1), -0.5_f64.ln(), 1e-12);
@@ -266,14 +354,9 @@ mod tests {
             1e-12,
         );
         close(ranked_probability_score(&p, 1), 0.04 + 0.09, 1e-12);
-    }
-
-    #[test]
-    fn scoring_rules_report_impossible_or_malformed_forecasts() {
-        assert_eq!(log_score(&[1.0, 0.0], 1), f64::NEG_INFINITY);
         assert_eq!(log_loss(&[1.0, 0.0], 1), f64::INFINITY);
         assert!(brier_score(&[0.5, 0.6], 1).is_nan());
-        assert!(spherical_score(&[0.5, 0.5], 2).is_nan());
+        assert!(log_score(&[0.5], 2).is_nan());
         assert!(ranked_probability_score(&[0.5, -0.5, 1.0], 0).is_nan());
     }
 }

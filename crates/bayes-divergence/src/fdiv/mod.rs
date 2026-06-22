@@ -51,8 +51,8 @@
 //! finite value where the generator allows it (total variation, Hellinger) and
 //! `+∞` where it does not (KL, χ²).
 
-use crate::validate_row_stochastic;
-use bayes_core_ext::BayesError;
+use bayes_core::{BayesError, validate_row_stochastic};
+use euclid::Real;
 
 /// A convex **generator** `f : (0, ∞) → ℝ` with `f(1) = 0`, defining the
 /// f-divergence `D_f(p ‖ q) = Σ qᵢ f(pᵢ/qᵢ)` via [`f_divergence`].
@@ -92,6 +92,34 @@ pub trait FGenerator {
     }
 }
 
+/// A convex generator over an arbitrary [`Real`] carrier.
+///
+/// This is the lazy/backend-generic companion to [`FGenerator`]. It preserves the same
+/// f-divergence limit conventions while expressing support cases with value-level masks rather
+/// than host numeric branching.
+pub trait RealFGenerator<R: Real> {
+    /// `f(t)` for `t >= 0`, with the same right-limit convention at `0` as [`FGenerator::f`].
+    fn f_real(&self, t: R) -> R;
+
+    /// The recession constant `f'(infinity) = lim t->infinity f(t)/t`.
+    fn f_infinity_real(&self) -> R {
+        R::infinity()
+    }
+
+    /// One term `q_i f(p_i/q_i)` of the divergence sum.
+    fn term_real(&self, p: R, q: R) -> R {
+        let q_positive = q.gt(&R::zero());
+        let p_positive = p.gt(&R::zero());
+        let regular = q.clone() * self.f_real(p.clone() / q);
+        let mismatch = p * self.f_infinity_real();
+        R::select(
+            &q_positive,
+            regular,
+            R::select(&p_positive, mismatch, R::zero()),
+        )
+    }
+}
+
 /// `D_f(p ‖ q) = Σ qᵢ f(pᵢ/qᵢ)` for the given `generator`, over two probability
 /// vectors aligned by index (the shorter is zero-padded). `≥ 0` for any convex
 /// generator with `f(1) = 0` (`fDiv_nonneg`); `0` when `p == q`.
@@ -114,6 +142,26 @@ pub fn f_divergence<G: FGenerator + ?Sized>(p: &[f64], q: &[f64], generator: &G)
             generator.term(pi, qi)
         })
         .sum()
+}
+
+/// `D_f(p || q) = sum_i q_i f(p_i/q_i)` over two probability vectors in any [`Real`]
+/// carrier.
+///
+/// This is the numeric reduction only: it assumes the inputs represent probability vectors and
+/// uses zero-padding for unequal lengths, mirroring [`f_divergence`].
+pub fn f_divergence_real<R, G>(p: &[R], q: &[R], generator: &G) -> R
+where
+    R: Real,
+    G: RealFGenerator<R> + ?Sized,
+{
+    let n = p.len().max(q.len());
+    (0..n)
+        .map(|i| {
+            let pi = p.get(i).cloned().unwrap_or_else(R::zero);
+            let qi = q.get(i).cloned().unwrap_or_else(R::zero);
+            generator.term_real(pi, qi)
+        })
+        .fold(R::zero(), |sum, term| sum + term)
 }
 
 mod channel;

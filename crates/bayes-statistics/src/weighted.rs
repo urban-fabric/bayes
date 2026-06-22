@@ -1,5 +1,7 @@
 //! Weighted descriptive statistics.
 
+use euclid::Real;
+
 fn valid(data: &[f64], weights: &[f64]) -> bool {
     data.len() == weights.len()
         && !data.is_empty()
@@ -29,6 +31,14 @@ pub fn weight_sum(weights: &[f64]) -> f64 {
     if sum > 0.0 { sum } else { f64::NAN }
 }
 
+/// Sum of weights over any [`Real`] carrier.
+pub fn weight_sum_real<R: Real>(weights: &[R]) -> R {
+    if weights.is_empty() {
+        return R::nan();
+    }
+    weights.iter().cloned().fold(R::zero(), |acc, w| acc + w)
+}
+
 /// Normalize nonnegative raw weights to a probability vector.
 ///
 /// This is the raw-weight counterpart of riemann `normWeights_isDistribution`:
@@ -41,6 +51,15 @@ pub fn normalized_weights(weights: &[f64]) -> Vec<f64> {
         return Vec::new();
     }
     weights.iter().map(|&w| w / sum).collect()
+}
+
+/// Normalize raw weights over any [`Real`] carrier.
+pub fn normalized_weights_real<R: Real>(weights: &[R]) -> Vec<R> {
+    if weights.is_empty() {
+        return Vec::new();
+    }
+    let sum = weight_sum_real(weights);
+    weights.iter().cloned().map(|w| w / sum.clone()).collect()
 }
 
 /// Normalize log-weights to a probability vector using stable softmax.
@@ -78,6 +97,20 @@ pub fn effective_sample_size(weights: &[f64]) -> f64 {
     }
 }
 
+/// Effective sample size `(Σw)^2 / Σw²` over any [`Real`] carrier.
+pub fn effective_sample_size_real<R: Real>(weights: &[R]) -> R {
+    if weights.is_empty() {
+        return R::nan();
+    }
+    let sum = weight_sum_real(weights);
+    let sum_sq = weights
+        .iter()
+        .cloned()
+        .map(|w| w.clone() * w)
+        .fold(R::zero(), |acc, w| acc + w);
+    sum.clone() * sum / sum_sq
+}
+
 /// Whether an ESS value is attainable for `n` nonnegative normalized weights.
 ///
 /// A false result flags a diagnostic outside the riemann-backed range
@@ -101,6 +134,20 @@ pub fn weighted_mean(data: &[f64], weights: &[f64]) -> f64 {
     data.iter().zip(weights).map(|(&x, &w)| w * x).sum::<f64>() / sum_w
 }
 
+/// Weighted arithmetic mean over any [`Real`] carrier.
+pub fn weighted_mean_real<R: Real>(data: &[R], weights: &[R]) -> R {
+    if data.len() != weights.len() || data.is_empty() {
+        return R::nan();
+    }
+    let sum_w = weight_sum_real(weights);
+    data.iter()
+        .cloned()
+        .zip(weights.iter().cloned())
+        .map(|(x, w)| w * x)
+        .fold(R::zero(), |acc, x| acc + x)
+        / sum_w
+}
+
 /// Weighted population variance, dividing by `Σw`.
 pub fn weighted_population_variance(data: &[f64], weights: &[f64]) -> f64 {
     if !valid(data, weights) {
@@ -112,6 +159,24 @@ pub fn weighted_population_variance(data: &[f64], weights: &[f64]) -> f64 {
         .zip(weights)
         .map(|(&x, &w)| w * (x - m).powi(2))
         .sum::<f64>()
+        / sum_w
+}
+
+/// Weighted population variance over any [`Real`] carrier.
+pub fn weighted_population_variance_real<R: Real>(data: &[R], weights: &[R]) -> R {
+    if data.len() != weights.len() || data.is_empty() {
+        return R::nan();
+    }
+    let m = weighted_mean_real(data, weights);
+    let sum_w = weight_sum_real(weights);
+    data.iter()
+        .cloned()
+        .zip(weights.iter().cloned())
+        .map(|(x, w)| {
+            let centered = x - m.clone();
+            w * centered.clone() * centered
+        })
+        .fold(R::zero(), |acc, x| acc + x)
         / sum_w
 }
 
@@ -135,9 +200,39 @@ pub fn weighted_variance(data: &[f64], weights: &[f64]) -> f64 {
     sum_w * ss / denom
 }
 
+/// Unbiased weighted sample variance for reliability weights over any [`Real`] carrier.
+pub fn weighted_variance_real<R: Real>(data: &[R], weights: &[R]) -> R {
+    if data.len() != weights.len() || data.is_empty() {
+        return R::nan();
+    }
+    let m = weighted_mean_real(data, weights);
+    let sum_w = weight_sum_real(weights);
+    let sum_w2 = weights
+        .iter()
+        .cloned()
+        .map(|w| w.clone() * w)
+        .fold(R::zero(), |acc, w| acc + w);
+    let denom = sum_w.clone() * sum_w.clone() - sum_w2;
+    let ss = data
+        .iter()
+        .cloned()
+        .zip(weights.iter().cloned())
+        .map(|(x, w)| {
+            let centered = x - m.clone();
+            w * centered.clone() * centered
+        })
+        .fold(R::zero(), |acc, x| acc + x);
+    sum_w * ss / denom
+}
+
 /// Weighted sample standard deviation.
 pub fn weighted_std_dev(data: &[f64], weights: &[f64]) -> f64 {
     weighted_variance(data, weights).sqrt()
+}
+
+/// Weighted sample standard deviation over any [`Real`] carrier.
+pub fn weighted_std_dev_real<R: Real>(data: &[R], weights: &[R]) -> R {
+    weighted_variance_real(data, weights).sqrt()
 }
 
 /// Weighted sample covariance for paired data.
@@ -162,6 +257,30 @@ pub fn weighted_covariance(a: &[f64], b: &[f64], weights: &[f64]) -> f64 {
     sum_w * ss / denom
 }
 
+/// Weighted sample covariance over any [`Real`] carrier.
+pub fn weighted_covariance_real<R: Real>(a: &[R], b: &[R], weights: &[R]) -> R {
+    if a.len() != b.len() || a.len() != weights.len() || a.is_empty() {
+        return R::nan();
+    }
+    let ma = weighted_mean_real(a, weights);
+    let mb = weighted_mean_real(b, weights);
+    let sum_w = weight_sum_real(weights);
+    let sum_w2 = weights
+        .iter()
+        .cloned()
+        .map(|w| w.clone() * w)
+        .fold(R::zero(), |acc, w| acc + w);
+    let denom = sum_w.clone() * sum_w.clone() - sum_w2;
+    let ss = a
+        .iter()
+        .cloned()
+        .zip(b.iter().cloned())
+        .zip(weights.iter().cloned())
+        .map(|((x, y), w)| w * (x - ma.clone()) * (y - mb.clone()))
+        .fold(R::zero(), |acc, x| acc + x);
+    sum_w * ss / denom
+}
+
 /// Weighted Pearson correlation.
 pub fn weighted_correlation(a: &[f64], b: &[f64], weights: &[f64]) -> f64 {
     let cov = weighted_covariance(a, b, weights);
@@ -171,6 +290,12 @@ pub fn weighted_correlation(a: &[f64], b: &[f64], weights: &[f64]) -> f64 {
     } else {
         cov / denom
     }
+}
+
+/// Weighted Pearson correlation over any [`Real`] carrier.
+pub fn weighted_correlation_real<R: Real>(a: &[R], b: &[R], weights: &[R]) -> R {
+    weighted_covariance_real(a, b, weights)
+        / (weighted_std_dev_real(a, weights) * weighted_std_dev_real(b, weights))
 }
 
 /// Weighted empirical quantile. Uses the first ordered value whose cumulative
@@ -213,6 +338,26 @@ mod tests {
         let w = [1.0; 4];
         close(weighted_mean(&data, &w), 2.5, 1e-12);
         close(weighted_variance(&data, &w), 5.0 / 3.0, 1e-12);
+        close(
+            weighted_mean_real(&data, &w),
+            weighted_mean(&data, &w),
+            1e-12,
+        );
+        close(
+            weighted_population_variance_real(&data, &w),
+            weighted_population_variance(&data, &w),
+            1e-12,
+        );
+        close(
+            weighted_variance_real(&data, &w),
+            weighted_variance(&data, &w),
+            1e-12,
+        );
+        close(
+            weighted_std_dev_real(&data, &w),
+            weighted_std_dev(&data, &w),
+            1e-12,
+        );
     }
 
     #[test]
@@ -221,6 +366,11 @@ mod tests {
         let weights = [9.0, 1.0];
         close(weighted_quantile(&data, &weights, 0.5), 1.0, 1e-12);
         close(effective_sample_size(&weights), 100.0 / 82.0, 1e-12);
+        close(
+            effective_sample_size_real(&weights),
+            effective_sample_size(&weights),
+            1e-12,
+        );
     }
 
     #[test]
@@ -230,6 +380,8 @@ mod tests {
         assert_eq!(p.len(), 3);
         close(p.iter().sum(), 1.0, 1e-12);
         close(p[1], 0.6, 1e-12);
+        let p_real = normalized_weights_real(&weights);
+        assert_eq!(p_real, p);
         close(
             effective_sample_size(&weights),
             effective_sample_size(&p),
@@ -274,5 +426,15 @@ mod tests {
         let y = [2.0, 4.0, 6.0, 8.0];
         let w = [1.0, 2.0, 1.0, 2.0];
         close(weighted_correlation(&x, &y, &w), 1.0, 1e-12);
+        close(
+            weighted_covariance_real(&x, &y, &w),
+            weighted_covariance(&x, &y, &w),
+            1e-12,
+        );
+        close(
+            weighted_correlation_real(&x, &y, &w),
+            weighted_correlation(&x, &y, &w),
+            1e-12,
+        );
     }
 }

@@ -14,7 +14,6 @@ rust-version = "1.95"
 # external
 rand = "0.10"
 rand_chacha = "0.10"
-thiserror = "2.0"
 # bayes is **numeric-only**: it writes scalar-generic closed forms over `euclid::numeric`
 # (`Real`/`Complex`) plus host-`f64` statistics. It does not depend on the container
 # tier — the matrix-coupled multivariate densities now live concretely in the backend

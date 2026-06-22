@@ -1,35 +1,29 @@
-//! Functional extension traits that compose any distribution implementing the
-//! spine: log-likelihood, interval probability, truncation, and bijective
-//! transforms. Each is blanket-implemented, so the combinators are available on
-//! every distribution without per-type boilerplate.
+//! Extension traits for ext-only distribution combinators.
 
 use crate::{
     Affine, Bijector, Continuous, ContinuousCdf, Discrete, Exp, OrderStatistic, Sigmoid,
     Transformed, Truncated,
 };
 use bayes_core_ext::BayesError;
-use euclid::{Natural, Real};
-
-fn ln_sub_exp_f64(a: f64, b: f64) -> f64 {
-    if a < b {
-        f64::NAN
-    } else if a == b {
-        f64::NEG_INFINITY
-    } else {
-        a.ln_sub_exp(b)
-    }
-}
+use bayes_distribution::functional::{
+    ContinuousCdfExt as BaseContinuousCdfExt,
+    ContinuousDistributionExt as BaseContinuousDistributionExt,
+    DiscreteDistributionExt as BaseDiscreteDistributionExt,
+};
+use euclid::Natural;
 
 /// Functional operations for any continuous distribution.
-pub trait ContinuousDistributionExt: Continuous + Sized {
-    /// Log-likelihood `Σ ln f(xᵢ)`. Empty samples have log-likelihood `0`.
+pub trait ContinuousDistributionExt:
+    BaseContinuousDistributionExt<f64> + Continuous + Sized
+{
+    /// Log-likelihood `sum ln f(x_i)`. Empty samples have log-likelihood `0`.
     fn ln_likelihood(&self, data: &[f64]) -> f64 {
-        data.iter().map(|&x| self.ln_pdf(x)).sum()
+        BaseContinuousDistributionExt::ln_likelihood(self, data)
     }
 
-    /// Likelihood `Π f(xᵢ)`, computed as `exp(log-likelihood)`.
+    /// Likelihood `prod f(x_i)`, computed as `exp(log-likelihood)`.
     fn likelihood(&self, data: &[f64]) -> f64 {
-        self.ln_likelihood(data).exp()
+        BaseContinuousDistributionExt::likelihood(self, data)
     }
 
     /// Push the distribution through a bijector.
@@ -53,34 +47,21 @@ pub trait ContinuousDistributionExt: Continuous + Sized {
     }
 }
 
-impl<D> ContinuousDistributionExt for D where D: Continuous + Sized {}
+impl<D> ContinuousDistributionExt for D where
+    D: BaseContinuousDistributionExt<f64> + Continuous + Sized
+{
+}
 
 /// Functional operations for any continuous distribution with a CDF.
-pub trait ContinuousCdfExt: ContinuousCdf + Sized {
+pub trait ContinuousCdfExt: BaseContinuousCdfExt<f64> + ContinuousCdf + Sized {
     /// Probability mass in `(lo, hi]`.
     fn probability_between(&self, lo: f64, hi: f64) -> f64 {
-        if lo > hi || lo.is_nan() || hi.is_nan() {
-            return f64::NAN;
-        }
-        let p = self.cdf(hi) - self.cdf(lo);
-        if p.is_nan() { f64::NAN } else { p.max(0.0) }
+        BaseContinuousCdfExt::probability_between(self, lo, hi)
     }
 
-    /// Log probability mass in `(lo, hi]`, using CDF or survival logs to reduce
-    /// cancellation in tails.
+    /// Log probability mass in `(lo, hi]`.
     fn ln_probability_between(&self, lo: f64, hi: f64) -> f64 {
-        if lo > hi || lo.is_nan() || hi.is_nan() {
-            return f64::NAN;
-        }
-        let cdf_hi = self.cdf(hi);
-        if cdf_hi.is_nan() {
-            return f64::NAN;
-        }
-        if cdf_hi <= 0.5 {
-            ln_sub_exp_f64(self.ln_cdf(hi), self.ln_cdf(lo))
-        } else {
-            ln_sub_exp_f64(self.ln_sf(lo), self.ln_sf(hi))
-        }
+        BaseContinuousCdfExt::ln_probability_between(self, lo, hi)
     }
 
     /// Truncate and renormalize to `[lo, hi]`.
@@ -98,7 +79,7 @@ pub trait ContinuousCdfExt: ContinuousCdf + Sized {
     where
         Self: Continuous,
     {
-        OrderStatistic::new(self, sample_size, rank)
+        BaseContinuousCdfExt::order_statistic(self, sample_size, rank)
     }
 
     /// Distribution of the sample minimum from `sample_size` independent draws.
@@ -106,7 +87,7 @@ pub trait ContinuousCdfExt: ContinuousCdf + Sized {
     where
         Self: Continuous,
     {
-        OrderStatistic::minimum(self, sample_size)
+        BaseContinuousCdfExt::minimum_of(self, sample_size)
     }
 
     /// Distribution of the sample maximum from `sample_size` independent draws.
@@ -114,12 +95,12 @@ pub trait ContinuousCdfExt: ContinuousCdf + Sized {
     where
         Self: Continuous,
     {
-        OrderStatistic::maximum(self, sample_size)
+        BaseContinuousCdfExt::maximum_of(self, sample_size)
     }
 
     /// Reliability cumulative hazard `H(x) = -ln S(x)`.
     fn cumulative_hazard(&self, x: f64) -> f64 {
-        -self.ln_sf(x)
+        BaseContinuousCdfExt::cumulative_hazard(self, x)
     }
 
     /// Log hazard `ln h(x) = ln f(x) - ln S(x)`.
@@ -127,7 +108,7 @@ pub trait ContinuousCdfExt: ContinuousCdf + Sized {
     where
         Self: Continuous,
     {
-        self.ln_pdf(x) - self.ln_sf(x)
+        BaseContinuousCdfExt::ln_hazard(self, x)
     }
 
     /// Hazard rate `h(x) = f(x) / S(x)`.
@@ -135,31 +116,31 @@ pub trait ContinuousCdfExt: ContinuousCdf + Sized {
     where
         Self: Continuous,
     {
-        self.ln_hazard(x).exp()
+        BaseContinuousCdfExt::hazard(self, x)
     }
 }
 
-impl<D> ContinuousCdfExt for D where D: ContinuousCdf + Sized {}
+impl<D> ContinuousCdfExt for D where D: BaseContinuousCdfExt<f64> + ContinuousCdf + Sized {}
 
 /// Functional operations for any discrete distribution.
-pub trait DiscreteDistributionExt<X>: Discrete<X>
+pub trait DiscreteDistributionExt<X>: BaseDiscreteDistributionExt<X> + Discrete<X>
 where
     X: Copy + Natural<Real = f64>,
 {
-    /// Log-likelihood `Σ ln P(X = xᵢ)`. Empty samples have log-likelihood `0`.
+    /// Log-likelihood `sum ln P(X = x_i)`. Empty samples have log-likelihood `0`.
     fn ln_likelihood(&self, data: &[X]) -> f64 {
-        data.iter().map(|&x| self.ln_pmf(x)).sum()
+        BaseDiscreteDistributionExt::ln_likelihood(self, data)
     }
 
-    /// Likelihood `Π P(X = xᵢ)`, computed as `exp(log-likelihood)`.
+    /// Likelihood `prod P(X = x_i)`, computed as `exp(log-likelihood)`.
     fn likelihood(&self, data: &[X]) -> f64 {
-        self.ln_likelihood(data).exp()
+        BaseDiscreteDistributionExt::likelihood(self, data)
     }
 }
 
 impl<D, X> DiscreteDistributionExt<X> for D
 where
-    D: Discrete<X>,
+    D: BaseDiscreteDistributionExt<X> + Discrete<X>,
     X: Copy + Natural<Real = f64>,
 {
 }

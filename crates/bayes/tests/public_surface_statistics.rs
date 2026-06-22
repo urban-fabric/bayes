@@ -47,12 +47,14 @@ fn trigamma_is_exposed_and_correct() {
 #[test]
 fn stable_log_weights_are_public_and_have_valid_ess() {
     use bayes::{
-        effective_sample_size, is_effective_sample_size_admissible, normalized_log_weights,
-        normalized_weights,
+        effective_sample_size, effective_sample_size_real, is_effective_sample_size_admissible,
+        normalized_log_weights, normalized_weights, normalized_weights_real, weighted_mean_real,
+        weighted_variance, weighted_variance_real,
     };
 
     let raw = normalized_weights(&[1.0, 2.0, 1.0]);
     close(raw.iter().sum(), 1.0, 1e-12);
+    assert_eq!(normalized_weights_real(&[1.0, 2.0, 1.0]), raw);
 
     let p = normalized_log_weights(&[1000.0, 1001.0, 1000.0]);
     close(p.iter().sum(), 1.0, 1e-12);
@@ -60,6 +62,35 @@ fn stable_log_weights_are_public_and_have_valid_ess() {
 
     let ess = effective_sample_size(&p);
     assert!(is_effective_sample_size_admissible(ess, p.len()));
+    close(effective_sample_size_real(&p), ess, 1e-12);
+    close(
+        weighted_mean_real(&[1.0, 2.0, 4.0], &[1.0, 2.0, 1.0]),
+        2.25,
+        1e-12,
+    );
+    close(
+        weighted_variance_real(&[1.0, 2.0, 4.0], &[1.0, 2.0, 1.0]),
+        weighted_variance(&[1.0, 2.0, 4.0], &[1.0, 2.0, 1.0]),
+        1e-12,
+    );
+}
+
+#[test]
+fn generic_real_summary_reducers_are_public() {
+    use bayes::{
+        correlation_real, covariance_real, mean_real, population_variance_real, std_dev_real,
+        variance_real, z_scores_real,
+    };
+
+    let x = [1.0, 2.0, 3.0, 4.0];
+    let y = [2.0, 4.0, 6.0, 8.0];
+    close(mean_real(&x), 2.5, 1e-12);
+    close(population_variance_real(&x), 1.25, 1e-12);
+    close(variance_real(&x), 5.0 / 3.0, 1e-12);
+    close(std_dev_real(&x), (5.0_f64 / 3.0).sqrt(), 1e-12);
+    close(covariance_real(&x, &y), 10.0 / 3.0, 1e-12);
+    close(correlation_real(&x, &y), 1.0, 1e-12);
+    close(z_scores_real(&x).iter().sum::<f64>(), 0.0, 1e-12);
 }
 
 #[test]
@@ -83,11 +114,13 @@ fn variance_decomposition_is_public_and_exactly_partitions_spread() {
 fn probability_vectors_scores_and_constraints_are_public() {
     use bayes::{
         brier_score, is_probability_vector, is_row_stochastic, log_loss, log_score,
-        normalize_probability_rows, normalize_probability_weights, ranked_probability_score,
-        spherical_score, validate_probability_vector, validate_row_stochastic,
+        normalize_probability_rows, normalize_probability_rows_real, normalize_probability_weights,
+        normalize_probability_weights_real, ranked_probability_score, spherical_score,
+        validate_probability_vector, validate_row_stochastic,
     };
 
     let p = normalize_probability_weights(&[2.0, 5.0, 3.0]);
+    assert_eq!(normalize_probability_weights_real(&[2.0, 5.0, 3.0]), p);
     assert!(is_probability_vector(&p));
     validate_probability_vector(&p).unwrap();
     close(log_score(&p, 1), 0.5_f64.ln(), 1e-12);
@@ -101,6 +134,10 @@ fn probability_vectors_scores_and_constraints_are_public() {
     close(ranked_probability_score(&p, 1), 0.04 + 0.09, 1e-12);
 
     let rows = normalize_probability_rows(&[vec![2.0, 8.0], vec![3.0, 3.0]]);
+    assert_eq!(
+        normalize_probability_rows_real(&[vec![2.0, 8.0], vec![3.0, 3.0]]),
+        rows
+    );
     assert!(is_row_stochastic(&rows));
     validate_row_stochastic(&rows).unwrap();
     // The dense-matrix row-stochastic validator (`is_row_stochastic_matrix`) moved to ito;

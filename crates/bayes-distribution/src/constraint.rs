@@ -1,7 +1,5 @@
 //! Support constraints for the lazy distribution families.
 
-use std::f64::consts::PI;
-
 use bayes_core::{Boundary, Constrained, Constraint, IntegerConstraint, NaturalConstraint};
 use euclid::{Compare, Integer, Natural, Real};
 
@@ -216,8 +214,8 @@ impl<R: Real> Constrained for VonMises<R> {
 
     fn support_constraint(&self) -> Self::Constraint {
         Constraint::Bounded {
-            lo: R::scalar(-PI),
-            hi: R::scalar(PI),
+            lo: -R::pi(),
+            hi: R::pi(),
             lower: Boundary::Closed,
             upper: Boundary::Open,
         }
@@ -239,7 +237,7 @@ impl<N: Natural> Constrained for BetaBinomial<N> {
 
     fn support_constraint(&self) -> Self::Constraint {
         NaturalConstraint::Interval {
-            lo: N::zero(),
+            lo: N::from_u64(0),
             hi: self.trials(),
         }
     }
@@ -251,7 +249,7 @@ impl<N: Natural> Constrained for Binomial<N> {
 
     fn support_constraint(&self) -> Self::Constraint {
         NaturalConstraint::Interval {
-            lo: N::zero(),
+            lo: N::from_u64(0),
             hi: self.trials(),
         }
     }
@@ -264,7 +262,7 @@ impl<I: Integer> Constrained for DiscreteUniform<I> {
     fn support_constraint(&self) -> Self::Constraint {
         IntegerConstraint::Interval {
             lo: self.lo(),
-            hi: self.hi() - I::one(),
+            hi: self.hi() - I::from_i64(1),
         }
     }
 }
@@ -290,7 +288,10 @@ where
         let draws = self.draws();
         let successes_le_draws = successes.le(&draws);
         let hi = N::select(&successes_le_draws, successes, draws);
-        NaturalConstraint::Interval { lo: N::zero(), hi }
+        NaturalConstraint::Interval {
+            lo: N::from_u64(0),
+            hi,
+        }
     }
 }
 

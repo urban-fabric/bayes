@@ -49,7 +49,7 @@ where
     }
 
     fn ln_pmf(&self, k: N) -> N::Real {
-        let zero_count = N::zero();
+        let zero_count = N::from_u64(0);
         let n = self.trials();
         let zero = N::Real::zero();
         let p = self.p();

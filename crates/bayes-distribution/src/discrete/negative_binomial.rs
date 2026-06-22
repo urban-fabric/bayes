@@ -50,7 +50,7 @@ where
     }
 
     fn ln_pmf(&self, k: N) -> N::Real {
-        let zero_count = N::zero();
+        let zero_count = N::from_u64(0);
         let is_zero = k.eq(&zero_count);
         let one_case =
             <N::Real as Compare>::select(&is_zero, N::Real::zero(), N::Real::neg_infinity());

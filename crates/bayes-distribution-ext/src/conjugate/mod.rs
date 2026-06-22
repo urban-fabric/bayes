@@ -33,86 +33,10 @@
 
 mod beta;
 mod gamma;
-mod natural;
 
+pub use bayes_distribution::conjugate::{Conjugate, Counts, NaturalParams, NigNatural, Pair};
 pub use beta::{BetaBernoulli, BetaBinomialModel};
 pub use gamma::{GammaExponential, GammaPoisson};
-pub use natural::{Counts, NaturalParams, NigNatural, Pair};
-
-/// A conjugate prior/likelihood pair whose posterior is computable in closed
-/// form by the **one** algebraic move every conjugate family shares: add the
-/// data's sufficient statistic to the prior's natural hyperparameters,
-///
-/// ```text
-/// posterior = η + Σ T(xᵢ)
-/// ```
-///
-/// in a commutative additive monoid of hyperparameters ([`NaturalParams`]).
-/// That umbrella law — and its two corollaries, **online updating equals batch**
-/// and **order-independence** — is machine-checked once, generically over the
-/// monoid, in the `riemann` Lean development
-/// (`RiemannLean/Bayes/ExponentialFamily.lean`: `posterior`,
-/// `posterior_online_eq_batch`, `posterior_perm`); the named families specialize
-/// it in `Bayes/ConjugateFamilies.lean`.
-///
-/// So an implementor supplies only the family-specific pieces — the per-datum
-/// statistic [`statistic`](Self::statistic), the prior's natural coordinates
-/// [`prior_natural`](Self::prior_natural), the map back to a distribution
-/// [`posterior_from_natural`](Self::posterior_from_natural), and the family's
-/// [`posterior_predictive`](Self::posterior_predictive) closed form — and inherits
-/// the proved-correct [`posterior`](Self::posterior) accumulation (and its streaming
-/// accumulator [`posterior_natural`](Self::posterior_natural)) for free.
-pub trait Conjugate {
-    /// The observation type of the likelihood.
-    type Datum;
-    /// The posterior distribution type (the same family as the prior).
-    type Posterior;
-    /// The **posterior-predictive** type — the law of a *future* observation with
-    /// the parameter integrated out against the posterior. Usually a compound
-    /// distribution (Beta–Binomial, Negative-Binomial, Student-t, Lomax, …) in a
-    /// *different* family from the prior, which is why it is its own associated
-    /// type rather than [`Posterior`](Self::Posterior).
-    type Predictive;
-    /// The natural-hyperparameter monoid this family accumulates in.
-    type Natural: NaturalParams;
-
-    /// `T(x)` — the per-datum sufficient statistic as a natural-hyperparameter
-    /// increment. Takes `&self` because some statistics carry a model constant
-    /// (the binomial trial count, the known likelihood variance) — matching
-    /// riemann's parameterized `binomStat m`.
-    fn statistic(&self, x: &Self::Datum) -> Self::Natural;
-
-    /// `η` — the prior expressed in natural hyperparameters (the fold seed).
-    fn prior_natural(&self) -> Self::Natural;
-
-    /// Recover the posterior distribution from accumulated natural
-    /// hyperparameters `η + Σ T(xᵢ)`.
-    fn posterior_from_natural(&self, natural: Self::Natural) -> Self::Posterior;
-
-    /// `η + Σ T(xᵢ)` — the posterior's natural hyperparameters, the accumulator
-    /// behind a streaming update. Folds each datum's statistic into the prior;
-    /// by riemann's `posterior_online_eq_batch` / `posterior_perm` the result is
-    /// independent of how `data` is split or ordered.
-    fn posterior_natural(&self, data: &[Self::Datum]) -> Self::Natural {
-        let mut acc = self.prior_natural();
-        for x in data {
-            acc = acc.combine(&self.statistic(x));
-        }
-        acc
-    }
-
-    /// The closed-form posterior after observing `data`.
-    fn posterior(&self, data: &[Self::Datum]) -> Self::Posterior {
-        self.posterior_from_natural(self.posterior_natural(data))
-    }
-
-    /// The closed-form **posterior-predictive** after observing `data`: the
-    /// distribution of the next observation with the parameter marginalized out
-    /// against [`posterior`](Self::posterior). Each conjugate family supplies its
-    /// own compound form; the update half of conjugacy is generic
-    /// ([`posterior`](Self::posterior)), the predictive half is family-specific.
-    fn posterior_predictive(&self, data: &[Self::Datum]) -> Self::Predictive;
-}
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]

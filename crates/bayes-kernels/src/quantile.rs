@@ -1,100 +1,20 @@
-use super::*;
-use euclid::numeric::Boolean;
+//! Quantile kernel view plus the generic bisection inverse-CDF helper.
+//!
+//! Closed-form family quantiles live in [`crate::families`]. The iterative
+//! bisection helper remains here because it is an algorithm shared by families
+//! without elementary inverse CDFs.
 
-// --- closed-form quantiles (inverse CDFs) ---
-//
-// The inverse-CDF maps `p ∈ (0, 1)` to the support — a total formula on the open
-// interval, so (as with `logit`) clamping `p` and the `p = 0`/`p = 1` boundary are
-// the caller's branch. Variable powers `(·)^{1/shape}` go through
-// `exp((1/shape)·ln(·))` because the lazy `powf` takes a *constant* exponent.
+use euclid::numeric::{Boolean, Real};
 
-/// Exponential quantile: `−ln(1 − p) / rate`.
-pub fn exponential_quantile<T: Real>(p: T, rate: T) -> T {
-    -((T::one() - p).ln()) / rate
-}
+pub use crate::families::{
+    cauchy::cauchy_quantile, exponential::exponential_quantile, frechet::frechet_quantile,
+    gumbel::gumbel_quantile, half_normal::half_normal_quantile, laplace::laplace_quantile,
+    logistic::logistic_quantile, lognormal::lognormal_quantile, lomax::lomax_quantile,
+    normal::normal_quantile, pareto::pareto_quantile, rayleigh::rayleigh_quantile,
+    triangular::triangular_quantile, uniform::uniform_quantile, weibull::weibull_quantile,
+};
 
-/// Logistic quantile: `location + scale · ln(p / (1 − p))`.
-pub fn logistic_quantile<T: Real>(p: T, location: T, scale: T) -> T {
-    location + scale * (p.clone() / (T::one() - p)).ln()
-}
-
-/// Cauchy quantile: `location + scale · tan(π·(p − ½))`.
-pub fn cauchy_quantile<T: Real>(p: T, location: T, scale: T) -> T {
-    location + scale * (T::pi() * (p - T::half())).tan()
-}
-
-/// Laplace quantile: `location − scale · sign(q) · ln(1 − 2|q|)`, `q = p − ½`.
-pub fn laplace_quantile<T: Real>(p: T, location: T, scale: T) -> T {
-    let q = p - T::half();
-    location - scale * q.clone().signum() * (T::one() - T::two() * q.abs()).ln()
-}
-
-/// Uniform quantile: `lo + width · p`, with `width = hi − lo`.
-pub fn uniform_quantile<T: Real>(p: T, lo: T, width: T) -> T {
-    lo + width * p
-}
-
-/// Weibull quantile: `scale · (−ln(1 − p))^{1/shape}`.
-pub fn weibull_quantile<T: Real>(p: T, scale: T, shape: T) -> T {
-    let base = -((T::one() - p).ln());
-    scale * ((T::one() / shape) * base.ln()).exp()
-}
-
-/// Gumbel quantile: `location − scale · ln(−ln p)`.
-pub fn gumbel_quantile<T: Real>(p: T, location: T, scale: T) -> T {
-    location - scale * (-(p.ln())).ln()
-}
-
-/// Fréchet quantile: `scale · (−ln p)^{−1/shape}`.
-pub fn frechet_quantile<T: Real>(p: T, scale: T, shape: T) -> T {
-    let base = -(p.ln());
-    scale * ((-(T::one() / shape)) * base.ln()).exp()
-}
-
-/// Pareto quantile: `minimum · (1 − p)^{−1/shape}`.
-pub fn pareto_quantile<T: Real>(p: T, minimum: T, shape: T) -> T {
-    let base = T::one() - p;
-    minimum * ((-(T::one() / shape)) * base.ln()).exp()
-}
-
-/// Lomax quantile: `scale · ((1 − p)^{−1/shape} − 1)`.
-pub fn lomax_quantile<T: Real>(p: T, scale: T, shape: T) -> T {
-    let base = T::one() - p;
-    scale * (((-(T::one() / shape)) * base.ln()).exp() - T::one())
-}
-
-/// Rayleigh quantile: `scale · √(−2·ln(1 − p))`.
-pub fn rayleigh_quantile<T: Real>(p: T, scale: T) -> T {
-    scale * (-T::two() * (T::one() - p).ln()).sqrt()
-}
-
-/// Normal quantile: `mean + std·√2·erf⁻¹(2p − 1)`.
-pub fn normal_quantile<T: Real>(p: T, mean: T, std_dev: T) -> T {
-    mean + std_dev * T::sqrt_2() * (T::two() * p - T::one()).erf_inv()
-}
-
-/// Half-normal quantile: `scale·√2·erf⁻¹(p)`.
-pub fn half_normal_quantile<T: Real>(p: T, scale: T) -> T {
-    scale * T::sqrt_2() * p.erf_inv()
-}
-
-/// Log-normal quantile: the Normal quantile on the log scale, exponentiated —
-/// `exp(mean_log + σ_log·√2·erf⁻¹(2p − 1))`.
-pub fn lognormal_quantile<T: Real>(p: T, mean_log: T, std_log: T) -> T {
-    normal_quantile(p, mean_log, std_log).exp()
-}
-
-// --- iterative quantile (no elementary inverse) ---
-//
-// The families whose CDF has no closed-form inverse — Gamma, Beta, Student's t, F, Wald,
-// Inverse-Gamma — invert it by bisection. Written once over [`Real`] through
-// [`Compare::while_loop`], the same routine is a host `while` loop on `f64`/`f32` and a
-// graph `While` on a tensor backend, so the quantile is no longer host-only.
-
-/// Inverse CDF by bisection, write-once over [`Real`]. `cdf` must be monotone
-/// non-decreasing; `lo`/`hi` are the support bounds (either may be `±∞`). An infinite end is
-/// widened geometrically into a finite bracket, then the bracket is bisected for a fixed
-/// trip count (≈ full `f64` precision). The `p ≤ 0` / `p ≥ 1` ends return `lo` / `hi`.
+/// Inverse CDF by bisection, write-once over [`Real`].
 pub fn inverse_cdf_bisect<T, F>(cdf: F, lo: T, hi: T, p: T) -> T
 where
     T: Real,
@@ -103,12 +23,9 @@ where
     let cdf = &cdf;
     let p = &p;
 
-    // Seed a finite working bracket; an infinite end starts at ∓1 and is widened below.
     let a0 = T::select(&lo.is_finite(), lo.clone(), -T::one());
     let b0 = T::select(&hi.is_finite(), hi.clone(), T::one());
 
-    // Widen until `cdf(a) ≤ p ≤ cdf(b)`, pushing the offending end out by the current span
-    // (≥ 1) each trip; 64 trips cover any finite double-precision quantile.
     let widen_trips = T::scalar(64.0);
     let (a, b, _) = T::while_loop(
         (a0, b0, T::zero()),
@@ -127,7 +44,6 @@ where
         },
     );
 
-    // Bisect the now-bracketing `[a, b]` for a fixed trip count.
     let bisect_trips = T::scalar(100.0);
     let (a, b, _) = T::while_loop(
         (a, b, T::zero()),
@@ -149,6 +65,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        exponential_cdf, exponential_ln_cdf, exponential_ln_sf, gamma_cdf, gamma_cdf_on_support,
+        lognormal_cdf, normal_cdf, normal_ln_cdf, normal_ln_sf, pareto_cdf, weibull_cdf,
+    };
 
     #[test]
     fn full_domain_cdfs_floor_below_support() {
@@ -157,10 +77,10 @@ mod tests {
         assert_eq!(lognormal_cdf(-1.0_f64, 0.0, 1.0), 0.0);
         assert_eq!(weibull_cdf(-1.0_f64, 1.5, 2.0), 0.0);
         assert_eq!(pareto_cdf(0.5_f64, 1.0, 2.0), 0.0);
-        // The interior agrees with the on-support kernel where both apply.
+
         let g = gamma_cdf(2.0_f64, 3.0, 1.0);
         assert!((g - gamma_cdf_on_support(2.0, 3.0, 1.0)).abs() < 1e-15);
-        // Stable log-CDF/SF tails floor to ±∞ / 0 off support.
+
         assert_eq!(exponential_ln_cdf(-1.0_f64, 2.0), f64::NEG_INFINITY);
         assert_eq!(exponential_ln_sf(-1.0_f64, 2.0), 0.0);
     }

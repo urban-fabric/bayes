@@ -1,0 +1,75 @@
+use euclid::numeric::Real;
+
+pub use super::gamma::{
+    gamma_exponential_log_marginal_likelihood, gamma_exponential_log_predictive,
+};
+
+/// Exponential log-density on `x >= 0`.
+pub fn exponential_log_pdf_on_support<T: Real>(x: T, rate: T) -> T {
+    rate.clone().ln() - rate * x
+}
+
+/// Exponential log-survival on `x >= 0`.
+pub fn exponential_log_survival_on_support<T: Real>(x: T, rate: T) -> T {
+    -(rate * x)
+}
+
+/// Exponential CDF on `x >= 0`.
+pub fn exponential_cdf_on_support<T: Real>(x: T, rate: T) -> T {
+    T::one() - (-(rate * x)).exp()
+}
+
+/// Exponential CDF with the below-support floor folded in.
+pub fn exponential_cdf<T: Real>(x: T, rate: T) -> T {
+    let in_support = x.ge(&T::zero());
+    T::select(&in_support, exponential_cdf_on_support(x, rate), T::zero())
+}
+
+/// Exponential log-CDF on `x >= 0`.
+pub fn exponential_ln_cdf_on_support<T: Real>(x: T, rate: T) -> T {
+    (-(rate * x)).ln_1m_exp()
+}
+
+/// Exponential log-CDF with the below-support floor folded in.
+pub fn exponential_ln_cdf<T: Real>(x: T, rate: T) -> T {
+    let in_support = x.gt(&T::zero());
+    let safe_x = T::select(&in_support, x, T::one());
+    exponential_ln_cdf_on_support(safe_x, rate).mask_invalid(in_support, T::neg_infinity())
+}
+
+/// Exponential log-survival with the below-support branch folded in.
+pub fn exponential_ln_sf<T: Real>(x: T, rate: T) -> T {
+    let in_support = x.gt(&T::zero());
+    T::select(
+        &in_support,
+        exponential_log_survival_on_support(x, rate),
+        T::zero(),
+    )
+}
+
+/// Exponential quantile.
+pub fn exponential_quantile<T: Real>(p: T, rate: T) -> T {
+    -((T::one() - p).ln()) / rate
+}
+
+/// Exponential entropy `1 - ln(rate)`.
+pub fn exponential_entropy<T: Real>(rate: T) -> T {
+    T::one() - rate.ln()
+}
+
+/// Exponential KL divergence.
+pub fn kl_exponential<T: Real>(rate_self: T, rate_other: T) -> T {
+    (rate_self.clone() / rate_other.clone()).ln() + rate_other / rate_self - T::one()
+}
+
+/// Exponential squared Hellinger distance.
+pub fn hellinger_sq_exponential<T: Real>(rate_self: T, rate_other: T) -> T {
+    let (l0, l1) = (rate_self, rate_other);
+    crate::hellinger_sq_from_bc(T::two() * (l0.clone() * l1.clone()).sqrt() / (l0 + l1))
+}
+
+/// Exponential chi-squared divergence interior.
+pub fn chi_squared_exponential_on_support<T: Real>(rate_self: T, rate_other: T) -> T {
+    let (l0, l1) = (rate_self, rate_other);
+    l0.clone() * l0.clone() / (l1.clone() * (T::two() * l0 - l1)) - T::one()
+}

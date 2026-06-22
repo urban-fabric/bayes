@@ -8,10 +8,14 @@
 //!   i.e. conditional entropy `≥ 0`);
 //! - `I(X;Y) ≤ H(X)` and `≤ H(Y)` (`mutualInfo_le_entropy_fst` / `_snd`).
 
-use super::{kl_term, shannon_entropy};
+#[cfg(test)]
+use super::shannon_entropy;
+use super::{kl_term, shannon_entropy_real};
+use euclid::Real;
 
 /// The row (X) and column (Y) marginals of a joint distribution table: `p_X[i] = Σ_k J[i][k]`
 /// and `p_Y[k] = Σ_i J[i][k]`. Shared by the joint-distribution measures below.
+#[cfg(test)]
 fn marginals(joint: &[Vec<f64>]) -> (Vec<f64>, Vec<f64>) {
     let cols = joint.iter().map(Vec::len).max().unwrap_or(0);
     let px: Vec<f64> = joint.iter().map(|row| row.iter().sum()).collect();
@@ -19,6 +23,22 @@ fn marginals(joint: &[Vec<f64>]) -> (Vec<f64>, Vec<f64>) {
     for row in joint {
         for (k, &v) in row.iter().enumerate() {
             py[k] += v;
+        }
+    }
+    (px, py)
+}
+
+/// Generic row and column marginals of a joint distribution table.
+fn marginals_real<R: Real>(joint: &[Vec<R>]) -> (Vec<R>, Vec<R>) {
+    let cols = joint.iter().map(Vec::len).max().unwrap_or(0);
+    let px: Vec<R> = joint
+        .iter()
+        .map(|row| row.iter().cloned().fold(R::zero(), |sum, v| sum + v))
+        .collect();
+    let mut py = vec![R::zero(); cols];
+    for row in joint {
+        for (k, v) in row.iter().enumerate() {
+            py[k] = py[k].clone() + v.clone();
         }
     }
     (px, py)
@@ -32,16 +52,21 @@ fn marginals(joint: &[Vec<f64>]) -> (Vec<f64>, Vec<f64>) {
 /// (`RiemannLean/Bayes/Divergence.lean`: `mutualInfo_nonneg`). The `0·ln 0 = 0`
 /// convention is applied to empty cells.
 pub fn mutual_information(joint: &[Vec<f64>]) -> f64 {
+    mutual_information_real(joint)
+}
+
+/// **Mutual information** over any [`Real`] carrier.
+pub fn mutual_information_real<R: Real>(joint: &[Vec<R>]) -> R {
     if joint.is_empty() {
-        return 0.0;
+        return R::zero();
     }
-    let (px, py) = marginals(joint);
+    let (px, py) = marginals_real(joint);
     joint
         .iter()
         .enumerate()
-        .flat_map(|(i, row)| row.iter().enumerate().map(move |(k, &j)| (i, k, j)))
-        .map(|(i, k, j)| kl_term(j, px[i] * py[k]))
-        .sum()
+        .flat_map(|(i, row)| row.iter().enumerate().map(move |(k, j)| (i, k, j)))
+        .map(|(i, k, j)| kl_term(j.clone(), px[i].clone() * py[k].clone()))
+        .fold(R::zero(), |sum, term| sum + term)
 }
 
 /// **Joint entropy** `H(X, Y) = −Σ_{i,k} J[i][k]·ln J[i][k]` (in nats, with `0 ln 0 = 0`)
@@ -52,12 +77,16 @@ pub fn mutual_information(joint: &[Vec<f64>]) -> f64 {
 /// diagram: `I(X;Y) = H(X) + H(Y) − H(X,Y) ≤ H(X,Y)`, and a conditional entropy
 /// `H(Y|X) = H(X,Y) − H(X)` follows by the chain rule.
 pub fn joint_entropy(joint: &[Vec<f64>]) -> f64 {
+    joint_entropy_real(joint)
+}
+
+/// **Joint entropy** over any [`Real`] carrier.
+pub fn joint_entropy_real<R: Real>(joint: &[Vec<R>]) -> R {
     -joint
         .iter()
-        .flat_map(|row| row.iter())
-        .filter(|&&j| j > 0.0)
-        .map(|&j| j * j.ln())
-        .sum::<f64>()
+        .flat_map(|row| row.iter().cloned())
+        .map(|j| j.clone().xlogy(j))
+        .fold(R::zero(), |sum, term| sum + term)
 }
 
 /// **Conditional entropy** `H(Y|X) = H(X,Y) − H(X)` (in nats) — the residual uncertainty in
@@ -67,11 +96,16 @@ pub fn joint_entropy(joint: &[Vec<f64>]) -> f64 {
 /// reverse direction `H(X|Y)` is this function on the transposed table. Returns `0` for an
 /// empty table (any tiny negative from rounding is clamped, the proved floor being `0`).
 pub fn conditional_entropy(joint: &[Vec<f64>]) -> f64 {
+    conditional_entropy_real(joint)
+}
+
+/// **Conditional entropy** over any [`Real`] carrier.
+pub fn conditional_entropy_real<R: Real>(joint: &[Vec<R>]) -> R {
     if joint.is_empty() {
-        return 0.0;
+        return R::zero();
     }
-    let (px, _) = marginals(joint);
-    (joint_entropy(joint) - shannon_entropy(&px)).max(0.0)
+    let (px, _) = marginals_real(joint);
+    (joint_entropy_real(joint) - shannon_entropy_real(&px)).max(R::zero())
 }
 
 /// The **variation of information** `VI(X, Y) = H(X|Y) + H(Y|X) = 2·H(X,Y) − H(X) − H(Y)`
@@ -80,11 +114,17 @@ pub fn conditional_entropy(joint: &[Vec<f64>]) -> f64 {
 /// to `H(X,Y) − I(X;Y)`. Nonnegative because both conditional entropies are (`riemann`:
 /// `entropy_fst_le_joint` + `entropy_snd_le_joint`). Returns `0` for an empty table.
 pub fn variation_of_information(joint: &[Vec<f64>]) -> f64 {
+    variation_of_information_real(joint)
+}
+
+/// **Variation of information** over any [`Real`] carrier.
+pub fn variation_of_information_real<R: Real>(joint: &[Vec<R>]) -> R {
     if joint.is_empty() {
-        return 0.0;
+        return R::zero();
     }
-    let (px, py) = marginals(joint);
-    (2.0 * joint_entropy(joint) - shannon_entropy(&px) - shannon_entropy(&py)).max(0.0)
+    let (px, py) = marginals_real(joint);
+    (R::two() * joint_entropy_real(joint) - shannon_entropy_real(&px) - shannon_entropy_real(&py))
+        .max(R::zero())
 }
 
 /// **Normalized mutual information** `NMI(X, Y) = I(X;Y) / min(H(X), H(Y))`, in `[0, 1]` — a
@@ -94,15 +134,22 @@ pub fn variation_of_information(joint: &[Vec<f64>]) -> f64 {
 /// either marginal is (essentially) deterministic — `min(H(X), H(Y)) = 0`, so there is no
 /// shared information to normalize (then `I = 0` too).
 pub fn normalized_mutual_information(joint: &[Vec<f64>]) -> f64 {
+    normalized_mutual_information_real(joint)
+}
+
+/// **Normalized mutual information** over any [`Real`] carrier.
+pub fn normalized_mutual_information_real<R: Real>(joint: &[Vec<R>]) -> R {
     if joint.is_empty() {
-        return 0.0;
+        return R::zero();
     }
-    let (px, py) = marginals(joint);
-    let denom = shannon_entropy(&px).min(shannon_entropy(&py));
-    if denom <= 1e-12 {
-        return 0.0;
-    }
-    (mutual_information(joint) / denom).clamp(0.0, 1.0)
+    let (px, py) = marginals_real(joint);
+    let denom = shannon_entropy_real(&px).min(shannon_entropy_real(&py));
+    let small = denom.le(&R::scalar(1e-12));
+    let safe_denom = R::select(&small, R::one(), denom.clone());
+    let value = (mutual_information_real(joint) / safe_denom)
+        .max(R::zero())
+        .min(R::one());
+    R::select(&small, R::zero(), value)
 }
 
 #[cfg(test)]

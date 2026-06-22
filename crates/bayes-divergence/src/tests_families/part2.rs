@@ -2,8 +2,8 @@ use super::*;
 
 #[test]
 fn wald_divergences_match_numeric() {
-    let a = Wald::new(1.0, 3.0).unwrap();
-    let b = Wald::new(1.3, 2.0).unwrap();
+    let a = Wald::new(1.0, 3.0);
+    let b = Wald::new(1.3, 2.0);
     let (lo, hi, n) = (1e-3, 30.0, 700_000);
     close(a.kl_divergence(&b), kl_num(&a, &b, lo, hi, n), 2e-3);
     close(a.hellinger_sq(&b), hellinger_num(&a, &b, lo, hi, n), 2e-3);
@@ -29,8 +29,8 @@ fn wald_divergences_match_numeric() {
 
 #[test]
 fn gumbel_kl_matches_numeric() {
-    let a = Gumbel::new(0.0, 1.0).unwrap();
-    let b = Gumbel::new(0.5, 1.5).unwrap();
+    let a = Gumbel::new(0.0, 1.0);
+    let b = Gumbel::new(0.5, 1.5);
     close(
         a.kl_divergence(&b),
         kl_num(&a, &b, -20.0, 60.0, 600_000),
@@ -42,12 +42,12 @@ fn gumbel_kl_matches_numeric() {
 
 #[test]
 fn frechet_kl_matches_weibull_reparam_and_numeric() {
-    let a = Frechet::new(3.0, 1.0).unwrap();
-    let b = Frechet::new(2.0, 1.5).unwrap();
+    let a = Frechet::new(3.0, 1.0);
+    let b = Frechet::new(2.0, 1.5);
     // X ~ Fréchet(α, s) ⟺ 1/X ~ Weibull(shape α, scale 1/s); `Weibull::new` takes
     // (scale, shape).
-    let wa = Weibull::new(1.0, 3.0).unwrap();
-    let wb = Weibull::new(1.0 / 1.5, 2.0).unwrap();
+    let wa = Weibull::new(1.0, 3.0);
+    let wb = Weibull::new(1.0 / 1.5, 2.0);
     close(a.kl_divergence(&b), wa.kl_divergence(&wb), 1e-12);
     close(
         a.kl_divergence(&b),
@@ -64,8 +64,8 @@ fn frechet_kl_matches_weibull_reparam_and_numeric() {
 #[test]
 fn uniform_divergences_closed_form() {
     // [0,1] ⊆ [-0.5, 2]: widths 1 and 2.5, overlap 1.
-    let a = Uniform::new(0.0, 1.0).unwrap();
-    let b = Uniform::new(-0.5, 2.0).unwrap();
+    let a = Uniform::new(0.0, 1.0);
+    let b = Uniform::new(-0.5, 2.0);
     close(a.kl_divergence(&b), 2.5_f64.ln(), 1e-12);
     close(a.chi_squared_divergence(&b), 1.5, 1e-12);
     close(a.hellinger_sq(&b), 1.0 - 1.0 / 2.5_f64.sqrt(), 1e-12);
@@ -73,8 +73,8 @@ fn uniform_divergences_closed_form() {
     close(a.kl_divergence(&a), 0.0, 1e-12);
     close(a.hellinger_sq(&a), 0.0, 1e-12);
     // Partial overlap: KL/χ² diverge, Hellinger stays finite.
-    let c = Uniform::new(0.0, 2.0).unwrap();
-    let d = Uniform::new(1.0, 3.0).unwrap();
+    let c = Uniform::new(0.0_f64, 2.0);
+    let d = Uniform::new(1.0_f64, 3.0);
     assert!(c.kl_divergence(&d).is_infinite());
     assert!(c.chi_squared_divergence(&d).is_infinite());
     close(c.hellinger_sq(&d), 0.5, 1e-12); // BC = 1/√(2·2)
@@ -85,16 +85,16 @@ fn uniform_divergences_closed_form() {
 #[test]
 fn discrete_uniform_divergences_closed_form() {
     // {2..5} (n=4) ⊆ {0..9} (n=10), overlap 4.
-    let a = DiscreteUniform::new(2, 5).unwrap();
-    let b = DiscreteUniform::new(0, 9).unwrap();
+    let a = DiscreteUniform::new(2_i64, 5);
+    let b = DiscreteUniform::new(0_i64, 9);
     close(a.kl_divergence(&b), (10.0_f64 / 4.0).ln(), 1e-12);
     close(a.chi_squared_divergence(&b), 10.0 / 4.0 - 1.0, 1e-12);
     close(a.hellinger_sq(&b), 1.0 - 4.0 / 40.0_f64.sqrt(), 1e-12);
     check_renyi_limits(&a, &b);
     close(a.kl_divergence(&a), 0.0, 1e-12);
     // Partial overlap {3,4} of {0..4} and {3..7}.
-    let c = DiscreteUniform::new(0, 4).unwrap();
-    let d = DiscreteUniform::new(3, 7).unwrap();
+    let c = DiscreteUniform::new(0_i64, 4);
+    let d = DiscreteUniform::new(3_i64, 7);
     assert!(c.kl_divergence(&d).is_infinite());
     close(c.hellinger_sq(&d), 0.6, 1e-12); // BC = 2/√(5·5)
 }
@@ -106,12 +106,10 @@ fn discrete_uniform_divergences_closed_form() {
 #[test]
 fn binomial_divergences_scale_with_n_and_match_sums() {
     let n = 12u64;
-    let a = Binomial::new(n, 0.3).unwrap();
-    let b = Binomial::new(n, 0.55).unwrap();
+    let a = Binomial::new(n, 0.3);
+    let b = Binomial::new(n, 0.55);
     // KL = n · per-trial Bernoulli KL.
-    let bern = Bernoulli::new(0.3)
-        .unwrap()
-        .kl_divergence(&Bernoulli::new(0.55).unwrap());
+    let bern = Bernoulli::new(0.3).kl_divergence(&Bernoulli::new(0.55));
     close(a.kl_divergence(&b), n as f64 * bern, 1e-12);
     // direct pmf sums
     let kl: f64 = (0..=n)
@@ -148,18 +146,15 @@ fn binomial_divergences_scale_with_n_and_match_sums() {
     check_renyi_limits(&a, &b);
     close(a.kl_divergence(&a), 0.0, 1e-12);
     // Differing trial counts are out-of-family.
-    assert!(
-        a.kl_divergence(&Binomial::new(11, 0.3).unwrap())
-            .is_infinite()
-    );
-    assert_eq!(a.hellinger_sq(&Binomial::new(11, 0.3).unwrap()), 1.0);
+    assert!(a.kl_divergence(&Binomial::new(11, 0.3)).is_infinite());
+    assert_eq!(a.hellinger_sq(&Binomial::new(11, 0.3)), 1.0);
 }
 
 #[test]
 fn negative_binomial_divergences_match_sums() {
     let r = 5.0;
-    let a = NegativeBinomial::new(r, 0.4).unwrap();
-    let b = NegativeBinomial::new(r, 0.6).unwrap();
+    let a = NegativeBinomial::new(r, 0.4);
+    let b = NegativeBinomial::new(r, 0.6);
     // Stay in the well-conditioned range: past ~250 one pmf underflows to 0 while
     // the other is still positive, and the series have long since converged.
     let kmax = 250u64;
@@ -205,12 +200,12 @@ fn negative_binomial_divergences_match_sums() {
     check_renyi_limits(&a, &b);
     close(a.kl_divergence(&a), 0.0, 1e-10);
     // χ² diverges when (1−p₁)² ≥ 1−p₂.
-    let c = NegativeBinomial::new(r, 0.1).unwrap();
-    let d = NegativeBinomial::new(r, 0.5).unwrap();
+    let c = NegativeBinomial::new(r, 0.1);
+    let d = NegativeBinomial::new(r, 0.5);
     assert!(c.chi_squared_divergence(&d).is_infinite());
     // Differing successes are out-of-family.
     assert!(
-        a.kl_divergence(&NegativeBinomial::new(4.0, 0.4).unwrap())
+        a.kl_divergence(&NegativeBinomial::new(4.0, 0.4))
             .is_infinite()
     );
 }

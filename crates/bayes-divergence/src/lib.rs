@@ -73,10 +73,10 @@
 // divergence impls (and intra-doc links) reference them as `crate::Normal`, etc.
 // Private: not re-exported — divergence's own public surface stays its trait set.
 #[allow(unused_imports)]
-use bayes_distribution_ext::*;
+use bayes_distribution::*;
+use euclid::Real;
 
 mod chi_squared;
-mod families;
 mod fdiv;
 mod hellinger;
 mod info;
@@ -96,34 +96,42 @@ mod tests_families;
 
 pub use chi_squared::ChiSquaredDivergence;
 pub use fdiv::{
-    Alpha, Channel, ChiSquared as ChiSquaredGen, Custom, FGenerator, Jeffreys, Kl, ReverseKl,
-    SquaredHellinger, TotalVariation as TotalVariationGen, f_divergence,
+    Alpha, Channel, ChiSquared as ChiSquaredGen, Custom, FGenerator, Jeffreys, Kl, RealFGenerator,
+    ReverseKl, SquaredHellinger, TotalVariation as TotalVariationGen, f_divergence,
+    f_divergence_real,
 };
 pub use hellinger::HellingerDistance;
 pub use info::{
-    bhattacharyya_coefficient, cross_entropy, is_entropy_admissible, jensen_shannon, max_entropy,
-    normalized_entropy, shannon_entropy,
+    bhattacharyya_coefficient, bhattacharyya_coefficient_real, cross_entropy, cross_entropy_real,
+    is_entropy_admissible, jensen_shannon, jensen_shannon_real, max_entropy, max_entropy_real,
+    normalized_entropy, normalized_entropy_real, shannon_entropy, shannon_entropy_real,
 };
 pub use jensen_shannon::JensenShannon;
 pub use kl::{Divergence, KlDivergence};
 pub use mutual_information::{
-    conditional_entropy, joint_entropy, mutual_information, normalized_mutual_information,
-    variation_of_information,
+    conditional_entropy, conditional_entropy_real, joint_entropy, joint_entropy_real,
+    mutual_information, mutual_information_real, normalized_mutual_information,
+    normalized_mutual_information_real, variation_of_information, variation_of_information_real,
 };
 pub use renyi::RenyiDivergence;
 pub use total_variation::TotalVariation;
 
 /// One term `x · ln(x/y)` of a discrete KL / Jensen–Shannon sum, with the limit
 /// convention `0 · ln(0/·) = 0`. Shared across the divergence submodules.
-fn kl_term(x: f64, y: f64) -> f64 {
-    if x > 0.0 { x * (x / y).ln() } else { 0.0 }
+fn kl_term<R: Real>(x: R, y: R) -> R {
+    let ratio = x.clone() / y;
+    x.xlogy(ratio)
 }
 
 /// `Σ pᵢ ln(pᵢ/qᵢ)` over two probability vectors, built on [`kl_term`]. `+∞`
 /// when the supports disagree (differing lengths, or some `pᵢ > 0 = qᵢ`).
-fn discrete_kl(p: &[f64], q: &[f64]) -> f64 {
+fn discrete_kl<R: Real>(p: &[R], q: &[R]) -> R {
     if p.len() != q.len() {
-        return f64::INFINITY;
+        return R::infinity();
     }
-    p.iter().zip(q).map(|(&pi, &qi)| kl_term(pi, qi)).sum()
+    p.iter()
+        .cloned()
+        .zip(q.iter().cloned())
+        .map(|(pi, qi)| kl_term(pi, qi))
+        .fold(R::zero(), |acc, x| acc + x)
 }

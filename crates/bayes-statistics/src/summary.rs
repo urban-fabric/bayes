@@ -1,12 +1,22 @@
 //! Summary statistics — location, dispersion, shape, and association — computed
 //! with numerically stable one-pass algorithms (Welford) where it matters.
 
+use euclid::Real;
+
 /// Arithmetic mean. `NaN` for an empty sample.
 pub fn mean(data: &[f64]) -> f64 {
     if data.is_empty() {
         return f64::NAN;
     }
     data.iter().sum::<f64>() / data.len() as f64
+}
+
+/// Arithmetic mean over any [`Real`] carrier.
+pub fn mean_real<R: Real>(data: &[R]) -> R {
+    if data.is_empty() {
+        return R::nan();
+    }
+    data.iter().cloned().fold(R::zero(), |acc, x| acc + x) / R::scalar(data.len() as f64)
 }
 
 /// Welford accumulation of `(mean, M₂ = Σ(xᵢ-mean)²)` in one pass.
@@ -21,6 +31,17 @@ fn mean_and_m2(data: &[f64]) -> (f64, f64) {
     (mean, m2)
 }
 
+fn mean_and_m2_real<R: Real>(data: &[R]) -> (R, R) {
+    let mut mean = R::zero();
+    let mut m2 = R::zero();
+    for (i, x) in data.iter().cloned().enumerate() {
+        let delta = x.clone() - mean.clone();
+        mean = mean + delta.clone() / R::scalar(i as f64 + 1.0);
+        m2 = m2 + delta * (x - mean.clone());
+    }
+    (mean, m2)
+}
+
 /// Unbiased sample variance (divides by `n-1`). `NaN` for fewer than 2 points.
 pub fn variance(data: &[f64]) -> f64 {
     if data.len() < 2 {
@@ -28,6 +49,15 @@ pub fn variance(data: &[f64]) -> f64 {
     }
     let (_, m2) = mean_and_m2(data);
     m2 / (data.len() as f64 - 1.0)
+}
+
+/// Unbiased sample variance over any [`Real`] carrier.
+pub fn variance_real<R: Real>(data: &[R]) -> R {
+    if data.len() < 2 {
+        return R::nan();
+    }
+    let (_, m2) = mean_and_m2_real(data);
+    m2 / R::scalar((data.len() - 1) as f64)
 }
 
 /// Population (biased) variance (divides by `n`). `NaN` for an empty sample.
@@ -39,9 +69,23 @@ pub fn population_variance(data: &[f64]) -> f64 {
     m2 / data.len() as f64
 }
 
+/// Population variance over any [`Real`] carrier.
+pub fn population_variance_real<R: Real>(data: &[R]) -> R {
+    if data.is_empty() {
+        return R::nan();
+    }
+    let (_, m2) = mean_and_m2_real(data);
+    m2 / R::scalar(data.len() as f64)
+}
+
 /// Sample standard deviation (`√variance`).
 pub fn std_dev(data: &[f64]) -> f64 {
     variance(data).sqrt()
+}
+
+/// Sample standard deviation over any [`Real`] carrier.
+pub fn std_dev_real<R: Real>(data: &[R]) -> R {
+    variance_real(data).sqrt()
 }
 
 /// Coefficient of variation `s / |x̄|`. `NaN` if the mean is zero or undefined.
@@ -51,6 +95,11 @@ pub fn coefficient_of_variation(data: &[f64]) -> f64 {
         return f64::NAN;
     }
     std_dev(data) / m.abs()
+}
+
+/// Coefficient of variation over any [`Real`] carrier.
+pub fn coefficient_of_variation_real<R: Real>(data: &[R]) -> R {
+    std_dev_real(data) / mean_real(data).abs()
 }
 
 /// `k`-th standardized central moment about the mean (population form).
@@ -65,6 +114,39 @@ fn standardized_moment(data: &[f64], k: i32) -> f64 {
     mk / var.powf(k as f64 / 2.0)
 }
 
+fn standardized_moment3_real<R: Real>(data: &[R]) -> R {
+    let (m, m2) = mean_and_m2_real(data);
+    let n = R::scalar(data.len() as f64);
+    let var = m2 / n.clone();
+    let m3 = data
+        .iter()
+        .cloned()
+        .map(|x| {
+            let centered = x - m.clone();
+            centered.clone() * centered.clone() * centered
+        })
+        .fold(R::zero(), |acc, x| acc + x)
+        / n;
+    m3 / (var.clone() * var.sqrt())
+}
+
+fn standardized_moment4_real<R: Real>(data: &[R]) -> R {
+    let (m, m2) = mean_and_m2_real(data);
+    let n = R::scalar(data.len() as f64);
+    let var = m2 / n.clone();
+    let m4 = data
+        .iter()
+        .cloned()
+        .map(|x| {
+            let centered = x - m.clone();
+            let centered2 = centered.clone() * centered;
+            centered2.clone() * centered2
+        })
+        .fold(R::zero(), |acc, x| acc + x)
+        / n;
+    m4 / (var.clone() * var)
+}
+
 /// Sample skewness — the third standardized moment. `NaN` if fewer than 2 points
 /// or zero variance.
 pub fn skewness(data: &[f64]) -> f64 {
@@ -74,12 +156,28 @@ pub fn skewness(data: &[f64]) -> f64 {
     standardized_moment(data, 3)
 }
 
+/// Population skewness over any [`Real`] carrier.
+pub fn skewness_real<R: Real>(data: &[R]) -> R {
+    if data.len() < 2 {
+        return R::nan();
+    }
+    standardized_moment3_real(data)
+}
+
 /// Excess kurtosis — the fourth standardized moment minus 3. `NaN` if degenerate.
 pub fn kurtosis(data: &[f64]) -> f64 {
     if data.len() < 2 {
         return f64::NAN;
     }
     standardized_moment(data, 4) - 3.0
+}
+
+/// Excess kurtosis over any [`Real`] carrier.
+pub fn kurtosis_real<R: Real>(data: &[R]) -> R {
+    if data.len() < 2 {
+        return R::nan();
+    }
+    standardized_moment4_real(data) - R::scalar(3.0)
 }
 
 /// Geometric mean `(∏ xᵢ)^{1/n}` (requires `xᵢ > 0`). `NaN` if empty or any
@@ -91,6 +189,20 @@ pub fn geometric_mean(data: &[f64]) -> f64 {
     (data.iter().map(|&x| x.ln()).sum::<f64>() / data.len() as f64).exp()
 }
 
+/// Geometric mean over any [`Real`] carrier.
+pub fn geometric_mean_real<R: Real>(data: &[R]) -> R {
+    if data.is_empty() {
+        return R::nan();
+    }
+    (data
+        .iter()
+        .cloned()
+        .map(|x| x.ln())
+        .fold(R::zero(), |acc, x| acc + x)
+        / R::scalar(data.len() as f64))
+    .exp()
+}
+
 /// Harmonic mean `n / Σ(1/xᵢ)` (requires `xᵢ > 0`). `NaN` if empty or any
 /// non-positive value.
 pub fn harmonic_mean(data: &[f64]) -> f64 {
@@ -100,6 +212,19 @@ pub fn harmonic_mean(data: &[f64]) -> f64 {
     data.len() as f64 / data.iter().map(|&x| 1.0 / x).sum::<f64>()
 }
 
+/// Harmonic mean over any [`Real`] carrier.
+pub fn harmonic_mean_real<R: Real>(data: &[R]) -> R {
+    if data.is_empty() {
+        return R::nan();
+    }
+    R::scalar(data.len() as f64)
+        / data
+            .iter()
+            .cloned()
+            .map(|x| R::one() / x)
+            .fold(R::zero(), |acc, x| acc + x)
+}
+
 /// Mean absolute deviation around the arithmetic mean.
 pub fn mean_abs_deviation(data: &[f64]) -> f64 {
     if data.is_empty() {
@@ -107,6 +232,19 @@ pub fn mean_abs_deviation(data: &[f64]) -> f64 {
     }
     let m = mean(data);
     data.iter().map(|&x| (x - m).abs()).sum::<f64>() / data.len() as f64
+}
+
+/// Mean absolute deviation over any [`Real`] carrier.
+pub fn mean_abs_deviation_real<R: Real>(data: &[R]) -> R {
+    if data.is_empty() {
+        return R::nan();
+    }
+    let m = mean_real(data);
+    data.iter()
+        .cloned()
+        .map(|x| (x - m.clone()).abs())
+        .fold(R::zero(), |acc, x| acc + x)
+        / R::scalar(data.len() as f64)
 }
 
 fn sorted_finite(data: &[f64]) -> Vec<f64> {
@@ -185,6 +323,16 @@ pub fn z_scores(data: &[f64]) -> Vec<f64> {
     data.iter().map(|&x| (x - m) / s).collect()
 }
 
+/// Standardize values to z-scores over any [`Real`] carrier.
+pub fn z_scores_real<R: Real>(data: &[R]) -> Vec<R> {
+    let m = mean_real(data);
+    let s = std_dev_real(data);
+    data.iter()
+        .cloned()
+        .map(|x| (x - m.clone()) / s.clone())
+        .collect()
+}
+
 /// Sample covariance between paired samples (Bessel's `n-1`). `NaN` if the lengths
 /// differ or fewer than 2 pairs.
 pub fn covariance(a: &[f64], b: &[f64]) -> f64 {
@@ -195,6 +343,22 @@ pub fn covariance(a: &[f64], b: &[f64]) -> f64 {
     let mb = mean(b);
     let cov: f64 = a.iter().zip(b).map(|(&x, &y)| (x - ma) * (y - mb)).sum();
     cov / (a.len() as f64 - 1.0)
+}
+
+/// Sample covariance over any [`Real`] carrier.
+pub fn covariance_real<R: Real>(a: &[R], b: &[R]) -> R {
+    if a.len() != b.len() || a.len() < 2 {
+        return R::nan();
+    }
+    let ma = mean_real(a);
+    let mb = mean_real(b);
+    let cov = a
+        .iter()
+        .cloned()
+        .zip(b.iter().cloned())
+        .map(|(x, y)| (x - ma.clone()) * (y - mb.clone()))
+        .fold(R::zero(), |acc, x| acc + x);
+    cov / R::scalar((a.len() - 1) as f64)
 }
 
 /// Pearson correlation coefficient `cov(a,b) / (σ_a σ_b)`, in `[-1, 1]`.
@@ -209,6 +373,11 @@ pub fn correlation(a: &[f64], b: &[f64]) -> f64 {
         return f64::NAN;
     }
     covariance(a, b) / denom
+}
+
+/// Pearson correlation coefficient over any [`Real`] carrier.
+pub fn correlation_real<R: Real>(a: &[R], b: &[R]) -> R {
+    covariance_real(a, b) / (std_dev_real(a) * std_dev_real(b))
 }
 
 #[cfg(test)]
@@ -227,6 +396,36 @@ mod tests {
         close(population_variance(&d), 4.0, 1e-12);
         close(variance(&d), 32.0 / 7.0, 1e-12);
         close(std_dev(&d), (32.0_f64 / 7.0).sqrt(), 1e-12);
+    }
+
+    #[test]
+    fn generic_real_summaries_match_host_f64() {
+        let d = [1.0, 2.0, 4.0, 8.0];
+        close(mean_real(&d), mean(&d), 1e-12);
+        close(population_variance_real(&d), population_variance(&d), 1e-12);
+        close(variance_real(&d), variance(&d), 1e-12);
+        close(std_dev_real(&d), std_dev(&d), 1e-12);
+        close(geometric_mean_real(&d), geometric_mean(&d), 1e-12);
+        close(harmonic_mean_real(&d), harmonic_mean(&d), 1e-12);
+        close(mean_abs_deviation_real(&d), mean_abs_deviation(&d), 1e-12);
+        close(
+            coefficient_of_variation_real(&d),
+            coefficient_of_variation(&d),
+            1e-12,
+        );
+        close(skewness_real(&d), skewness(&d), 1e-12);
+        close(kurtosis_real(&d), kurtosis(&d), 1e-12);
+
+        let e = [2.0, 3.0, 5.0, 11.0];
+        close(covariance_real(&d, &e), covariance(&d, &e), 1e-12);
+        close(correlation_real(&d, &e), correlation(&d, &e), 1e-12);
+
+        let z = z_scores(&d);
+        let generic_z = z_scores_real(&d);
+        assert_eq!(generic_z.len(), z.len());
+        for (got, expected) in generic_z.iter().zip(z) {
+            close(*got, expected, 1e-12);
+        }
     }
 
     #[test]
