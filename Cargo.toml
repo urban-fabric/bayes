@@ -51,8 +51,4 @@ lto = "thin"
 codegen-units = 1
 debug = true
 
-# TEMPORARY (offline dev, multi-repo numeric rollout): build against the local
-# euclid sibling so the scalar-generic array contracts (real+complex) are visible.
-# Reconcile to git revs before landing.
-[patch."ssh://git@github.com/urban-fabric/euclid.git"]
-euclid = { path = "../euclid" }
+# euclid is consumed from git `main` (published contract surface); no local path patch.
