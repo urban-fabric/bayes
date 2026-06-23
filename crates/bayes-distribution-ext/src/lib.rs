@@ -13,6 +13,7 @@
 //! sibling crate `bayes-divergence`; sampling stays on [`rand::distr::Distribution`].
 #![cfg_attr(test, allow(clippy::expect_used, clippy::panic, clippy::unwrap_used))]
 
+pub mod characteristic_function;
 pub mod combinator;
 pub mod conjugate;
 pub mod continuous;
@@ -20,7 +21,10 @@ pub mod discrete;
 pub mod estimation;
 pub mod exponential_family;
 pub mod functional;
+pub mod generalized_entropy;
+pub mod l_moments;
 pub mod moment_generating;
+pub mod probability_generating;
 #[cfg(test)]
 mod kernel_impls;
 pub mod transformed;
@@ -43,13 +47,17 @@ pub use discrete::{
     Bernoulli, BetaBinomial, Binomial, Categorical, DiscreteUniform, Geometric, Hypergeometric,
     NegativeBinomial, Poisson,
 };
+pub use characteristic_function::CharacteristicFunction;
 pub use estimation::FisherInformation;
+pub use generalized_entropy::GeneralizedEntropy;
+pub use l_moments::LMoments;
 pub use exponential_family::{CountSum, ExponentialFamily, MeanVar, SufficientStatistic, Trials};
 pub use functional::{
     ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt, ContinuousFn,
     DiscreteDistributionExt, DiscreteFn, DiscreteMass,
 };
 pub use moment_generating::MomentGenerating;
+pub use probability_generating::ProbabilityGenerating;
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};
 
 pub(crate) use continuous::normal;

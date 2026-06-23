@@ -72,6 +72,24 @@ fn fisher_information_crlb_and_jeffreys_are_public() {
 }
 
 #[test]
+fn characteristic_pgf_entropy_and_lmoments_are_public() {
+    use bayes::{
+        CharacteristicFunction, Cauchy, GeneralizedEntropy, LMoments, ProbabilityGenerating,
+        Uniform,
+    };
+    // Characteristic function reaches the Cauchy, which has no MGF: φ(t)=e^{−|t|}.
+    let (re, im) = Cauchy::new(0.0, 1.0).unwrap().characteristic_function(2.0);
+    close(re, (-2.0_f64).exp(), 1e-12);
+    close(im, 0.0, 1e-12);
+    // PGF of Poisson(2) at 0 is the zero-count mass e^{−2}.
+    close(Poisson::new(2.0).unwrap().pgf(0.0), (-2.0_f64).exp(), 1e-12);
+    // Rényi entropy of a Uniform is ln(width) for any order.
+    close(Uniform::new(0.0, 2.0).unwrap().renyi_entropy(3.0), 2.0_f64.ln(), 1e-12);
+    // L-moments: exponential L-skewness is the scale-free 1/3.
+    close(Exponential::new(5.0).unwrap().l_skewness(), 1.0 / 3.0, 1e-12);
+}
+
+#[test]
 fn moment_generating_feeds_chernoff_tail() {
     use bayes::statistics::chernoff_bound;
     use bayes::MomentGenerating;
