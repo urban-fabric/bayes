@@ -312,6 +312,23 @@ pub fn gini_mean_difference(data: &[f64]) -> f64 {
     2.0 * weighted_sum / (n as f64 * (n as f64 - 1.0))
 }
 
+/// Gini mean difference over any [`Real`] carrier. Carriers carry no order, so this uses the
+/// sort-free pairwise form `2·Σ_{i<j}|xᵢ−xⱼ| / (n(n−1))` (`O(n²)`, versus the eager
+/// `O(n log n)` sorted form) — the lazy-surface equivalent that lowers onto every backend.
+pub fn gini_mean_difference_real<R: Real>(data: &[R]) -> R {
+    let n = data.len();
+    if n < 2 {
+        return R::nan();
+    }
+    let mut total = R::zero();
+    for (i, x) in data.iter().cloned().enumerate() {
+        for y in data.iter().skip(i + 1).cloned() {
+            total = total + (x.clone() - y).abs();
+        }
+    }
+    R::two() * total / R::scalar(n as f64 * (n as f64 - 1.0))
+}
+
 /// Standardize each value to a z-score using the sample mean and sample standard
 /// deviation. Returns an empty vector for degenerate input.
 pub fn z_scores(data: &[f64]) -> Vec<f64> {

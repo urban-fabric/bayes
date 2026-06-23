@@ -29,6 +29,12 @@ pub fn negative_binomial_skewness<T: Real>(successes: T, p: T) -> T {
     (T::two() - p.clone()) / (successes * (T::one() - p)).sqrt()
 }
 
+/// Negative-binomial excess kurtosis `6/r + p²/(r(1−p))` (failures-before-`r`-
+/// successes parameterization). Reduces to the geometric value at `r = 1`.
+pub fn negative_binomial_excess_kurtosis<T: Real>(successes: T, p: T) -> T {
+    T::scalar(6.0) / successes.clone() + p.clone() * p.clone() / (successes * (T::one() - p))
+}
+
 /// Negative-binomial KL for a matched number of successes.
 pub fn kl_negative_binomial<T: Real>(successes: T, p_self: T, p_other: T) -> T {
     let one = T::one();

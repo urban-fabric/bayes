@@ -59,8 +59,9 @@ pub use confidence::{
 };
 pub use correlation::{cramers_v, kendall_tau, ranks, spearman};
 pub use effect::{
-    cohen_d, eta_squared, glass_delta, hedges_g, odds_ratio, omega_squared, pooled_std_dev,
-    risk_difference, risk_ratio,
+    cohen_d, cohen_d_real, eta_squared, eta_squared_real, glass_delta, glass_delta_real, hedges_g,
+    hedges_g_real, odds_ratio, odds_ratio_real, omega_squared, omega_squared_real, pooled_std_dev,
+    pooled_std_dev_real, risk_difference, risk_difference_real, risk_ratio, risk_ratio_real,
 };
 pub use empirical::{Ecdf, Histogram, histogram};
 pub use estimation::{
@@ -85,7 +86,8 @@ pub use resampling::{bootstrap, jackknife, percentile_interval};
 pub use summary::{
     coefficient_of_variation, coefficient_of_variation_real, correlation, correlation_real,
     covariance, covariance_real, geometric_mean, geometric_mean_real, gini_mean_difference,
-    harmonic_mean, harmonic_mean_real, kurtosis, kurtosis_real, mean, mean_abs_deviation,
+    gini_mean_difference_real, harmonic_mean, harmonic_mean_real, kurtosis, kurtosis_real, mean,
+    mean_abs_deviation,
     mean_abs_deviation_real, mean_real, population_variance, population_variance_real, skewness,
     skewness_real, std_dev, std_dev_real, trimmed_mean, variance, variance_real, winsorized_mean,
     z_scores, z_scores_real,

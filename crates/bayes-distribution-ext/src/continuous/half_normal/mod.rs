@@ -83,12 +83,16 @@ impl Moments for HalfNormal {
         self.variance().sqrt()
     }
 
+    /// `√2(4−π) / (π−2)^{3/2}` — a scale-free constant (≈ 0.995).
     fn skewness(&self) -> f64 {
-        f64::NAN
+        let pi = std::f64::consts::PI;
+        std::f64::consts::SQRT_2 * (4.0 - pi) / (pi - 2.0).powf(1.5)
     }
 
+    /// `8(π−3) / (π−2)²` — a scale-free constant (≈ 0.869).
     fn kurtosis(&self) -> f64 {
-        f64::NAN
+        let pi = std::f64::consts::PI;
+        8.0 * (pi - 3.0) / ((pi - 2.0) * (pi - 2.0))
     }
 }
 

@@ -1,20 +1,55 @@
-//! Quantile kernel view plus the generic bisection inverse-CDF helper.
+//! The generic bisection inverse-CDF helper.
 //!
-//! Closed-form family quantiles live in [`crate::families`]. The iterative
-//! bisection helper remains here because it is an algorithm shared by families
-//! without elementary inverse CDFs.
+//! Closed-form family quantiles live in [`crate::families`] (and re-export at the
+//! crate root). This iterative bisection helper lives here because it is an
+//! algorithm shared by families without elementary inverse CDFs.
 
-use euclid::numeric::{Boolean, Real};
+use euclid::numeric::{Compare, Element, Natural, Real};
 
-pub use crate::families::{
-    cauchy::cauchy_quantile, exponential::exponential_quantile, frechet::frechet_quantile,
-    gumbel::gumbel_quantile, half_normal::half_normal_quantile, laplace::laplace_quantile,
-    logistic::logistic_quantile, lognormal::lognormal_quantile, lomax::lomax_quantile,
-    normal::normal_quantile, pareto::pareto_quantile, rayleigh::rayleigh_quantile,
-    triangular::triangular_quantile, uniform::uniform_quantile, weibull::weibull_quantile,
-};
+/// Fixed bracket-widening steps (the bracket is valid long before this; extra steps are
+/// idempotent because the `select` updates freeze once `cdf(a) ≤ p ≤ cdf(b)`).
+const WIDEN_TRIPS: usize = 64;
+/// Fixed bisection steps — 100 halvings resolves the bracket to machine precision.
+const BISECT_TRIPS: usize = 100;
+/// Integer-bisection steps for a discrete quantile — 64 spans the whole `u64` count range.
+const DISCRETE_BISECT_TRIPS: usize = 64;
+
+/// Inverse CDF for a **discrete** distribution: the smallest count `k ∈ [k_min, k_max]` with
+/// `cdf(k) ≥ p`.
+///
+/// The integer bisection is carried out in the **real** surface (`Natural` is a semiring with no
+/// subtraction, and `k_max` may be `u64::MAX`, which would overflow integer midpoints), bridged
+/// back to a count with [`Natural::from_real`]. Like [`inverse_cdf_bisect`] it is a fixed `for`-
+/// loop with branchless `select`, so it is carrier-agnostic — a host search on a scalar, an
+/// unrolled graph on a tensor of counts.
+pub fn discrete_inverse_cdf<N, F>(k_min: N, k_max: N, p: N::Real, cdf: F) -> N
+where
+    N: Natural + Compare,
+    N::Real: Real + Compare<Mask = <N as Compare>::Mask>,
+    F: Fn(N) -> N::Real,
+{
+    let p = &p;
+    let one = N::Real::one();
+    let two = one.clone() + one.clone();
+    let mut lo = k_min.to_real();
+    let mut hi = k_max.to_real();
+    for _ in 0..DISCRETE_BISECT_TRIPS {
+        let mid = ((lo.clone() + hi.clone()) / two.clone()).floor();
+        // cdf(mid) < p ⇒ the quantile is strictly above mid; else mid is a valid upper bound.
+        let below = cdf(N::from_real(mid.clone())).lt(p);
+        lo = <N::Real as Compare>::select(&below, mid.clone() + one.clone(), lo);
+        hi = <N::Real as Compare>::select(&below, hi, mid);
+    }
+    N::from_real(lo)
+}
 
 /// Inverse CDF by bisection, write-once over [`Real`].
+///
+/// Both phases are **bounded `for`-loops with branchless `select`**, not host `while`-loops, so
+/// the routine is carrier-agnostic: on an eager scalar it runs the iterations directly; on a
+/// deferred / tensor carrier it unrolls into the computation graph (a host `while` over a tensor
+/// mask can't lower — the predicate is a mask, not a host `bool`). Each step is idempotent once
+/// converged, so a fixed trip count matches the original early-stopping loop.
 pub fn inverse_cdf_bisect<T, F>(cdf: F, lo: T, hi: T, p: T) -> T
 where
     T: Real,
@@ -23,39 +58,25 @@ where
     let cdf = &cdf;
     let p = &p;
 
-    let a0 = T::select(&lo.is_finite(), lo.clone(), -T::one());
-    let b0 = T::select(&hi.is_finite(), hi.clone(), T::one());
+    let mut a = T::select(&lo.is_finite(), lo.clone(), -T::one());
+    let mut b = T::select(&hi.is_finite(), hi.clone(), T::one());
 
-    let widen_trips = T::scalar(64.0);
-    let (a, b, _) = T::while_loop(
-        (a0, b0, T::zero()),
-        |s: &(T, T, T)| {
-            let low_bad = cdf(s.0.clone()).gt(p);
-            let high_bad = cdf(s.1.clone()).lt(p);
-            s.2.lt(&widen_trips).and(&low_bad.or(&high_bad))
-        },
-        |(a, b, k): (T, T, T)| {
-            let span = (b.clone() - a.clone()).abs().max(T::one());
-            let low_bad = cdf(a.clone()).gt(p);
-            let high_bad = cdf(b.clone()).lt(p);
-            let a = T::select(&low_bad, a.clone() - span.clone(), a);
-            let b = T::select(&high_bad, b.clone() + span, b);
-            (a, b, k + T::one())
-        },
-    );
+    // Widen the bracket until cdf(a) ≤ p ≤ cdf(b).
+    for _ in 0..WIDEN_TRIPS {
+        let span = (b.clone() - a.clone()).abs().max(T::one());
+        let low_bad = cdf(a.clone()).gt(p);
+        let high_bad = cdf(b.clone()).lt(p);
+        a = T::select(&low_bad, a.clone() - span.clone(), a);
+        b = T::select(&high_bad, b.clone() + span, b);
+    }
 
-    let bisect_trips = T::scalar(100.0);
-    let (a, b, _) = T::while_loop(
-        (a, b, T::zero()),
-        |s: &(T, T, T)| s.2.lt(&bisect_trips),
-        |(a, b, k): (T, T, T)| {
-            let mid = (a.clone() + b.clone()) * T::half();
-            let upper_half = cdf(mid.clone()).ge(p);
-            let b = T::select(&upper_half, mid.clone(), b);
-            let a = T::select(&upper_half, a, mid);
-            (a, b, k + T::one())
-        },
-    );
+    // Bisect.
+    for _ in 0..BISECT_TRIPS {
+        let mid = (a.clone() + b.clone()) * T::half();
+        let upper_half = cdf(mid.clone()).ge(p);
+        b = T::select(&upper_half, mid.clone(), b);
+        a = T::select(&upper_half, a, mid);
+    }
 
     let quantile = (a + b) * T::half();
     let at_or_below = T::select(&p.le(&T::zero()), lo, quantile);

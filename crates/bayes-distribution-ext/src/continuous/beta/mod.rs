@@ -99,8 +99,12 @@ impl Moments for Beta {
         self.variance().sqrt()
     }
 
+    /// `6[(α−β)²(α+β+1) − αβ(α+β+2)] / [αβ(α+β+2)(α+β+3)]`.
     fn kurtosis(&self) -> f64 {
-        f64::NAN
+        let s = self.alpha + self.beta;
+        let d = self.alpha - self.beta;
+        let prod = self.alpha * self.beta;
+        6.0 * (d * d * (s + 1.0) - prod * (s + 2.0)) / (prod * (s + 2.0) * (s + 3.0))
     }
 
     fn median(&self) -> f64 {

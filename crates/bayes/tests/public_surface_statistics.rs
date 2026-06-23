@@ -45,6 +45,45 @@ fn trigamma_is_exposed_and_correct() {
 }
 
 #[test]
+fn fisher_information_crlb_and_jeffreys_are_public() {
+    use bayes::{Binomial, FisherInformation, Rayleigh};
+    // Closed-form information about each family's canonical scalar parameter.
+    close(
+        Bernoulli::new(0.25).unwrap().fisher_information(),
+        1.0 / (0.25 * 0.75),
+        1e-12,
+    );
+    close(Poisson::new(4.0).unwrap().fisher_information(), 0.25, 1e-12);
+    close(
+        Rayleigh::new(3.0).unwrap().fisher_information(),
+        4.0 / 9.0,
+        1e-12,
+    );
+    // The Cramér–Rao bound equals the efficient (MLE) variance for the Bernoulli
+    // mean: p(1−p)/n.
+    let b = Bernoulli::new(0.3).unwrap();
+    close(b.cramer_rao_bound(100), 0.3 * 0.7 / 100.0, 1e-12);
+    // Jeffreys priors are the proper Beta(1/2, 1/2).
+    let j = Bernoulli::jeffreys_prior();
+    close(j.alpha(), 0.5, 1e-12);
+    close(j.beta(), 0.5, 1e-12);
+    let jb = Binomial::jeffreys_prior();
+    close(jb.alpha(), 0.5, 1e-12);
+}
+
+#[test]
+fn moment_generating_feeds_chernoff_tail() {
+    use bayes::statistics::chernoff_bound;
+    use bayes::MomentGenerating;
+    // The standard-normal MGF drives the Chernoff method to the exact Gaussian
+    // tail: minimized at tilt s = a/σ² = 2, e^{−s·a}·M(s) = e^{−2}.
+    let z = Normal::new(0.0, 1.0).unwrap();
+    close(chernoff_bound(z.mgf(2.0), 2.0, 2.0), (-2.0_f64).exp(), 1e-12);
+    // Closed-form MGF: Gamma(3, 2) at t = 1 is (β/(β−t))^k = 8.
+    close(Gamma::new(3.0, 2.0).unwrap().mgf(1.0), 8.0, 1e-12);
+}
+
+#[test]
 fn stable_log_weights_are_public_and_have_valid_ess() {
     use bayes::{
         effective_sample_size, effective_sample_size_real, is_effective_sample_size_admissible,

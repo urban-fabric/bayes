@@ -77,7 +77,7 @@ impl<T: Real> Moments<T> for NegativeBinomial<T> {
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::negative_binomial_excess_kurtosis(self.successes(), self.p())
     }
 
     fn entropy(&self) -> T {

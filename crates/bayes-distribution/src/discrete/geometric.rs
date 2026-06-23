@@ -74,7 +74,7 @@ impl<T: Real> Moments<T> for Geometric<T> {
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::geometric_excess_kurtosis(self.p())
     }
 
     fn entropy(&self) -> T {

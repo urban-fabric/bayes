@@ -17,11 +17,14 @@
 //! distribution definition. Iterative inference (MCMC / variational) is **not** here
 //! — it belongs to a higher layer that consumes these as priors and likelihoods.
 //!
-//! The scalar prior families (`beta`, `gamma`) live here; the matrix-coupled
-//! conjugates (`normal`, `dirichlet`, `multivariate_normal`) — the ones whose
-//! posteriors are multivariate-Normal / Wishart / Dirichlet, all carrying
-//! `ramanujan` matrices — live in the sibling crate `ito`, reusing the
-//! [`Conjugate`] trait and the [`natural`] hyperparameter monoid defined here.
+//! The scalar prior families live here: `beta`, `gamma`, and the univariate
+//! Gaussian conjugates in `normal` (Normal–Normal with known variance, and
+//! Normal–Inverse-Gamma for unknown mean *and* variance — both observing scalar
+//! data). The genuinely matrix-coupled conjugates (`dirichlet`,
+//! `multivariate_normal`) — the ones whose posteriors are multivariate-Normal /
+//! Wishart / Dirichlet, all carrying `ramanujan` matrices — live in the sibling
+//! crate `ito`, reusing the [`Conjugate`] trait and the [`natural`]
+//! hyperparameter monoid defined here.
 //!
 //! ```
 //! use bayes_distribution_ext::{Beta, BetaBernoulli, Conjugate, Moments};
@@ -33,10 +36,12 @@
 
 mod beta;
 mod gamma;
+mod normal;
 
 pub use bayes_distribution::conjugate::{Conjugate, Counts, NaturalParams, NigNatural, Pair};
 pub use beta::{BetaBernoulli, BetaBinomialModel};
 pub use gamma::{GammaExponential, GammaPoisson};
+pub use normal::{NormalInverseGamma, NormalInverseGammaModel, NormalKnownVariance};
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]

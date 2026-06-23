@@ -21,6 +21,12 @@ pub fn bernoulli_skewness<T: Real>(p: T) -> T {
     (q.clone() - p.clone()) / (p * q).sqrt()
 }
 
+/// Bernoulli excess kurtosis `(1 − 6p(1−p)) / (p(1−p))`.
+pub fn bernoulli_excess_kurtosis<T: Real>(p: T) -> T {
+    let pq = p.clone() * (T::one() - p);
+    (T::one() - T::scalar(6.0) * pq.clone()) / pq
+}
+
 /// Bernoulli KL on `0 < p < 1`.
 pub fn kl_bernoulli_on_unit<T: Real>(p_self: T, p_other: T) -> T {
     let one = T::one();

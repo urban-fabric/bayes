@@ -61,8 +61,8 @@ where
         one.clone() - (k.to_real() * (one - K::Real::scalar(self.p)).ln()).exp()
     }
     fn inverse_cdf(&self, p: K::Real) -> K {
-        // Smallest `k ≥ 1` with `cdf(k) ≥ p`, the host search via `while_loop`.
-        K::while_loop(K::one(), |k| self.cdf(k.clone()).lt(&p), |k| k + K::one())
+        // Smallest `k ≥ 1` with `cdf(k) ≥ p`, by carrier-agnostic integer bisection.
+        bayes_kernels::discrete_inverse_cdf(K::one(), K::from_u64(u64::MAX), p, |k| self.cdf(k))
     }
 }
 
@@ -92,8 +92,9 @@ impl Moments for Geometric {
         self.variance().sqrt()
     }
 
+    /// `6 + p²/(1−p)` (trial-count parameterization).
     fn kurtosis(&self) -> f64 {
-        f64::NAN
+        6.0 + self.p * self.p / (1.0 - self.p)
     }
 
     fn median(&self) -> f64 {

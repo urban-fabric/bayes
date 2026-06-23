@@ -25,6 +25,11 @@ pub fn geometric_skewness<T: Real>(p: T) -> T {
     (T::two() - p.clone()) / (T::one() - p).sqrt()
 }
 
+/// Geometric excess kurtosis `6 + p²/(1−p)` (trial-count parameterization).
+pub fn geometric_excess_kurtosis<T: Real>(p: T) -> T {
+    T::scalar(6.0) + p.clone() * p.clone() / (T::one() - p)
+}
+
 /// Geometric KL divergence.
 pub fn kl_geometric<T: Real>(p_self: T, p_other: T) -> T {
     let one = T::one();

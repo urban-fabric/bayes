@@ -3,7 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
 use bayes_core_ext::BayesError;
-use euclid::{Boolean, Compare, Element, Natural, Real};
+use euclid::{Compare, Element, Natural, Real};
 
 /// The binomial distribution: the number of successes in `n` independent trials,
 /// each with success probability `p ∈ [0, 1]`. Support `{0, …, n}`.
@@ -60,13 +60,8 @@ where
         K::Real::select(&at_or_above, one, interior)
     }
     fn inverse_cdf(&self, p: K::Real) -> K {
-        // Smallest `k ≤ n` with `cdf(k) ≥ p`, the bounded host search via `while_loop`.
-        let n = K::from_u64(self.n);
-        K::while_loop(
-            K::zero(),
-            |k| k.lt(&n).and(&self.cdf(k.clone()).lt(&p)),
-            |k| k + K::one(),
-        )
+        // Smallest `k ≤ n` with `cdf(k) ≥ p`, by carrier-agnostic integer bisection over [0, n].
+        bayes_kernels::discrete_inverse_cdf(K::zero(), K::from_u64(self.n), p, |k| self.cdf(k))
     }
 }
 

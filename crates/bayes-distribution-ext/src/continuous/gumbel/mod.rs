@@ -99,8 +99,9 @@ impl Moments for Gumbel {
         self.variance().sqrt()
     }
 
+    /// Excess kurtosis is the scale-free constant `12/5`.
     fn kurtosis(&self) -> f64 {
-        f64::NAN
+        12.0 / 5.0
     }
 }
 

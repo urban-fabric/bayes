@@ -61,11 +61,11 @@ impl<T: Real> Moments<T> for LogNormal<T> {
     }
 
     fn skewness(&self) -> T {
-        T::nan()
+        kernels::lognormal_skewness(self.sigma())
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::lognormal_excess_kurtosis(self.sigma())
     }
 
     fn entropy(&self) -> T {

@@ -175,6 +175,8 @@ fn lazy_real_moment_kernels_match_distribution() {
     let lognormal = LogNormal::new(0.2, 0.7).unwrap();
     close(lognormal_mean(0.2, 0.7), lognormal.mean(), 1e-12);
     close(lognormal_variance(0.2, 0.7), lognormal.variance(), 1e-12);
+    close(lognormal_skewness(0.7), lognormal.skewness(), 1e-12);
+    close(lognormal_excess_kurtosis(0.7), lognormal.kurtosis(), 1e-12);
 
     let gamma = Gamma::new(2.5, 1.2).unwrap();
     close(gamma_variance(2.5, 1.2), gamma.variance(), 1e-12);
@@ -184,6 +186,7 @@ fn lazy_real_moment_kernels_match_distribution() {
     let beta = Beta::new(2.0, 5.0).unwrap();
     close(beta_variance(2.0, 5.0), beta.variance(), 1e-12);
     close(beta_skewness(2.0, 5.0), beta.skewness(), 1e-12);
+    close(beta_excess_kurtosis(2.0, 5.0), beta.kurtosis(), 1e-12);
 
     let chi = ChiSquared::new(5.0).unwrap();
     close(chi_squared_skewness(5.0), chi.skewness(), 1e-12);
@@ -192,6 +195,17 @@ fn lazy_real_moment_kernels_match_distribution() {
     let wald = Wald::new(1.0, 2.0).unwrap();
     close(wald_skewness(1.0, 2.0), wald.skewness(), 1e-12);
     close(wald_excess_kurtosis(1.0, 2.0), wald.kurtosis(), 1e-12);
+
+    let rayleigh = Rayleigh::new(1.4).unwrap();
+    close(rayleigh_skewness(), rayleigh.skewness(), 1e-12);
+    close(rayleigh_excess_kurtosis(), rayleigh.kurtosis(), 1e-12);
+
+    let half_normal = HalfNormal::new(2.0).unwrap();
+    close(half_normal_skewness(), half_normal.skewness(), 1e-12);
+    close(half_normal_excess_kurtosis(), half_normal.kurtosis(), 1e-12);
+
+    let gumbel = Gumbel::new(0.5, 1.3).unwrap();
+    close(gumbel_excess_kurtosis(), gumbel.kurtosis(), 1e-12);
 
     let poisson = Poisson::new(3.5).unwrap();
     close(poisson_skewness(3.5), poisson.skewness(), 1e-12);
@@ -202,6 +216,7 @@ fn lazy_real_moment_kernels_match_distribution() {
 
     let geometric = Geometric::new(0.25).unwrap();
     close(geometric_skewness(0.25), geometric.skewness(), 1e-12);
+    close(geometric_excess_kurtosis(0.25), geometric.kurtosis(), 1e-12);
 
     let negbin = NegativeBinomial::new(5.0, 0.4).unwrap();
     close(
@@ -209,7 +224,54 @@ fn lazy_real_moment_kernels_match_distribution() {
         negbin.skewness(),
         1e-12,
     );
+    close(
+        negative_binomial_excess_kurtosis(5.0, 0.4),
+        negbin.kurtosis(),
+        1e-12,
+    );
 
     let bernoulli = Bernoulli::new(0.3).unwrap();
     close(bernoulli_skewness(0.3), bernoulli.skewness(), 1e-12);
+    close(bernoulli_excess_kurtosis(0.3), bernoulli.kurtosis(), 1e-12);
+}
+
+/// The newly-filled moment formulas, checked against independently-computed
+/// textbook reference values (not just self-consistency with the kernels).
+#[test]
+fn filled_moment_formulas_match_known_values() {
+    // LogNormal(σ=1): skew = (e+2)√(e−1) ≈ 6.1849, exkurt = e⁴+2e³+3e²−6 ≈ 110.936.
+    let ln1 = LogNormal::new(0.0, 1.0).unwrap();
+    close(ln1.skewness(), 6.184_877_138_632_554, 1e-9);
+    close(ln1.kurtosis(), 110.936_392_176_311_53, 1e-9);
+
+    // Beta(1,1) = Uniform(0,1): excess kurtosis = −1.2.
+    close(Beta::new(1.0, 1.0).unwrap().kurtosis(), -1.2, 1e-12);
+    // Beta(2,2): symmetric, excess kurtosis = −6/(2·2+3) = −6/7.
+    close(Beta::new(2.0, 2.0).unwrap().kurtosis(), -6.0 / 7.0, 1e-12);
+
+    // Bernoulli(0.5): excess kurtosis = (1−6·0.25)/0.25 = −2.
+    close(Bernoulli::new(0.5).unwrap().kurtosis(), -2.0, 1e-12);
+
+    // Geometric(0.5) on {1,2,…}: excess kurtosis = 6 + 0.25/0.5 = 6.5.
+    close(Geometric::new(0.5).unwrap().kurtosis(), 6.5, 1e-12);
+
+    // NegativeBinomial(r=1) reduces to the geometric value.
+    close(
+        NegativeBinomial::new(1.0, 0.5).unwrap().kurtosis(),
+        6.5,
+        1e-12,
+    );
+
+    // Rayleigh: scale-free constants ≈ 0.631 (skew), ≈ 0.245 (exkurt).
+    let ray = Rayleigh::new(3.0).unwrap();
+    close(ray.skewness(), 0.631_110_657_818_937_8, 1e-9);
+    close(ray.kurtosis(), 0.245_089_300_687_638, 1e-9);
+
+    // Half-normal: scale-free constants ≈ 0.995 (skew), ≈ 0.869 (exkurt).
+    let hn = HalfNormal::new(5.0).unwrap();
+    close(hn.skewness(), 0.995_271_746_431_156_5, 1e-9);
+    close(hn.kurtosis(), 0.869_177_303_605_973_6, 1e-9);
+
+    // Gumbel: excess kurtosis = 12/5 = 2.4, independent of location/scale.
+    close(Gumbel::new(-1.0, 2.5).unwrap().kurtosis(), 2.4, 1e-12);
 }

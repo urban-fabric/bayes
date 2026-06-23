@@ -8,7 +8,7 @@ use crate::continuous::{
 use crate::discrete::{Bernoulli, Binomial, DiscreteUniform, Geometric, NegativeBinomial, Poisson};
 use crate::{ContinuousCdf, DiscreteCdf, IntegerDiscreteCdf, Support};
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Element, Integer, Natural, Real};
+use euclid::{Compare, Element, Integer, Natural, Real};
 
 impl<T: Real> Support<T> for Normal<T> {
     fn min(&self) -> T {
@@ -571,12 +571,7 @@ where
     }
 
     fn inverse_cdf(&self, p: N::Real) -> N {
-        let n = self.trials();
-        N::while_loop(
-            N::zero(),
-            |k| k.lt(&n).and(&self.cdf(k.clone()).lt(&p)),
-            |k| k + N::one(),
-        )
+        kernels::discrete_inverse_cdf(N::zero(), self.trials(), p, |k| self.cdf(k))
     }
 }
 
@@ -601,7 +596,7 @@ where
     }
 
     fn inverse_cdf(&self, p: N::Real) -> N {
-        N::while_loop(N::one(), |k| self.cdf(k.clone()).lt(&p), |k| k + N::one())
+        kernels::discrete_inverse_cdf(N::one(), N::from_u64(u64::MAX), p, |k| self.cdf(k))
     }
 }
 
@@ -626,7 +621,7 @@ where
     }
 
     fn inverse_cdf(&self, p: N::Real) -> N {
-        N::while_loop(N::zero(), |k| self.cdf(k.clone()).lt(&p), |k| k + N::one())
+        kernels::discrete_inverse_cdf(N::zero(), N::from_u64(u64::MAX), p, |k| self.cdf(k))
     }
 }
 
@@ -650,7 +645,7 @@ where
     }
 
     fn inverse_cdf(&self, p: N::Real) -> N {
-        N::while_loop(N::zero(), |k| self.cdf(k.clone()).lt(&p), |k| k + N::one())
+        kernels::discrete_inverse_cdf(N::zero(), N::from_u64(u64::MAX), p, |k| self.cdf(k))
     }
 }
 
@@ -680,11 +675,13 @@ where
     }
 
     fn inverse_cdf(&self, p: I::Real) -> I {
-        let hi = self.hi() - I::one();
-        I::while_loop(
-            self.lo(),
-            |k| k.lt(&hi).and(&self.cdf(k.clone()).lt(&p)),
-            |k| k + I::one(),
-        )
+        // Closed form (a uniform needs no search): the smallest integer offset `j` with
+        // `(j+1)/count ≥ p` is `ceil(p·count) − 1`, clamped to `[0, count−1]`; then `k = lo + j`.
+        let count = (self.hi() - self.lo()).to_real();
+        let one = I::Real::one();
+        let j = ((p * count.clone()).ceil() - one.clone())
+            .max(I::Real::zero())
+            .min(count - one);
+        self.lo() + I::from_real(j)
     }
 }

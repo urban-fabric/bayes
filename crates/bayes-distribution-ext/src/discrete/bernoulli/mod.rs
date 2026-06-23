@@ -94,8 +94,10 @@ impl Moments for Bernoulli {
         self.variance().sqrt()
     }
 
+    /// `(1 − 6p(1−p)) / (p(1−p))`.
     fn kurtosis(&self) -> f64 {
-        f64::NAN
+        let pq = self.p * (1.0 - self.p);
+        (1.0 - 6.0 * pq) / pq
     }
 
     fn median(&self) -> f64 {

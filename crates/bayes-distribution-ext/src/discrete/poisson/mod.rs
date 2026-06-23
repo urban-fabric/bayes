@@ -111,10 +111,9 @@ where
         K::Real::scalar(self.lambda).gamma_ur(k.to_real() + K::Real::one())
     }
     fn inverse_cdf(&self, p: K::Real) -> K {
-        // Smallest `k` with `cdf(k) ≥ p`. The host integer search is expressed through
-        // `while_loop`, so the same routine runs on a tensor of counts; `cdf(0) > 0 ≥ p`
-        // covers `p ≤ 0` (the loop never runs).
-        K::while_loop(K::zero(), |k| self.cdf(k.clone()).lt(&p), |k| k + K::one())
+        // Smallest `k` with `cdf(k) ≥ p`, by carrier-agnostic integer bisection — a host search
+        // on a scalar, an unrolled graph on a tensor of counts.
+        bayes_kernels::discrete_inverse_cdf(K::zero(), K::from_u64(u64::MAX), p, |k| self.cdf(k))
     }
 }
 

@@ -82,12 +82,16 @@ impl Moments for Rayleigh {
         self.variance().sqrt()
     }
 
+    /// `2√π(π−3) / (4−π)^{3/2}` — a scale-free constant (≈ 0.631).
     fn skewness(&self) -> f64 {
-        f64::NAN
+        let pi = std::f64::consts::PI;
+        2.0 * pi.sqrt() * (pi - 3.0) / (4.0 - pi).powf(1.5)
     }
 
+    /// `−(6π² − 24π + 16) / (4−π)²` — a scale-free constant (≈ 0.245).
     fn kurtosis(&self) -> f64 {
-        f64::NAN
+        let pi = std::f64::consts::PI;
+        -(6.0 * pi * pi - 24.0 * pi + 16.0) / ((4.0 - pi) * (4.0 - pi))
     }
 }
 

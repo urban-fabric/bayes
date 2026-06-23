@@ -25,6 +25,19 @@ pub fn beta_skewness<T: Real>(alpha: T, beta: T) -> T {
         / ((sum + T::two()) * (alpha * beta).sqrt())
 }
 
+/// Beta excess kurtosis
+/// `6[(α−β)²(α+β+1) − αβ(α+β+2)] / [αβ(α+β+2)(α+β+3)]`.
+pub fn beta_excess_kurtosis<T: Real>(alpha: T, beta: T) -> T {
+    let sum = alpha.clone() + beta.clone();
+    let diff = alpha.clone() - beta.clone();
+    let prod = alpha * beta;
+    let num = T::scalar(6.0)
+        * (diff.clone() * diff * (sum.clone() + T::one())
+            - prod.clone() * (sum.clone() + T::two()));
+    let den = prod * (sum.clone() + T::two()) * (sum + T::scalar(3.0));
+    num / den
+}
+
 /// Beta entropy.
 pub fn beta_entropy<T: Real>(alpha: T, beta: T) -> T {
     let one = T::one();

@@ -18,6 +18,22 @@ pub fn half_normal_cdf<T: Real>(x: T, scale: T) -> T {
     T::select(&in_support, half_normal_cdf_on_support(x, scale), T::zero())
 }
 
+/// Half-normal skewness `√2(4−π) / (π−2)^{3/2}` — a scale-free constant
+/// (≈ 0.995).
+pub fn half_normal_skewness<T: Real>() -> T {
+    let pi = T::pi();
+    let d = pi.clone() - T::two();
+    T::sqrt_2() * (T::scalar(4.0) - pi) / (d.clone() * d.clone() * d).sqrt()
+}
+
+/// Half-normal excess kurtosis `8(π−3) / (π−2)²` — a scale-free constant
+/// (≈ 0.869).
+pub fn half_normal_excess_kurtosis<T: Real>() -> T {
+    let pi = T::pi();
+    let d = pi.clone() - T::two();
+    T::scalar(8.0) * (pi - T::scalar(3.0)) / (d.clone() * d)
+}
+
 /// Half-normal quantile.
 pub fn half_normal_quantile<T: Real>(p: T, scale: T) -> T {
     scale * T::sqrt_2() * p.erf_inv()

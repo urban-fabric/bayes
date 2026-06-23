@@ -60,7 +60,7 @@ impl<T: Real> Moments<T> for Gumbel<T> {
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::gumbel_excess_kurtosis()
     }
 
     fn entropy(&self) -> T {

@@ -118,7 +118,7 @@ impl<T: Real> Moments<T> for Beta<T> {
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::beta_excess_kurtosis(self.alpha(), self.beta())
     }
 
     fn entropy(&self) -> T {

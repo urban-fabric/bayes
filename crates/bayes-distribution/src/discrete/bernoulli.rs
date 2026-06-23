@@ -83,7 +83,7 @@ impl<T: Real> Moments<T> for Bernoulli<T> {
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::bernoulli_excess_kurtosis(self.p())
     }
 
     fn entropy(&self) -> T {

@@ -17,8 +17,10 @@ pub mod combinator;
 pub mod conjugate;
 pub mod continuous;
 pub mod discrete;
+pub mod estimation;
 pub mod exponential_family;
 pub mod functional;
+pub mod moment_generating;
 #[cfg(test)]
 mod kernel_impls;
 pub mod transformed;
@@ -30,6 +32,7 @@ pub use bayes_core_ext::*;
 pub use combinator::{Mixture, OrderStatistic, Truncated};
 pub use conjugate::{
     BetaBernoulli, BetaBinomialModel, Conjugate, GammaExponential, GammaPoisson, NaturalParams,
+    NormalInverseGamma, NormalInverseGammaModel, NormalKnownVariance,
 };
 pub use continuous::{
     Beta, Cauchy, ChiSquared, Exponential, FisherSnedecor, Frechet, Gamma, Gumbel, HalfNormal,
@@ -40,11 +43,13 @@ pub use discrete::{
     Bernoulli, BetaBinomial, Binomial, Categorical, DiscreteUniform, Geometric, Hypergeometric,
     NegativeBinomial, Poisson,
 };
+pub use estimation::FisherInformation;
 pub use exponential_family::{CountSum, ExponentialFamily, MeanVar, SufficientStatistic, Trials};
 pub use functional::{
     ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt, ContinuousFn,
     DiscreteDistributionExt, DiscreteFn, DiscreteMass,
 };
+pub use moment_generating::MomentGenerating;
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};
 
 pub(crate) use continuous::normal;

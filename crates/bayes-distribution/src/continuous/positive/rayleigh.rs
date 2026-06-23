@@ -56,11 +56,11 @@ impl<T: Real> Moments<T> for Rayleigh<T> {
     }
 
     fn skewness(&self) -> T {
-        T::nan()
+        kernels::rayleigh_skewness()
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::rayleigh_excess_kurtosis()
     }
 
     fn entropy(&self) -> T {

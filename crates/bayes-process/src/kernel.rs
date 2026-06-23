@@ -1,30 +1,58 @@
 //! Positive-semidefinite **covariance kernels** — the covariance functions that
 //! parameterize a Gaussian process. A kernel maps a pair of input points (each a
-//! `&[f64]`, so inputs can be `d`-dimensional) to their covariance.
+//! `&[R]`, so inputs can be `d`-dimensional) to their covariance.
+//!
+//! Each kernel is generic over the euclid scalar `R: Real` (defaulting to `f64`), so the
+//! same definition evaluates eagerly on `f64` and lowers onto a lazy carrier (a `maxwell`
+//! tensor, a `dirac` column). The closed forms are delegated to `bayes_kernels`
+//! correlation functions, shared with the distance-parameterized [`crate::gp`] kernels, and
+//! the positive-definiteness domain guard (variance `≥ 0`, scales `> 0`, all finite) is
+//! expressed on the euclid comparison/mask surface so it lowers to one branchless `select`
+//! on every backend rather than a host `if`.
+
+use bayes_kernels as kernels;
+use euclid::{Boolean, Real};
 
 /// A covariance function `k(a, b)`. Implementations must be symmetric
-/// (`k(a,b) = k(b,a)`) and positive semidefinite.
-pub trait Kernel {
-    fn covariance(&self, a: &[f64], b: &[f64]) -> f64;
+/// (`k(a,b) = k(b,a)`) and positive semidefinite. Generic over the carrier `R: Real`.
+pub trait Kernel<R: Real = f64> {
+    fn covariance(&self, a: &[R], b: &[R]) -> R;
 }
 
-fn squared_distance(a: &[f64], b: &[f64]) -> f64 {
-    if a.len() != b.len() || a.iter().any(|x| !x.is_finite()) || b.iter().any(|x| !x.is_finite()) {
-        return f64::NAN;
+/// `‖a − b‖²` as a carrier value. The length mismatch is a host-shape error (returns
+/// `NaN`); non-finite *values* are left to propagate through the arithmetic, matching the
+/// lazy-surface convention of guarding shape on the host and values via masks.
+fn squared_distance<R: Real>(a: &[R], b: &[R]) -> R {
+    if a.len() != b.len() {
+        return R::nan();
     }
-    a.iter().zip(b).map(|(x, y)| (x - y) * (x - y)).sum()
+    a.iter()
+        .cloned()
+        .zip(b.iter().cloned())
+        .map(|(x, y)| (x - y).square())
+        .fold(R::zero(), |acc, d| acc + d)
+}
+
+/// A non-negative, finite parameter (a signal variance or a bias offset).
+fn nonneg_finite<R: Real>(x: &R) -> R::Mask {
+    x.is_finite().and(&x.ge(&R::zero()))
+}
+
+/// A strictly-positive, finite parameter (a length scale or a period).
+fn positive_finite<R: Real>(x: &R) -> R::Mask {
+    x.is_finite().and(&x.gt(&R::zero()))
 }
 
 /// The **radial basis function** (squared-exponential / Gaussian) kernel:
 /// `σ² exp(-‖a-b‖² / (2ℓ²))`. The default smooth, stationary kernel.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Rbf {
-    pub variance: f64,
-    pub length_scale: f64,
+pub struct Rbf<R: Real = f64> {
+    pub variance: R,
+    pub length_scale: R,
 }
 
-impl Rbf {
-    pub fn new(variance: f64, length_scale: f64) -> Self {
+impl<R: Real> Rbf<R> {
+    pub fn new(variance: R, length_scale: R) -> Self {
         Self {
             variance,
             length_scale,
@@ -32,17 +60,13 @@ impl Rbf {
     }
 }
 
-impl Kernel for Rbf {
-    fn covariance(&self, a: &[f64], b: &[f64]) -> f64 {
-        if !self.variance.is_finite()
-            || !self.length_scale.is_finite()
-            || self.variance < 0.0
-            || self.length_scale <= 0.0
-        {
-            return f64::NAN;
-        }
-        let d2 = squared_distance(a, b);
-        self.variance * (-d2 / (2.0 * self.length_scale * self.length_scale)).exp()
+impl<R: Real> Kernel<R> for Rbf<R> {
+    fn covariance(&self, a: &[R], b: &[R]) -> R {
+        let valid = nonneg_finite(&self.variance).and(&positive_finite(&self.length_scale));
+        let distance = squared_distance(a, b).sqrt();
+        let value = self.variance.clone()
+            * kernels::squared_exponential_correlation(distance, self.length_scale.clone());
+        value.mask_invalid(valid, R::nan())
     }
 }
 
@@ -60,14 +84,14 @@ pub enum MaternNu {
 /// The **Matérn** kernel at half-integer smoothness — less smooth than the RBF,
 /// often a better model for physical processes.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Matern {
-    pub variance: f64,
-    pub length_scale: f64,
+pub struct Matern<R: Real = f64> {
+    pub variance: R,
+    pub length_scale: R,
     pub nu: MaternNu,
 }
 
-impl Matern {
-    pub fn new(variance: f64, length_scale: f64, nu: MaternNu) -> Self {
+impl<R: Real> Matern<R> {
+    pub fn new(variance: R, length_scale: R, nu: MaternNu) -> Self {
         Self {
             variance,
             length_scale,
@@ -76,70 +100,66 @@ impl Matern {
     }
 }
 
-impl Kernel for Matern {
-    fn covariance(&self, a: &[f64], b: &[f64]) -> f64 {
-        if !self.variance.is_finite()
-            || !self.length_scale.is_finite()
-            || self.variance < 0.0
-            || self.length_scale <= 0.0
-        {
-            return f64::NAN;
-        }
-        let r = squared_distance(a, b).sqrt() / self.length_scale;
-        let shape = match self.nu {
-            MaternNu::Half => (-r).exp(),
+impl<R: Real> Kernel<R> for Matern<R> {
+    fn covariance(&self, a: &[R], b: &[R]) -> R {
+        let valid = nonneg_finite(&self.variance).and(&positive_finite(&self.length_scale));
+        let distance = squared_distance(a, b).sqrt();
+        let correlation = match self.nu {
+            MaternNu::Half => kernels::exponential_correlation(distance, self.length_scale.clone()),
             MaternNu::ThreeHalves => {
-                let s = 3.0_f64.sqrt() * r;
-                (1.0 + s) * (-s).exp()
+                kernels::matern_32_correlation(distance, self.length_scale.clone())
             }
             MaternNu::FiveHalves => {
-                let s = 5.0_f64.sqrt() * r;
-                (1.0 + s + s * s / 3.0) * (-s).exp()
+                kernels::matern_52_correlation(distance, self.length_scale.clone())
             }
         };
-        self.variance * shape
+        let value = self.variance.clone() * correlation;
+        value.mask_invalid(valid, R::nan())
     }
 }
 
 /// The **linear** (dot-product) kernel `σ² (a·b) + c` — Gaussian processes with
 /// this kernel are Bayesian linear regression.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Linear {
-    pub variance: f64,
-    pub bias: f64,
+pub struct Linear<R: Real = f64> {
+    pub variance: R,
+    pub bias: R,
 }
 
-impl Linear {
-    pub fn new(variance: f64, bias: f64) -> Self {
+impl<R: Real> Linear<R> {
+    pub fn new(variance: R, bias: R) -> Self {
         Self { variance, bias }
     }
 }
 
-impl Kernel for Linear {
-    fn covariance(&self, a: &[f64], b: &[f64]) -> f64 {
-        if !self.variance.is_finite()
-            || !self.bias.is_finite()
-            || self.variance < 0.0
-            || self.bias < 0.0
-        {
-            return f64::NAN;
-        }
-        let dot: f64 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-        self.variance * dot + self.bias
+impl<R: Real> Kernel<R> for Linear<R> {
+    fn covariance(&self, a: &[R], b: &[R]) -> R {
+        let valid = nonneg_finite(&self.variance).and(&nonneg_finite(&self.bias));
+        let dot = if a.len() != b.len() {
+            R::nan()
+        } else {
+            a.iter()
+                .cloned()
+                .zip(b.iter().cloned())
+                .map(|(x, y)| x * y)
+                .fold(R::zero(), |acc, p| acc + p)
+        };
+        let value = self.variance.clone() * dot + self.bias.clone();
+        value.mask_invalid(valid, R::nan())
     }
 }
 
 /// The **periodic** (exp-sine-squared) kernel
 /// `σ² exp(-2 sin²(π‖a-b‖/p) / ℓ²)` — for processes with a repeating pattern.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Periodic {
-    pub variance: f64,
-    pub length_scale: f64,
-    pub period: f64,
+pub struct Periodic<R: Real = f64> {
+    pub variance: R,
+    pub length_scale: R,
+    pub period: R,
 }
 
-impl Periodic {
-    pub fn new(variance: f64, length_scale: f64, period: f64) -> Self {
+impl<R: Real> Periodic<R> {
+    pub fn new(variance: R, length_scale: R, period: R) -> Self {
         Self {
             variance,
             length_scale,
@@ -148,20 +168,19 @@ impl Periodic {
     }
 }
 
-impl Kernel for Periodic {
-    fn covariance(&self, a: &[f64], b: &[f64]) -> f64 {
-        if !self.variance.is_finite()
-            || !self.length_scale.is_finite()
-            || !self.period.is_finite()
-            || self.variance < 0.0
-            || self.length_scale <= 0.0
-            || self.period <= 0.0
-        {
-            return f64::NAN;
-        }
-        let d = squared_distance(a, b).sqrt();
-        let s = (std::f64::consts::PI * d / self.period).sin();
-        self.variance * (-2.0 * s * s / (self.length_scale * self.length_scale)).exp()
+impl<R: Real> Kernel<R> for Periodic<R> {
+    fn covariance(&self, a: &[R], b: &[R]) -> R {
+        let valid = nonneg_finite(&self.variance)
+            .and(&positive_finite(&self.length_scale))
+            .and(&positive_finite(&self.period));
+        let distance = squared_distance(a, b).sqrt();
+        let value = self.variance.clone()
+            * kernels::periodic_correlation(
+                distance,
+                self.period.clone(),
+                self.length_scale.clone(),
+            );
+        value.mask_invalid(valid, R::nan())
     }
 }
 
@@ -204,13 +223,21 @@ mod tests {
 
     #[test]
     fn invalid_kernel_inputs_are_nan() {
-        assert!(Rbf::new(1.0, 1.0).covariance(&[0.0], &[0.0, 1.0]).is_nan());
-        assert!(Rbf::new(1.0, 0.0).covariance(&[0.0], &[0.0]).is_nan());
         assert!(
-            Periodic::new(1.0, 1.0, 0.0)
+            Rbf::<f64>::new(1.0, 1.0)
+                .covariance(&[0.0], &[0.0, 1.0])
+                .is_nan()
+        );
+        assert!(Rbf::<f64>::new(1.0, 0.0).covariance(&[0.0], &[0.0]).is_nan());
+        assert!(
+            Periodic::<f64>::new(1.0, 1.0, 0.0)
                 .covariance(&[0.0], &[0.0])
                 .is_nan()
         );
-        assert!(Linear::new(-1.0, 0.0).covariance(&[0.0], &[0.0]).is_nan());
+        assert!(
+            Linear::<f64>::new(-1.0, 0.0)
+                .covariance(&[0.0], &[0.0])
+                .is_nan()
+        );
     }
 }

@@ -81,11 +81,13 @@ impl Moments for LogNormal {
     }
 
     fn skewness(&self) -> f64 {
-        f64::NAN
+        let w = (self.sigma() * self.sigma()).exp();
+        (w + 2.0) * (w - 1.0).sqrt()
     }
 
     fn kurtosis(&self) -> f64 {
-        f64::NAN
+        let s2 = self.sigma() * self.sigma();
+        (4.0 * s2).exp() + 2.0 * (3.0 * s2).exp() + 3.0 * (2.0 * s2).exp() - 6.0
     }
 }
 

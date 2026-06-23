@@ -56,11 +56,11 @@ impl<T: Real> Moments<T> for HalfNormal<T> {
     }
 
     fn skewness(&self) -> T {
-        T::nan()
+        kernels::half_normal_skewness()
     }
 
     fn kurtosis(&self) -> T {
-        T::nan()
+        kernels::half_normal_excess_kurtosis()
     }
 
     fn entropy(&self) -> T {
