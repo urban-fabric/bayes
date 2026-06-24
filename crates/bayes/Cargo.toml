@@ -1,0 +1,26 @@
+[package]
+name = "bayes"
+description = "Closed-form probability and statistics for Rust: distributions, special functions, sample statistics, stochastic processes, and conjugate Bayesian updates. Facade crate re-exporting the bayes workspace."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+euclid.workspace = true
+bayes-core-ext.workspace = true
+bayes-kernels.workspace = true
+bayes-distribution.workspace = true
+bayes-distribution-ext.workspace = true
+bayes-divergence.workspace = true
+bayes-statistics.workspace = true
+bayes-process.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+rand_chacha.workspace = true
+
+[lints]
+workspace = true

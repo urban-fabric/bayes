@@ -1,0 +1,18 @@
+[package]
+name = "bayes-divergence"
+description = "Statistical divergences and information measures (KL, Hellinger, Rényi, χ², total variation, …) between bayes distributions."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bayes-core.workspace = true
+bayes-kernels.workspace = true
+euclid.workspace = true
+bayes-distribution.workspace = true
+
+[lints]
+workspace = true

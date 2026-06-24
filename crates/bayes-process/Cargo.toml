@@ -1,0 +1,21 @@
+[package]
+name = "bayes-process"
+description = "Probabilistic processes for bayes: random walks, Poisson processes, and Gaussian-process covariance kernels."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bayes-core-ext.workspace = true
+bayes-distribution-ext.workspace = true
+bayes-statistics.workspace = true
+bayes-kernels.workspace = true
+euclid.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+
+[lints]
+workspace = true

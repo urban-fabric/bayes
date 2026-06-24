@@ -1,5 +1,2 @@
-# Cargo's built-in (libgit2) fetcher can't use the ssh-agent in this environment,
-# but the git CLI authenticates fine. Use the CLI to fetch the urban-fabric git
-# dependency (ramanujan).
 [net]
 git-fetch-with-cli = true

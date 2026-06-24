@@ -1,37 +1,41 @@
-[package]
-name = "bayes"
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "Proprietary"
 authors = ["Raymond Mead"]
 repository = "https://github.com/urban-fabric/bayes"
 rust-version = "1.95"
-description = "Closed-form probability and statistics for Rust: distributions, special functions, sample statistics, stochastic processes, and conjugate Bayesian updates."
 
-[lib]
-path = "src/lib.rs"
-
-[dependencies]
-# Dense linear algebra (Cholesky / LU factorizations and their solves) plus the
-# DenseMatrix type used by the multivariate / Gaussian-process routines.
-ramanujan = { git = "ssh://git@github.com/urban-fabric/ramanujan.git", branch = "main" }
-# Spherical geometry: the S² space (`S2Point`, tangent frames) that directional
-# distributions (von Mises–Fisher) are defined over — the manifold as a typed space.
-hausdorff = { git = "ssh://git@github.com/urban-fabric/hausdorff.git", branch = "main" }
+[workspace.dependencies]
+# external
 rand = "0.10"
 rand_chacha = "0.10"
-thiserror = "2.0"
-# The euclid::numeric traits: bayes writes scalar-generic closed forms over
-# concrete `Real`, and lazy kernels over `LazyReal`/`LazyComplex`; scalar
-# constants are lifted by Euclid, while special-function normalizers remain
-# caller supplied.
+# bayes is **numeric-only**: it writes scalar-generic closed forms over `euclid::numeric`
+# (`Real`/`Complex`) plus host-`f64` statistics. It does not depend on the container
+# tier — the matrix-coupled multivariate densities now live concretely in the backend
+# (`maxwell::dist`). Verification that bayes' write-once closed forms run on a backend lives
+# in the *backend* crate (see maxwell's `bayes_density` test); the arrow stays backend → content.
 euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
+# internal members
+bayes-core = { path = "crates/bayes-core" }
+bayes-core-ext = { path = "crates/bayes-core-ext" }
+bayes-kernels = { path = "crates/bayes-kernels" }
+bayes-distribution = { path = "crates/bayes-distribution" }
+bayes-distribution-ext = { path = "crates/bayes-distribution-ext" }
+bayes-divergence = { path = "crates/bayes-divergence" }
+bayes-statistics = { path = "crates/bayes-statistics" }
+bayes-process = { path = "crates/bayes-process" }
 
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "warn"
 unreachable_pub = "warn"
+unstable_name_collisions = "allow"
 
-[lints.clippy]
+[workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"
 panic = "warn"
@@ -46,3 +50,5 @@ debug = "line-tables-only"
 lto = "thin"
 codegen-units = 1
 debug = true
+
+# euclid is consumed from git `main` (published contract surface); no local path patch.

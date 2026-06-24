@@ -1,0 +1,18 @@
+[package]
+name = "bayes-statistics"
+description = "Sample statistics for bayes: robust/weighted summaries, effect sizes, OLS, confidence intervals, hypothesis tests, resampling, KDE, and streaming stats."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+euclid.workspace = true
+bayes-distribution-ext.workspace = true
+rand.workspace = true
+rand_chacha.workspace = true
+
+[lints]
+workspace = true
