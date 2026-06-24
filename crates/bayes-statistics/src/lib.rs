@@ -87,10 +87,9 @@ pub use summary::{
     coefficient_of_variation, coefficient_of_variation_real, correlation, correlation_real,
     covariance, covariance_real, geometric_mean, geometric_mean_real, gini_mean_difference,
     gini_mean_difference_real, harmonic_mean, harmonic_mean_real, kurtosis, kurtosis_real, mean,
-    mean_abs_deviation,
-    mean_abs_deviation_real, mean_real, population_variance, population_variance_real, skewness,
-    skewness_real, std_dev, std_dev_real, trimmed_mean, variance, variance_real, winsorized_mean,
-    z_scores, z_scores_real,
+    mean_abs_deviation, mean_abs_deviation_real, mean_real, population_variance,
+    population_variance_real, skewness, skewness_real, std_dev, std_dev_real, trimmed_mean,
+    variance, variance_real, winsorized_mean, z_scores, z_scores_real,
 };
 pub use tdigest::TDigest;
 pub use weighted::{

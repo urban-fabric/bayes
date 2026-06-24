@@ -74,7 +74,7 @@ fn fisher_information_crlb_and_jeffreys_are_public() {
 #[test]
 fn characteristic_pgf_entropy_and_lmoments_are_public() {
     use bayes::{
-        CharacteristicFunction, Cauchy, GeneralizedEntropy, LMoments, ProbabilityGenerating,
+        Cauchy, CharacteristicFunction, GeneralizedEntropy, LMoments, ProbabilityGenerating,
         Uniform,
     };
     // Characteristic function reaches the Cauchy, which has no MGF: φ(t)=e^{−|t|}.
@@ -84,19 +84,31 @@ fn characteristic_pgf_entropy_and_lmoments_are_public() {
     // PGF of Poisson(2) at 0 is the zero-count mass e^{−2}.
     close(Poisson::new(2.0).unwrap().pgf(0.0), (-2.0_f64).exp(), 1e-12);
     // Rényi entropy of a Uniform is ln(width) for any order.
-    close(Uniform::new(0.0, 2.0).unwrap().renyi_entropy(3.0), 2.0_f64.ln(), 1e-12);
+    close(
+        Uniform::new(0.0, 2.0).unwrap().renyi_entropy(3.0),
+        2.0_f64.ln(),
+        1e-12,
+    );
     // L-moments: exponential L-skewness is the scale-free 1/3.
-    close(Exponential::new(5.0).unwrap().l_skewness(), 1.0 / 3.0, 1e-12);
+    close(
+        Exponential::new(5.0).unwrap().l_skewness(),
+        1.0 / 3.0,
+        1e-12,
+    );
 }
 
 #[test]
 fn moment_generating_feeds_chernoff_tail() {
-    use bayes::statistics::chernoff_bound;
     use bayes::MomentGenerating;
+    use bayes::statistics::chernoff_bound;
     // The standard-normal MGF drives the Chernoff method to the exact Gaussian
     // tail: minimized at tilt s = a/σ² = 2, e^{−s·a}·M(s) = e^{−2}.
     let z = Normal::new(0.0, 1.0).unwrap();
-    close(chernoff_bound(z.mgf(2.0), 2.0, 2.0), (-2.0_f64).exp(), 1e-12);
+    close(
+        chernoff_bound(z.mgf(2.0), 2.0, 2.0),
+        (-2.0_f64).exp(),
+        1e-12,
+    );
     // Closed-form MGF: Gamma(3, 2) at t = 1 is (β/(β−t))^k = 8.
     close(Gamma::new(3.0, 2.0).unwrap().mgf(1.0), 8.0, 1e-12);
 }

@@ -22,17 +22,18 @@ pub mod estimation;
 pub mod exponential_family;
 pub mod functional;
 pub mod generalized_entropy;
+#[cfg(test)]
+mod kernel_impls;
 pub mod l_moments;
 pub mod moment_generating;
 pub mod probability_generating;
-#[cfg(test)]
-mod kernel_impls;
 pub mod transformed;
 
 // Re-export the whole trait spine + foundation modules so in-crate `crate::<Spine>`
 // paths resolve and downstream `use bayes_distribution_ext::*` gets the full contract.
 pub use bayes_core_ext::*;
 
+pub use characteristic_function::CharacteristicFunction;
 pub use combinator::{Mixture, OrderStatistic, Truncated};
 pub use conjugate::{
     BetaBernoulli, BetaBinomialModel, Conjugate, GammaExponential, GammaPoisson, NaturalParams,
@@ -47,15 +48,14 @@ pub use discrete::{
     Bernoulli, BetaBinomial, Binomial, Categorical, DiscreteUniform, Geometric, Hypergeometric,
     NegativeBinomial, Poisson,
 };
-pub use characteristic_function::CharacteristicFunction;
 pub use estimation::FisherInformation;
-pub use generalized_entropy::GeneralizedEntropy;
-pub use l_moments::LMoments;
 pub use exponential_family::{CountSum, ExponentialFamily, MeanVar, SufficientStatistic, Trials};
 pub use functional::{
     ContinuousCdfExt, ContinuousDensity, ContinuousDistributionExt, ContinuousFn,
     DiscreteDistributionExt, DiscreteFn, DiscreteMass,
 };
+pub use generalized_entropy::GeneralizedEntropy;
+pub use l_moments::LMoments;
 pub use moment_generating::MomentGenerating;
 pub use probability_generating::ProbabilityGenerating;
 pub use transformed::{Affine, Bijector, Exp, Sigmoid, Transformed};

@@ -159,7 +159,8 @@ pub use crate::families::{
     },
     rayleigh::{
         kl_rayleigh, rayleigh_cdf, rayleigh_cdf_on_support, rayleigh_entropy,
-        rayleigh_excess_kurtosis, rayleigh_log_pdf_on_support, rayleigh_quantile, rayleigh_skewness,
+        rayleigh_excess_kurtosis, rayleigh_log_pdf_on_support, rayleigh_quantile,
+        rayleigh_skewness,
     },
     student_t::{student_t_log_pdf, students_t_cdf, students_t_entropy},
     triangular::{triangular_cdf, triangular_entropy, triangular_pdf, triangular_quantile},

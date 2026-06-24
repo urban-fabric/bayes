@@ -435,6 +435,12 @@ where
     type Output = B::Int;
 
     fn sample_tensor_with_key(&self, key: &B::Key, shape: &[usize]) -> B::Int {
-        B::beta_binomial(key, shape, self.trials().to_real(), self.alpha(), self.beta())
+        B::beta_binomial(
+            key,
+            shape,
+            self.trials().to_real(),
+            self.alpha(),
+            self.beta(),
+        )
     }
 }

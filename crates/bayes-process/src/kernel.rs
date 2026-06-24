@@ -228,7 +228,11 @@ mod tests {
                 .covariance(&[0.0], &[0.0, 1.0])
                 .is_nan()
         );
-        assert!(Rbf::<f64>::new(1.0, 0.0).covariance(&[0.0], &[0.0]).is_nan());
+        assert!(
+            Rbf::<f64>::new(1.0, 0.0)
+                .covariance(&[0.0], &[0.0])
+                .is_nan()
+        );
         assert!(
             Periodic::<f64>::new(1.0, 1.0, 0.0)
                 .covariance(&[0.0], &[0.0])

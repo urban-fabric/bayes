@@ -92,10 +92,22 @@ mod tests {
     fn renyi_limits_to_shannon_entropy_as_order_approaches_one() {
         // H_α → H (the differential/Shannon entropy) as α → 1.
         let cases: [(&dyn GeneralizedEntropy, f64); 4] = [
-            (&Normal::new(0.0, 2.0).unwrap(), Normal::new(0.0, 2.0).unwrap().entropy()),
-            (&Exponential::new(1.5).unwrap(), Exponential::new(1.5).unwrap().entropy()),
-            (&Laplace::new(0.0, 1.3).unwrap(), Laplace::new(0.0, 1.3).unwrap().entropy()),
-            (&Bernoulli::new(0.3).unwrap(), Bernoulli::new(0.3).unwrap().entropy()),
+            (
+                &Normal::new(0.0, 2.0).unwrap(),
+                Normal::new(0.0, 2.0).unwrap().entropy(),
+            ),
+            (
+                &Exponential::new(1.5).unwrap(),
+                Exponential::new(1.5).unwrap().entropy(),
+            ),
+            (
+                &Laplace::new(0.0, 1.3).unwrap(),
+                Laplace::new(0.0, 1.3).unwrap().entropy(),
+            ),
+            (
+                &Bernoulli::new(0.3).unwrap(),
+                Bernoulli::new(0.3).unwrap().entropy(),
+            ),
         ];
         for (d, shannon) in cases {
             close(d.renyi_entropy(1.0 + 1e-6), shannon, 1e-4);
@@ -128,14 +140,25 @@ mod tests {
         );
 
         // Bernoulli(½) collision entropy: ln Σ p² = ln(0.5) ⇒ H_2 = ln 2.
-        close(Bernoulli::new(0.5).unwrap().renyi_entropy(2.0), 2.0_f64.ln(), 1e-12);
+        close(
+            Bernoulli::new(0.5).unwrap().renyi_entropy(2.0),
+            2.0_f64.ln(),
+            1e-12,
+        );
     }
 
     #[test]
     fn renyi_is_nonincreasing_in_order() {
         // H_α is monotonically non-increasing in α for a fixed law.
         let n = Normal::new(1.0, 2.0).unwrap();
-        let (h_half, h_two, h_five) = (n.renyi_entropy(0.5), n.renyi_entropy(2.0), n.renyi_entropy(5.0));
-        assert!(h_half >= h_two && h_two >= h_five, "{h_half} {h_two} {h_five}");
+        let (h_half, h_two, h_five) = (
+            n.renyi_entropy(0.5),
+            n.renyi_entropy(2.0),
+            n.renyi_entropy(5.0),
+        );
+        assert!(
+            h_half >= h_two && h_two >= h_five,
+            "{h_half} {h_two} {h_five}"
+        );
     }
 }

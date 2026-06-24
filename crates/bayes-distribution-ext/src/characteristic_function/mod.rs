@@ -207,7 +207,10 @@ mod tests {
 
         // Cauchy(0,1): φ(t) = e^{−|t|}.
         close(
-            Cauchy::new(0.0, 1.0).unwrap().characteristic_function(2.0).0,
+            Cauchy::new(0.0, 1.0)
+                .unwrap()
+                .characteristic_function(2.0)
+                .0,
             (-2.0_f64).exp(),
             1e-12,
         );

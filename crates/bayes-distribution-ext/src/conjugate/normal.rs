@@ -350,7 +350,8 @@ mod tests {
     #[test]
     fn nig_posterior_matches_textbook_update() {
         // NIG(0, 1, 1, 1) prior, data {2, 4}: n=2, Σx=6, Σx²=20.
-        let model = NormalInverseGammaModel::new(NormalInverseGamma::new(0.0, 1.0, 1.0, 1.0).unwrap());
+        let model =
+            NormalInverseGammaModel::new(NormalInverseGamma::new(0.0, 1.0, 1.0, 1.0).unwrap());
         let data = [2.0, 4.0];
         let post = model.posterior(&data);
         // λ=λ₀+n=3, μ=(λ₀μ₀+Σx)/λ=2, α=α₀+n/2=2,
@@ -378,7 +379,8 @@ mod tests {
 
     #[test]
     fn nig_online_equals_batch_and_order_independent() {
-        let model = NormalInverseGammaModel::new(NormalInverseGamma::new(0.5, 2.0, 3.0, 4.0).unwrap());
+        let model =
+            NormalInverseGammaModel::new(NormalInverseGamma::new(0.5, 2.0, 3.0, 4.0).unwrap());
         let d1 = [1.0, -2.0, 0.5];
         let d2 = [3.0, 4.0];
         let all: Vec<f64> = d1.iter().chain(d2.iter()).copied().collect();
@@ -402,7 +404,8 @@ mod tests {
 
     #[test]
     fn nig_sequential_predictive_equals_marginal_likelihood() {
-        let model = NormalInverseGammaModel::new(NormalInverseGamma::new(0.0, 1.0, 2.0, 3.0).unwrap());
+        let model =
+            NormalInverseGammaModel::new(NormalInverseGamma::new(0.0, 1.0, 2.0, 3.0).unwrap());
         let data = [1.5, -0.5, 2.0, 0.25];
         close(
             model.ln_sequential_predictive(&data),
@@ -411,17 +414,18 @@ mod tests {
         );
         // ln Z(post) − ln Z(prior) − (n/2) ln(2π), computed independently.
         let post = model.posterior(&data);
-        let expect = (post.alpha().ln_gamma() - post.alpha() * post.beta().ln()
-            - 0.5 * post.lambda().ln())
-            - (2.0_f64.ln_gamma() - 2.0 * 3.0_f64.ln() - 0.5 * 1.0_f64.ln())
-            - 0.5 * data.len() as f64 * (2.0 * std::f64::consts::PI).ln();
+        let expect =
+            (post.alpha().ln_gamma() - post.alpha() * post.beta().ln() - 0.5 * post.lambda().ln())
+                - (2.0_f64.ln_gamma() - 2.0 * 3.0_f64.ln() - 0.5 * 1.0_f64.ln())
+                - 0.5 * data.len() as f64 * (2.0 * std::f64::consts::PI).ln();
         close(model.ln_marginal_likelihood(&data), expect, 1e-12);
         assert!(model.ln_marginal_likelihood(&[f64::INFINITY]).is_nan());
     }
 
     #[test]
     fn nig_predictive_log_density_round_trips() {
-        let model = NormalInverseGammaModel::new(NormalInverseGamma::new(0.0, 1.0, 2.0, 3.0).unwrap());
+        let model =
+            NormalInverseGammaModel::new(NormalInverseGamma::new(0.0, 1.0, 2.0, 3.0).unwrap());
         let data = [1.0, 2.0];
         close(
             model.ln_predictive(0.7).exp(),
@@ -435,7 +439,8 @@ mod tests {
         );
         close(
             model.ln_posterior_predictive_likelihood(&data, &[0.3, 1.1]),
-            NormalInverseGammaModel::new(model.posterior(&data)).ln_marginal_likelihood(&[0.3, 1.1]),
+            NormalInverseGammaModel::new(model.posterior(&data))
+                .ln_marginal_likelihood(&[0.3, 1.1]),
             1e-12,
         );
     }

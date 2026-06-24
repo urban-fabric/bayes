@@ -117,7 +117,10 @@ mod tests {
         let g = Geometric::new(0.5).unwrap();
         close(g.pgf(0.0), 0.0, 1e-12); // support starts at 1
         assert_eq!(g.pgf(2.0), f64::INFINITY);
-        assert_eq!(NegativeBinomial::new(2.0, 0.5).unwrap().pgf(2.0), f64::INFINITY);
+        assert_eq!(
+            NegativeBinomial::new(2.0, 0.5).unwrap().pgf(2.0),
+            f64::INFINITY
+        );
     }
 
     #[test]

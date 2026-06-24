@@ -300,7 +300,11 @@ mod tests {
     fn real_twins_match_eager_at_f64() {
         let a = [4.0, 5.0, 6.0, 7.0];
         let b = [1.0, 2.0, 3.0, 4.0];
-        close(pooled_std_dev_real::<f64>(&a, &b), pooled_std_dev(&a, &b), 1e-12);
+        close(
+            pooled_std_dev_real::<f64>(&a, &b),
+            pooled_std_dev(&a, &b),
+            1e-12,
+        );
         close(cohen_d_real::<f64>(&a, &b), cohen_d(&a, &b), 1e-12);
         close(hedges_g_real::<f64>(&a, &b), hedges_g(&a, &b), 1e-12);
         close(glass_delta_real::<f64>(&a, &b), glass_delta(&a, &b), 1e-12);
@@ -318,7 +322,11 @@ mod tests {
             1e-12,
         );
 
-        close(odds_ratio_real::<f64>(10, 5, 4, 8), odds_ratio(10, 5, 4, 8), 1e-12);
+        close(
+            odds_ratio_real::<f64>(10, 5, 4, 8),
+            odds_ratio(10, 5, 4, 8),
+            1e-12,
+        );
         close(
             risk_ratio_real::<f64>(10, 10, 5, 15),
             risk_ratio(10, 10, 5, 15),
