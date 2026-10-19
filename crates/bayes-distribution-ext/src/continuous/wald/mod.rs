@@ -99,6 +99,33 @@ impl Moments for Wald {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Wald {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::wald_log_pdf_on_support(x, T::scalar(self.mu()), T::scalar(self.shape()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Wald
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -148,32 +175,5 @@ mod tests {
         close(mean, d.mean(), 0.02);
         let var = xs.iter().map(|&x| (x - mean) * (x - mean)).sum::<f64>() / n as f64;
         close(var, d.variance(), 0.1);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for Wald {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        kernels::wald_log_pdf_on_support(x, T::scalar(self.mu()), T::scalar(self.shape()))
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T> Continuous<T> for Wald
-where
-    T: Real + Compare,
-{
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        let zero = T::zero();
-        let valid = x.gt(&zero);
-        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

@@ -95,6 +95,34 @@ impl Moments for ChiSquared {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for ChiSquared {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let half_freedom = T::scalar(0.5 * self.freedom());
+        kernels::chi_squared_log_pdf_on_support(x, half_freedom.clone(), half_freedom.ln_gamma())
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for ChiSquared
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -125,33 +153,5 @@ mod tests {
                 1e-12,
             );
         }
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for ChiSquared {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        let half_freedom = T::scalar(0.5 * self.freedom());
-        kernels::chi_squared_log_pdf_on_support(x, half_freedom.clone(), half_freedom.ln_gamma())
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T> Continuous<T> for ChiSquared
-where
-    T: Real + Compare,
-{
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        let zero = T::zero();
-        let valid = x.gt(&zero);
-        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

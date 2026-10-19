@@ -102,38 +102,6 @@ impl Moments for Geometric {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn pmf_cdf_and_moments() {
-        let g = Geometric::new(0.25).unwrap();
-        let mut cum = 0.0;
-        for k in 1..=50u64 {
-            cum += g.pmf(k);
-            close(g.cdf(k), cum, 1e-9);
-        }
-        close(g.mean(), 4.0, 1e-12);
-        close(g.variance(), 0.75 / 0.0625, 1e-12);
-        close(g.pmf(1_u64), 0.25, 1e-12);
-    }
-
-    #[test]
-    fn quantile_round_trips() {
-        let g = Geometric::new(0.3).unwrap();
-        for &p in &[0.1, 0.5, 0.9] {
-            let k: u64 = g.inverse_cdf(p);
-            assert!(g.cdf(k) >= p && (k == 1 || g.cdf(k - 1) < p), "p={p} k={k}");
-        }
-    }
-}
-
 // Mass kernel and discrete distribution traits.
 impl<N: Natural> DiscreteMassKernel<N> for Geometric {
     fn ln_pmf_kernel(&self, k: N) -> N::Real {
@@ -166,5 +134,37 @@ where
 
         let valid = k.ge(&one_count);
         <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn pmf_cdf_and_moments() {
+        let g = Geometric::new(0.25).unwrap();
+        let mut cum = 0.0;
+        for k in 1..=50u64 {
+            cum += g.pmf(k);
+            close(g.cdf(k), cum, 1e-9);
+        }
+        close(g.mean(), 4.0, 1e-12);
+        close(g.variance(), 0.75 / 0.0625, 1e-12);
+        close(g.pmf(1_u64), 0.25, 1e-12);
+    }
+
+    #[test]
+    fn quantile_round_trips() {
+        let g = Geometric::new(0.3).unwrap();
+        for &p in &[0.1, 0.5, 0.9] {
+            let k: u64 = g.inverse_cdf(p);
+            assert!(g.cdf(k) >= p && (k == 1 || g.cdf(k - 1) < p), "p={p} k={k}");
+        }
     }
 }

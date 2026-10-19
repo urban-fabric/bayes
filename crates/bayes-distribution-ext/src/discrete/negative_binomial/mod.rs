@@ -122,40 +122,6 @@ impl Moments for NegativeBinomial {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn geometric_special_case() {
-        let nb = NegativeBinomial::new(1.0, 0.3).unwrap();
-        close(nb.pmf(0_u64), 0.3, 1e-12);
-        close(nb.pmf(1_u64), 0.3 * 0.7, 1e-12);
-        close(nb.mean(), 0.7 / 0.3, 1e-12);
-    }
-
-    #[test]
-    fn pmf_cdf_agree_and_sampled_mean() {
-        let nb = NegativeBinomial::new(4.0, 0.4).unwrap();
-        let mut cum = 0.0;
-        for k in 0..60u64 {
-            cum += nb.pmf(k);
-            close(nb.cdf(k), cum, 1e-7);
-        }
-        let mut rng = ChaCha8Rng::seed_from_u64(9);
-        let n = 60_000;
-        let s: u64 = (0..n).map(|_| nb.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, nb.mean(), 0.05);
-    }
-}
-
 // Mass kernel and discrete distribution traits.
 impl<N: Natural> DiscreteMassKernel<N> for NegativeBinomial {
     fn ln_pmf_kernel(&self, k: N) -> N::Real {
@@ -189,5 +155,39 @@ where
         }
 
         self.ln_pmf_kernel(k)
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn geometric_special_case() {
+        let nb = NegativeBinomial::new(1.0, 0.3).unwrap();
+        close(nb.pmf(0_u64), 0.3, 1e-12);
+        close(nb.pmf(1_u64), 0.3 * 0.7, 1e-12);
+        close(nb.mean(), 0.7 / 0.3, 1e-12);
+    }
+
+    #[test]
+    fn pmf_cdf_agree_and_sampled_mean() {
+        let nb = NegativeBinomial::new(4.0, 0.4).unwrap();
+        let mut cum = 0.0;
+        for k in 0..60u64 {
+            cum += nb.pmf(k);
+            close(nb.cdf(k), cum, 1e-7);
+        }
+        let mut rng = ChaCha8Rng::seed_from_u64(9);
+        let n = 60_000;
+        let s: u64 = (0..n).map(|_| nb.sample(&mut rng)).sum();
+        close(s as f64 / n as f64, nb.mean(), 0.05);
     }
 }

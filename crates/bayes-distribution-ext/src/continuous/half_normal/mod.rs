@@ -96,6 +96,33 @@ impl Moments for HalfNormal {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for HalfNormal {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::half_normal_log_pdf_on_support(x, T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for HalfNormal
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.ge(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -121,32 +148,5 @@ mod tests {
             close(h.cdf(h.inverse_cdf(p)), p, 1e-9);
         }
         close(h.mean(), 2.0 * (2.0 / PI).sqrt(), 1e-12);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for HalfNormal {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        kernels::half_normal_log_pdf_on_support(x, T::scalar(self.scale()))
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T> Continuous<T> for HalfNormal
-where
-    T: Real + Compare,
-{
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        let zero = T::zero();
-        let valid = x.ge(&zero);
-        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

@@ -105,27 +105,6 @@ impl Moments for Gumbel {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn cdf_quantile_and_moments() {
-        let g = Gumbel::new(1.0, 2.0).unwrap();
-        for &p in &[0.1, 0.5, 0.9] {
-            close(g.cdf(g.inverse_cdf(p)), p, 1e-10);
-        }
-        close(g.mean(), 1.0 + 2.0 * EULER_GAMMA, 1e-12);
-        close(g.mode(), 1.0, 1e-12);
-        close(g.cdf(1.0), (-1.0f64).exp(), 1e-12);
-    }
-}
-
 // Density kernel.
 impl<T: Real> ContinuousDensityKernel<T> for Gumbel {
     fn ln_pdf_kernel(&self, x: T) -> T {
@@ -145,5 +124,26 @@ impl<T: Real> Continuous<T> for Gumbel {
 
     fn ln_pdf(&self, x: T) -> T {
         self.ln_pdf_kernel(x)
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn cdf_quantile_and_moments() {
+        let g = Gumbel::new(1.0, 2.0).unwrap();
+        for &p in &[0.1, 0.5, 0.9] {
+            close(g.cdf(g.inverse_cdf(p)), p, 1e-10);
+        }
+        close(g.mean(), 1.0 + 2.0 * EULER_GAMMA, 1e-12);
+        close(g.mode(), 1.0, 1e-12);
+        close(g.cdf(1.0), (-1.0f64).exp(), 1e-12);
     }
 }

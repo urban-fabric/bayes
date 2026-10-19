@@ -135,28 +135,6 @@ impl Estimate for Laplace {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn cdf_quantile_pdf_and_moments() {
-        let l = Laplace::new(1.0, 2.0).unwrap();
-        close(l.cdf(1.0), 0.5, 1e-12);
-        close(l.pdf(1.0), 1.0 / (2.0 * 2.0), 1e-12);
-        for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
-            close(l.cdf(l.inverse_cdf(p)), p, 1e-12);
-        }
-        close(l.mean(), 1.0, 1e-12);
-        close(l.variance(), 8.0, 1e-12);
-    }
-}
-
 // Density kernel.
 impl<T: Real> ContinuousDensityKernel<T> for Laplace {
     fn ln_pdf_kernel(&self, x: T) -> T {
@@ -176,5 +154,27 @@ impl<T: Real> Continuous<T> for Laplace {
 
     fn ln_pdf(&self, x: T) -> T {
         self.ln_pdf_kernel(x)
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn cdf_quantile_pdf_and_moments() {
+        let l = Laplace::new(1.0, 2.0).unwrap();
+        close(l.cdf(1.0), 0.5, 1e-12);
+        close(l.pdf(1.0), 1.0 / (2.0 * 2.0), 1e-12);
+        for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
+            close(l.cdf(l.inverse_cdf(p)), p, 1e-12);
+        }
+        close(l.mean(), 1.0, 1e-12);
+        close(l.variance(), 8.0, 1e-12);
     }
 }

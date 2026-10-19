@@ -128,6 +128,30 @@ impl Moments for VonMises {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for VonMises {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let kappa = T::scalar(self.kappa());
+        let log_normalizer = T::ln_tau() + kappa.clone().ln_bessel_i0();
+        kernels::von_mises_log_pdf(x, T::scalar(self.mu()), kappa, log_normalizer)
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for VonMises {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -174,29 +198,5 @@ mod tests {
             ss += t.sin();
         }
         close(ss.atan2(sc), mu, 0.02);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for VonMises {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        let kappa = T::scalar(self.kappa());
-        let log_normalizer = T::ln_tau() + kappa.clone().ln_bessel_i0();
-        kernels::von_mises_log_pdf(x, T::scalar(self.mu()), kappa, log_normalizer)
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T: Real> Continuous<T> for VonMises {
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        self.ln_pdf_kernel(x)
     }
 }

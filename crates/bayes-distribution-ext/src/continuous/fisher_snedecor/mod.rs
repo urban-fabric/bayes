@@ -112,27 +112,6 @@ impl Moments for FisherSnedecor {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn cdf_quantile_and_moments() {
-        let f = FisherSnedecor::new(5.0, 10.0).unwrap();
-        for &p in &[0.1, 0.5, 0.9] {
-            close(f.cdf(f.inverse_cdf(p)), p, 1e-6);
-        }
-        close(f.mean(), 10.0 / 8.0, 1e-12);
-        assert!(FisherSnedecor::new(5.0, 2.0).unwrap().mean().is_nan());
-        close(f.inverse_cdf(0.95), 3.325_835, 1e-3);
-    }
-}
-
 // Density kernel.
 impl<T: Real> ContinuousDensityKernel<T> for FisherSnedecor {
     fn ln_pdf_kernel(&self, x: T) -> T {
@@ -162,5 +141,26 @@ where
         let zero = T::zero();
         let valid = x.gt(&zero);
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn cdf_quantile_and_moments() {
+        let f = FisherSnedecor::new(5.0, 10.0).unwrap();
+        for &p in &[0.1, 0.5, 0.9] {
+            close(f.cdf(f.inverse_cdf(p)), p, 1e-6);
+        }
+        close(f.mean(), 10.0 / 8.0, 1e-12);
+        assert!(FisherSnedecor::new(5.0, 2.0).unwrap().mean().is_nan());
+        close(f.inverse_cdf(0.95), 3.325_835, 1e-3);
     }
 }

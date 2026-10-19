@@ -109,6 +109,33 @@ impl Moments for Lomax {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Lomax {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::lomax_log_pdf_on_support(x, T::scalar(self.shape()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Lomax
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.ge(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -139,32 +166,5 @@ mod tests {
         let n = 200_000;
         let s: f64 = (0..n).map(|_| d.sample(&mut rng)).sum();
         close(s / n as f64, d.mean(), 0.05);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for Lomax {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        kernels::lomax_log_pdf_on_support(x, T::scalar(self.shape()), T::scalar(self.scale()))
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T> Continuous<T> for Lomax
-where
-    T: Real + Compare,
-{
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        let zero = T::zero();
-        let valid = x.ge(&zero);
-        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

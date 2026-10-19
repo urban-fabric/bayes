@@ -112,6 +112,36 @@ impl Moments for Beta {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Beta {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let alpha = T::scalar(self.alpha());
+        let beta = T::scalar(self.beta());
+        kernels::beta_log_pdf_on_unit(x, alpha.clone(), beta.clone(), alpha.ln_beta(beta))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Beta
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let one = T::one();
+        let valid = x.gt(&zero).and(&x.lt(&one));
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -146,35 +176,5 @@ mod tests {
         let n = 60_000;
         let s: f64 = (0..n).map(|_| b.sample(&mut rng)).sum();
         close(s / n as f64, b.mean(), 0.01);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for Beta {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        let alpha = T::scalar(self.alpha());
-        let beta = T::scalar(self.beta());
-        kernels::beta_log_pdf_on_unit(x, alpha.clone(), beta.clone(), alpha.ln_beta(beta))
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T> Continuous<T> for Beta
-where
-    T: Real + Compare,
-{
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        let zero = T::zero();
-        let one = T::one();
-        let valid = x.gt(&zero).and(&x.lt(&one));
-        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

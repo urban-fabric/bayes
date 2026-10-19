@@ -109,6 +109,28 @@ impl Moments for Cauchy {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Cauchy {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::cauchy_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for Cauchy {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -129,27 +151,5 @@ mod tests {
         assert!(c.mean().is_nan());
         assert!(c.variance().is_nan());
         assert_eq!(c.median(), 1.0);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for Cauchy {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        kernels::cauchy_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T: Real> Continuous<T> for Cauchy {
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        self.ln_pdf_kernel(x)
     }
 }

@@ -105,6 +105,28 @@ impl Moments for Logistic {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Logistic {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::logistic_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for Logistic {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -140,27 +162,5 @@ mod tests {
         let n = 80_000;
         let s: f64 = (0..n).map(|_| d.sample(&mut rng)).sum();
         close(s / n as f64, d.mean(), 0.05);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for Logistic {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        kernels::logistic_log_pdf(x, T::scalar(self.location()), T::scalar(self.scale()))
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T: Real> Continuous<T> for Logistic {
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        self.ln_pdf_kernel(x)
     }
 }

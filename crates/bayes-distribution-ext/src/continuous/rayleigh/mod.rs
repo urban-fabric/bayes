@@ -105,27 +105,6 @@ impl Estimate for Rayleigh {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn cdf_quantile_and_moments() {
-        let r = Rayleigh::new(2.0).unwrap();
-        for &p in &[0.1, 0.5, 0.9] {
-            close(r.cdf(r.inverse_cdf(p)), p, 1e-12);
-        }
-        close(r.mean(), 2.0 * (PI / 2.0).sqrt(), 1e-12);
-        close(r.mode(), 2.0, 1e-12);
-        close(r.pdf(2.0), (2.0 / 4.0) * (-0.5f64).exp(), 1e-12);
-    }
-}
-
 // Density kernel.
 impl<T: Real> ContinuousDensityKernel<T> for Rayleigh {
     fn ln_pdf_kernel(&self, x: T) -> T {
@@ -150,5 +129,26 @@ where
         let zero = T::zero();
         let valid = x.ge(&zero);
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn cdf_quantile_and_moments() {
+        let r = Rayleigh::new(2.0).unwrap();
+        for &p in &[0.1, 0.5, 0.9] {
+            close(r.cdf(r.inverse_cdf(p)), p, 1e-12);
+        }
+        close(r.mean(), 2.0 * (PI / 2.0).sqrt(), 1e-12);
+        close(r.mode(), 2.0, 1e-12);
+        close(r.pdf(2.0), (2.0 / 4.0) * (-0.5f64).exp(), 1e-12);
     }
 }

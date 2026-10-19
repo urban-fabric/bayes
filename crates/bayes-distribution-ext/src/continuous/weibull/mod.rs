@@ -103,6 +103,33 @@ impl Moments for Weibull {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Weibull {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        kernels::weibull_log_pdf_on_support(x, T::scalar(self.scale()), T::scalar(self.shape()))
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Weibull
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.ge(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -131,32 +158,5 @@ mod tests {
         let n = 60_000;
         let s: f64 = (0..n).map(|_| w.sample(&mut rng)).sum();
         close(s / n as f64, w.mean(), 0.02);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for Weibull {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        kernels::weibull_log_pdf_on_support(x, T::scalar(self.scale()), T::scalar(self.shape()))
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T> Continuous<T> for Weibull
-where
-    T: Real + Compare,
-{
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        let zero = T::zero();
-        let valid = x.ge(&zero);
-        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

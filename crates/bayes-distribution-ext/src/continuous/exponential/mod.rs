@@ -100,30 +100,6 @@ impl Estimate for Exponential {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn cdf_pdf_quantile_moments() {
-        let e = Exponential::new(2.0).unwrap();
-        close(e.cdf(0.0), 0.0, 1e-12);
-        close(e.cdf(1.0), 1.0 - (-2.0f64).exp(), 1e-12);
-        close(e.pdf(0.0), 2.0, 1e-12);
-        for &p in &[0.1, 0.5, 0.9] {
-            close(e.cdf(e.inverse_cdf(p)), p, 1e-12);
-        }
-        close(e.mean(), 0.5, 1e-12);
-        close(e.variance(), 0.25, 1e-12);
-        close(e.median(), std::f64::consts::LN_2 / 2.0, 1e-12);
-    }
-}
-
 // Density kernel.
 impl<T: Real> ContinuousDensityKernel<T> for Exponential {
     fn ln_pdf_kernel(&self, x: T) -> T {
@@ -148,5 +124,29 @@ where
         let zero = T::zero();
         let valid = x.ge(&zero);
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn cdf_pdf_quantile_moments() {
+        let e = Exponential::new(2.0).unwrap();
+        close(e.cdf(0.0), 0.0, 1e-12);
+        close(e.cdf(1.0), 1.0 - (-2.0f64).exp(), 1e-12);
+        close(e.pdf(0.0), 2.0, 1e-12);
+        for &p in &[0.1, 0.5, 0.9] {
+            close(e.cdf(e.inverse_cdf(p)), p, 1e-12);
+        }
+        close(e.mean(), 0.5, 1e-12);
+        close(e.variance(), 0.25, 1e-12);
+        close(e.median(), std::f64::consts::LN_2 / 2.0, 1e-12);
     }
 }

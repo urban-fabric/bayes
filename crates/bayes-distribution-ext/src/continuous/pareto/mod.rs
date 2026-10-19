@@ -117,29 +117,6 @@ impl Estimate for Pareto {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn cdf_quantile_and_moments() {
-        let p = Pareto::new(2.0, 3.0).unwrap();
-        close(p.cdf(2.0), 0.0, 1e-12);
-        close(p.cdf(4.0), 1.0 - (0.5f64).powi(3), 1e-12);
-        for &q in &[0.1, 0.5, 0.9] {
-            close(p.cdf(p.inverse_cdf(q)), q, 1e-10);
-        }
-        close(p.mean(), 3.0 * 2.0 / 2.0, 1e-12);
-        assert!(Pareto::new(1.0, 1.5).unwrap().variance().is_nan());
-        assert!(Pareto::new(1.0, 0.8).unwrap().mean().is_nan());
-    }
-}
-
 // Density kernel.
 impl<T: Real> ContinuousDensityKernel<T> for Pareto {
     fn ln_pdf_kernel(&self, x: T) -> T {
@@ -164,5 +141,28 @@ where
         let min = T::scalar(self.scale());
         let valid = x.ge(&min);
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn cdf_quantile_and_moments() {
+        let p = Pareto::new(2.0, 3.0).unwrap();
+        close(p.cdf(2.0), 0.0, 1e-12);
+        close(p.cdf(4.0), 1.0 - (0.5f64).powi(3), 1e-12);
+        for &q in &[0.1, 0.5, 0.9] {
+            close(p.cdf(p.inverse_cdf(q)), q, 1e-10);
+        }
+        close(p.mean(), 3.0 * 2.0 / 2.0, 1e-12);
+        assert!(Pareto::new(1.0, 1.5).unwrap().variance().is_nan());
+        assert!(Pareto::new(1.0, 0.8).unwrap().mean().is_nan());
     }
 }

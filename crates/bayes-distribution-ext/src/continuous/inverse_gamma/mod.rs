@@ -108,37 +108,6 @@ impl Moments for InverseGamma {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn cdf_quantile_and_moments() {
-        let ig = InverseGamma::new(3.0, 2.0).unwrap();
-        for &p in &[0.1, 0.5, 0.9] {
-            close(ig.cdf(ig.inverse_cdf(p)), p, 1e-7);
-        }
-        close(ig.mean(), 2.0 / 2.0, 1e-12);
-        close(ig.mode(), 2.0 / 4.0, 1e-12);
-        assert!(InverseGamma::new(1.5, 1.0).unwrap().variance().is_nan());
-    }
-
-    #[test]
-    fn entropy_known_value() {
-        // H = α + ln(β Γ(α)) − (1+α)ψ(α); for InverseGamma(3, 2): ≈ 0.69515702.
-        close(
-            InverseGamma::new(3.0, 2.0).unwrap().entropy(),
-            0.695_157_02,
-            1e-6,
-        );
-    }
-}
-
 // Density kernel.
 impl<T: Real> ContinuousDensityKernel<T> for InverseGamma {
     fn ln_pdf_kernel(&self, x: T) -> T {
@@ -169,5 +138,36 @@ where
         let zero = T::zero();
         let valid = x.gt(&zero);
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn cdf_quantile_and_moments() {
+        let ig = InverseGamma::new(3.0, 2.0).unwrap();
+        for &p in &[0.1, 0.5, 0.9] {
+            close(ig.cdf(ig.inverse_cdf(p)), p, 1e-7);
+        }
+        close(ig.mean(), 2.0 / 2.0, 1e-12);
+        close(ig.mode(), 2.0 / 4.0, 1e-12);
+        assert!(InverseGamma::new(1.5, 1.0).unwrap().variance().is_nan());
+    }
+
+    #[test]
+    fn entropy_known_value() {
+        // H = α + ln(β Γ(α)) − (1+α)ψ(α); for InverseGamma(3, 2): ≈ 0.69515702.
+        close(
+            InverseGamma::new(3.0, 2.0).unwrap().entropy(),
+            0.695_157_02,
+            1e-6,
+        );
     }
 }

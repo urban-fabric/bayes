@@ -159,6 +159,39 @@ impl Estimate for Gamma {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for Gamma {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let shape = T::scalar(self.shape());
+        kernels::gamma_log_pdf_on_support(
+            x,
+            shape.clone(),
+            T::scalar(self.rate()),
+            shape.ln_gamma(),
+        )
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T> Continuous<T> for Gamma
+where
+    T: Real + Compare,
+{
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        let zero = T::zero();
+        let valid = x.gt(&zero);
+        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -221,38 +254,5 @@ mod tests {
         assert!((r32 - 0.4).abs() < 1e-3, "f32 roundtrip {r32}");
         let r64: f64 = roundtrip(&g, 0.4_f64);
         assert!((r64 - 0.4).abs() < 1e-8);
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for Gamma {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        let shape = T::scalar(self.shape());
-        kernels::gamma_log_pdf_on_support(
-            x,
-            shape.clone(),
-            T::scalar(self.rate()),
-            shape.ln_gamma(),
-        )
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T> Continuous<T> for Gamma
-where
-    T: Real + Compare,
-{
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        let zero = T::zero();
-        let valid = x.gt(&zero);
-        T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }

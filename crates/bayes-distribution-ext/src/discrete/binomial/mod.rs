@@ -104,36 +104,6 @@ impl Moments for Binomial {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn pmf_sums_to_one_and_cdf_agrees() {
-        let b = Binomial::new(10, 0.3).unwrap();
-        let mut cum = 0.0;
-        for k in 0..=10u64 {
-            cum += b.pmf(k);
-            close(b.cdf(k), cum, 1e-9);
-        }
-        close(cum, 1.0, 1e-10);
-        close(b.mean(), 3.0, 1e-12);
-        close(b.variance(), 10.0 * 0.3 * 0.7, 1e-12);
-    }
-
-    #[test]
-    fn pmf_landmark() {
-        let b = Binomial::new(5, 0.4).unwrap();
-        close(b.pmf(0_u64), 0.6f64.powi(5), 1e-12);
-        close(b.pmf(5_u64), 0.4f64.powi(5), 1e-12);
-    }
-}
-
 // Mass kernel and discrete distribution traits.
 impl<N: Natural> DiscreteMassKernel<N> for Binomial {
     fn ln_pmf_kernel(&self, k: N) -> N::Real {
@@ -175,5 +145,35 @@ where
 
         let valid = k.le(&n);
         <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn pmf_sums_to_one_and_cdf_agrees() {
+        let b = Binomial::new(10, 0.3).unwrap();
+        let mut cum = 0.0;
+        for k in 0..=10u64 {
+            cum += b.pmf(k);
+            close(b.cdf(k), cum, 1e-9);
+        }
+        close(cum, 1.0, 1e-10);
+        close(b.mean(), 3.0, 1e-12);
+        close(b.variance(), 10.0 * 0.3 * 0.7, 1e-12);
+    }
+
+    #[test]
+    fn pmf_landmark() {
+        let b = Binomial::new(5, 0.4).unwrap();
+        close(b.pmf(0_u64), 0.6f64.powi(5), 1e-12);
+        close(b.pmf(5_u64), 0.4f64.powi(5), 1e-12);
     }
 }

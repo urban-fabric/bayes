@@ -137,35 +137,6 @@ impl Moments for Hypergeometric {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::panic)]
-mod tests {
-    use super::*;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
-
-    #[test]
-    fn pmf_sums_to_one_and_known_value() {
-        let h = Hypergeometric::new(50, 5, 10).unwrap();
-        let total: f64 = (h.min()..=h.max()).map(|k| h.pmf(k)).sum();
-        close(total, 1.0, 1e-10);
-        close(h.mean(), 1.0, 1e-12);
-    }
-
-    #[test]
-    fn sampled_mean_matches() {
-        let mut rng = ChaCha8Rng::seed_from_u64(4);
-        let h = Hypergeometric::new(100, 30, 20).unwrap();
-        let n = 40_000;
-        let s: u64 = (0..n).map(|_| h.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, h.mean(), 0.05);
-    }
-}
-
 fn ln_binomial_real<T: Real>(n: T, k: T) -> T {
     let one = T::one();
     let n_minus_k = n.clone() - k.clone();
@@ -204,5 +175,34 @@ where
         let k_max = N::from_u64(self.draws().min(self.successes()));
         let valid = k.ge(&k_min).and(&k.le(&k_max));
         <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    fn close(a: f64, b: f64, tol: f64) {
+        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
+    }
+
+    #[test]
+    fn pmf_sums_to_one_and_known_value() {
+        let h = Hypergeometric::new(50, 5, 10).unwrap();
+        let total: f64 = (h.min()..=h.max()).map(|k| h.pmf(k)).sum();
+        close(total, 1.0, 1e-10);
+        close(h.mean(), 1.0, 1e-12);
+    }
+
+    #[test]
+    fn sampled_mean_matches() {
+        let mut rng = ChaCha8Rng::seed_from_u64(4);
+        let h = Hypergeometric::new(100, 30, 20).unwrap();
+        let n = 40_000;
+        let s: u64 = (0..n).map(|_| h.sample(&mut rng)).sum();
+        close(s as f64 / n as f64, h.mean(), 0.05);
     }
 }

@@ -181,6 +181,38 @@ impl Moments for StudentT {
     }
 }
 
+// Density kernel.
+impl<T: Real> ContinuousDensityKernel<T> for StudentT {
+    fn ln_pdf_kernel(&self, x: T) -> T {
+        let freedom = T::scalar(self.freedom());
+        let log_normalizer = T::half() * (freedom.clone() * T::pi()).ln()
+            + (freedom.clone() * T::half()).ln_gamma()
+            - ((freedom.clone() + T::one()) * T::half()).ln_gamma();
+        kernels::student_t_log_pdf(
+            x,
+            T::scalar(self.location()),
+            T::scalar(self.scale()),
+            freedom,
+            log_normalizer,
+        )
+    }
+
+    fn pdf_kernel(&self, x: T) -> T {
+        self.ln_pdf_kernel(x).exp()
+    }
+}
+
+// Continuous distribution.
+impl<T: Real> Continuous<T> for StudentT {
+    fn pdf(&self, x: T) -> T {
+        self.ln_pdf(x).exp()
+    }
+
+    fn ln_pdf(&self, x: T) -> T {
+        self.ln_pdf_kernel(x)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
@@ -233,37 +265,5 @@ mod tests {
         close(affine.location(), -0.5, 1e-12);
         close(affine.scale(), 3.0, 1e-12);
         assert!(ls.affine(0.0, 1.0).is_err());
-    }
-}
-
-// Density kernel.
-impl<T: Real> ContinuousDensityKernel<T> for StudentT {
-    fn ln_pdf_kernel(&self, x: T) -> T {
-        let freedom = T::scalar(self.freedom());
-        let log_normalizer = T::half() * (freedom.clone() * T::pi()).ln()
-            + (freedom.clone() * T::half()).ln_gamma()
-            - ((freedom.clone() + T::one()) * T::half()).ln_gamma();
-        kernels::student_t_log_pdf(
-            x,
-            T::scalar(self.location()),
-            T::scalar(self.scale()),
-            freedom,
-            log_normalizer,
-        )
-    }
-
-    fn pdf_kernel(&self, x: T) -> T {
-        self.ln_pdf_kernel(x).exp()
-    }
-}
-
-// Continuous distribution.
-impl<T: Real> Continuous<T> for StudentT {
-    fn pdf(&self, x: T) -> T {
-        self.ln_pdf(x).exp()
-    }
-
-    fn ln_pdf(&self, x: T) -> T {
-        self.ln_pdf_kernel(x)
     }
 }
