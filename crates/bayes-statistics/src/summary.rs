@@ -196,7 +196,6 @@ pub fn geometric_mean_real<R: Real>(data: &[R]) -> R {
     }
     (data
         .iter()
-        .cloned()
         .map(|x| x.ln())
         .fold(R::zero(), |acc, x| acc + x)
         / R::scalar(data.len() as f64))

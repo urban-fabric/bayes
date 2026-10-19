@@ -3,13 +3,17 @@ use crate::{
     Hypergeometric, NegativeBinomial, Normal, Poisson, StudentT,
 };
 
+/// A lazy density kernel, the point to evaluate it at, and the eager value it
+/// must match.
+type DensityCase = (Box<dyn Fn(f64) -> f64>, f64, f64);
+
 fn close(a: f64, b: f64, tol: f64) {
     assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
 }
 
 #[test]
 fn continuous_density_kernels_match_eager_on_support() {
-    let cases: &[(Box<dyn Fn(f64) -> f64>, f64, f64)] = &[
+    let cases: &[DensityCase] = &[
         (
             Box::new(|x| Normal::new(1.0, 2.0).unwrap().ln_pdf_kernel(x)),
             0.25,
