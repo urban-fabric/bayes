@@ -4,9 +4,9 @@ use rand::distr::Distribution;
 use crate::continuous::Beta;
 use crate::discrete::Binomial;
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Compare, Natural, Real};
+use euclid_numeric::{Compare, Natural, Real};
 
 /// The **beta-binomial** distribution: a binomial whose success probability is
 /// itself `Beta(α, β)`-distributed — equivalently, the marginal of `K | p ~
@@ -17,6 +17,27 @@ use euclid::{Compare, Natural, Real};
 /// over-dispersed alternative to the binomial.
 ///
 /// `P(K = k) = C(n, k) · B(k + α, n − k + β) / B(α, β)`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{BetaBinomial, Binomial, Discrete, Moments};
+///
+/// // With both shapes 1 the mixing prior is uniform, and the result is uniform
+/// // on {0, ..., n}: every count equally likely.
+/// let flat = BetaBinomial::new(10, 1.0, 1.0)?;
+/// assert!((flat.pmf(0_u64) - 1.0 / 11.0).abs() < 1e-12);
+/// assert!((flat.pmf(7_u64) - 1.0 / 11.0).abs() < 1e-12);
+///
+/// // That is wildly over-dispersed next to the binomial it generalizes, which
+/// // is the whole reason to reach for it.
+/// assert!(flat.variance() > Binomial::new(10, 0.5)?.variance());
+///
+/// // Large shapes concentrate the prior and recover the binomial.
+/// let tight = BetaBinomial::new(10, 1e6, 1e6)?;
+/// assert!((tight.variance() - Binomial::new(10, 0.5)?.variance()).abs() < 1e-3);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BetaBinomial {
     n: u64,
@@ -26,14 +47,7 @@ pub struct BetaBinomial {
 
 impl BetaBinomial {
     pub fn new(n: u64, alpha: f64, beta: f64) -> Result<Self, BayesError> {
-        for (name, v) in [("alpha", alpha), ("beta", beta)] {
-            if !v.is_finite() {
-                return Err(BayesError::NonFinite { name, value: v });
-            }
-            if v <= 0.0 {
-                return Err(BayesError::NotPositive { name, value: v });
-            }
-        }
+        validate::positive(&[("alpha", alpha), ("beta", beta)])?;
         Ok(Self { n, alpha, beta })
     }
 
@@ -179,19 +193,16 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn reduces_to_binomial_at_large_equal_shapes() {
         let bb = BetaBinomial::new(10, 1e6, 1e6).unwrap();
         let bin = Binomial::new(10, 0.5).unwrap();
         for k in 0..=10u64 {
-            close(bb.pmf(k), bin.pmf(k), 1e-3);
+            assert_close!(bb.pmf(k), bin.pmf(k), 1e-3);
         }
     }
 
@@ -199,7 +210,7 @@ mod tests {
     fn uniform_when_shapes_are_one() {
         let bb = BetaBinomial::new(4, 1.0, 1.0).unwrap();
         for k in 0..=4u64 {
-            close(bb.pmf(k), 1.0 / 5.0, 1e-12);
+            assert_close!(bb.pmf(k), 1.0 / 5.0, 1e-12);
         }
     }
 
@@ -209,10 +220,10 @@ mod tests {
         let mut cum = 0.0;
         for k in 0..=12u64 {
             cum += bb.pmf(k);
-            close(bb.cdf(k), cum, 1e-12);
+            assert_close!(bb.cdf(k), cum, 1e-12);
         }
-        close(cum, 1.0, 1e-12);
-        close(bb.mean(), 12.0 * 2.0 / 7.0, 1e-12);
+        assert_close!(cum, 1.0, 1e-12);
+        assert_close!(bb.mean(), 12.0 * 2.0 / 7.0, 1e-12);
     }
 
     #[test]
@@ -221,6 +232,6 @@ mod tests {
         let bb = BetaBinomial::new(20, 3.0, 4.0).unwrap();
         let n = 60_000;
         let s: u64 = (0..n).map(|_| bb.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, bb.mean(), 0.03);
+        assert_close!(s as f64 / n as f64, bb.mean(), 0.03);
     }
 }

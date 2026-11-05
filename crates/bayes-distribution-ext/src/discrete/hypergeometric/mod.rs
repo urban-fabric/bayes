@@ -3,12 +3,27 @@ use rand::{Rng, RngExt};
 
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
 use bayes_core_ext::BayesError;
-use euclid::{Boolean, Compare, Natural, Real};
+use euclid_numeric::{Boolean, Compare, Natural, Real};
 
 /// The hypergeometric distribution: the number of successes in `draws` samples
 /// taken **without replacement** from a population of `population` items
 /// containing `successes` successes. Support `[max(0, draws+successes-population),
 /// min(draws, successes)]`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Binomial, Hypergeometric, Moments};
+///
+/// // Ten draws, without replacement, from 50 items of which 20 are successes.
+/// let h = Hypergeometric::new(50, 20, 10)?;
+/// assert!((h.mean() - 4.0).abs() < 1e-12);  // draws * successes / population
+///
+/// // Sampling without replacement is self-correcting, so the variance is
+/// // strictly below that of the binomial with the same mean.
+/// assert!(h.variance() < Binomial::new(10, 0.4)?.variance());
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Hypergeometric {
     population: u64,
@@ -174,7 +189,13 @@ where
             N::from_u64((self.draws() + self.successes()).saturating_sub(self.population()));
         let k_max = N::from_u64(self.draws().min(self.successes()));
         let valid = k.ge(&k_min).and(&k.le(&k_max));
-        <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity())
+        let mass =
+            <N::Real as Compare>::select(&valid, self.ln_pmf_kernel(k), N::Real::neg_infinity());
+        // A log-mass cannot exceed 0. The kernel is a difference of three independently-rounded
+        // log-binomials, so a mass that is exactly 1 — every draw forced to be a success, as in
+        // `Hypergeometric(10, 10, 5)` — came out as `exp(+9e-16) = 1.0000000000000009`. That is a
+        // probability above one, which breaks anything downstream that validates its inputs.
+        mass.min(N::Real::scalar(0.0))
     }
 }
 
@@ -182,19 +203,16 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn pmf_sums_to_one_and_known_value() {
         let h = Hypergeometric::new(50, 5, 10).unwrap();
         let total: f64 = (h.min()..=h.max()).map(|k| h.pmf(k)).sum();
-        close(total, 1.0, 1e-10);
-        close(h.mean(), 1.0, 1e-12);
+        assert_close!(total, 1.0, 1e-10);
+        assert_close!(h.mean(), 1.0, 1e-12);
     }
 
     #[test]
@@ -203,6 +221,6 @@ mod tests {
         let h = Hypergeometric::new(100, 30, 20).unwrap();
         let n = 40_000;
         let s: u64 = (0..n).map(|_| h.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, h.mean(), 0.05);
+        assert_close!(s as f64 / n as f64, h.mean(), 0.05);
     }
 }

@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 /// Categorical log-mass for the selected class probability.
 pub fn categorical_log_pmf<T: Real>(selected_probability: T) -> T {

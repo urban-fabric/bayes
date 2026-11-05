@@ -5,7 +5,7 @@
 //! [`Real`]. Host validation and error reporting live in the eager extension
 //! crates.
 
-use euclid::{Boolean, Compare, Integer, Natural, Real};
+use euclid_numeric::{Boolean, Compare, Integer, Natural, Real};
 
 /// Whether a real support boundary includes its endpoint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

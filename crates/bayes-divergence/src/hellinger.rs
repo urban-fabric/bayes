@@ -7,7 +7,7 @@ use crate::{
     InverseGamma, LogNormal, NegativeBinomial, Normal, Poisson, Uniform, VonMises, Wald,
 };
 use bayes_kernels as kernels;
-use euclid::{Compare, Element, Integer, Natural, Real};
+use euclid_numeric::{Compare, Element, Integer, Natural, Real};
 
 /// The **squared Hellinger distance** `H^2(p, q) = 1 - BC`, where
 /// `BC = integral sqrt(pq)` is the Bhattacharyya coefficient.

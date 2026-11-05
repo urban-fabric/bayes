@@ -7,9 +7,9 @@
 //! `Transformed(Normal, Exp)` is the log-normal, `Transformed(d, Affine{..})`
 //! shifts and scales any base distribution.
 
-mod bijector;
+pub mod bijector;
 
-pub use bijector::{Affine, Bijector, Exp, Sigmoid};
+pub use bijector::{Affine, Bijector, Compose, Exp, Identity, Inverse, Sigmoid, Softplus};
 
 use rand::Rng;
 use rand::distr::Distribution;
@@ -54,9 +54,35 @@ where
     fn pdf(&self, y: f64) -> f64 {
         self.ln_pdf(y).exp()
     }
+
+    /// `ln p_X(g⁻¹(y)) + ln|d g⁻¹/dy|`, and `-inf` wherever there is no mass.
+    ///
+    /// The two early returns are not defensive padding; without them this
+    /// function answers `NaN` for every `y` outside the bijector's image. A
+    /// `y` the map cannot reach sends `g⁻¹(y)` to `±inf` or `NaN` — for
+    /// `Exp` that is any `y <= 0` — and the Jacobian term diverges the other
+    /// way, so the sum is `-inf + inf`. `Transformed(Normal, Exp).pdf(-1.0_f64)`
+    /// used to return `NaN` where [`LogNormal`](crate::LogNormal), the same
+    /// distribution by another name, returns `0`.
     fn ln_pdf(&self, y: f64) -> f64 {
+        if y.is_nan() {
+            // Propagated rather than answered: a density of zero would be a
+            // confident claim about an argument that carries no information.
+            return f64::NAN;
+        }
         let x = self.bijector.inverse(y);
-        self.base.ln_pdf(x) + self.bijector.inverse_log_det_jacobian(y)
+        if !x.is_finite() {
+            // Outside the open image of `g`, where the transformed variable
+            // cannot land.
+            return f64::NEG_INFINITY;
+        }
+        let base = self.base.ln_pdf(x);
+        if base == f64::NEG_INFINITY {
+            // The base has no mass at the preimage, which settles the answer
+            // whatever the Jacobian does.
+            return f64::NEG_INFINITY;
+        }
+        base + self.bijector.inverse_log_det_jacobian(y)
     }
 }
 
@@ -102,19 +128,16 @@ impl<D: Moments> Moments for Transformed<D, Affine> {
 mod tests {
     use super::*;
     use crate::{LogNormal, Normal};
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn exp_of_normal_is_lognormal() {
         let t = Transformed::new(Normal::new(0.5, 1.2).unwrap(), Exp);
         let ln = LogNormal::new(0.5, 1.2).unwrap();
         for &y in &[0.1, 0.5, 1.0, 2.0, 5.0] {
-            close(t.pdf(y), ln.pdf(y), 1e-10);
+            assert_close!(t.pdf(y), ln.pdf(y), 1e-10);
         }
     }
 
@@ -126,7 +149,7 @@ mod tests {
         );
         let target = Normal::new(3.0, 2.0).unwrap();
         for &y in &[-1.0, 1.0, 3.0, 5.0] {
-            close(t.pdf(y), target.pdf(y), 1e-10);
+            assert_close!(t.pdf(y), target.pdf(y), 1e-10);
         }
     }
 
@@ -135,6 +158,43 @@ mod tests {
         let mut rng = ChaCha8Rng::seed_from_u64(2);
         let t = Transformed::new(Normal::new(0.0, 1.0).unwrap(), Exp);
         assert!((0..1000).all(|_| t.sample(&mut rng) > 0.0));
+    }
+
+    /// Outside the bijector's image there is no mass, so the density is zero —
+    /// and it must agree with the named family that happens to be the same
+    /// distribution.
+    ///
+    /// Every one of these returned `NaN` before, because `g⁻¹(y)` is `±inf` or
+    /// `NaN` off the image while the Jacobian term diverges the other way, so
+    /// the change-of-variables sum was `-inf + inf`. A combinator is where this
+    /// kind of thing hides: the conformance sweep checks every *family* for
+    /// "`pdf >= 0`, and a `NaN` argument never yields a confident probability",
+    /// but `Transformed` is not a family and was never swept.
+    #[test]
+    fn points_outside_the_image_have_zero_density_not_nan() {
+        let exp_normal = Transformed::new(Normal::new(0.0, 1.0).unwrap(), Exp);
+        let named = LogNormal::new(0.0, 1.0).unwrap();
+        // `Exp` has image (0, inf): nothing at or below zero.
+        for &y in &[-1e9, -1.0, -1e-9, 0.0] {
+            assert_eq!(exp_normal.pdf(y), 0.0, "Transformed-Exp pdf at {y}");
+            assert_eq!(
+                exp_normal.pdf(y),
+                named.pdf(y),
+                "disagreed with LogNormal at {y}"
+            );
+            assert_eq!(exp_normal.ln_pdf(y), f64::NEG_INFINITY);
+        }
+
+        // `Sigmoid` has image (0, 1), and saturates to the endpoints in f64.
+        let logit_normal = Transformed::new(Normal::new(0.0, 1.0).unwrap(), Sigmoid);
+        for &y in &[-0.5, 0.0, 1.0, 1.5] {
+            assert_eq!(logit_normal.pdf(y), 0.0, "logit-normal pdf at {y}");
+        }
+        assert!(logit_normal.pdf(0.5) > 0.0);
+
+        // A NaN argument stays a NaN rather than becoming a confident zero.
+        assert!(exp_normal.pdf(f64::NAN).is_nan());
+        assert!(logit_normal.ln_pdf(f64::NAN).is_nan());
     }
 
     #[test]
@@ -146,16 +206,16 @@ mod tests {
             Affine::new(2.0, 3.0).unwrap(),
         );
         let target = Normal::new(5.0, 3.0).unwrap();
-        close(t.mean(), target.mean(), 1e-12);
-        close(t.variance(), target.variance(), 1e-12);
-        close(t.std_dev(), target.std_dev(), 1e-12);
+        assert_close!(t.mean(), target.mean(), 1e-12);
+        assert_close!(t.variance(), target.variance(), 1e-12);
+        assert_close!(t.std_dev(), target.std_dev(), 1e-12);
         // Differential entropy gains ln|a|: H[N(1,1.5)] + ln 2 = H[N(5,3)].
-        close(t.entropy(), target.entropy(), 1e-12);
-        close(t.median(), 5.0, 1e-12);
-        close(t.mode(), 5.0, 1e-12);
+        assert_close!(t.entropy(), target.entropy(), 1e-12);
+        assert_close!(t.median(), 5.0, 1e-12);
+        assert_close!(t.mode(), 5.0, 1e-12);
         // Normal is symmetric/mesokurtic, preserved under affine maps.
-        close(t.skewness(), 0.0, 1e-12);
-        close(t.kurtosis(), 0.0, 1e-12);
+        assert_close!(t.skewness(), 0.0, 1e-12);
+        assert_close!(t.kurtosis(), 0.0, 1e-12);
     }
 
     #[test]
@@ -165,9 +225,9 @@ mod tests {
         // skewness flips sign (odd), excess kurtosis is invariant (even).
         let base = Exponential::new(2.0).unwrap(); // mean 0.5, var 0.25, skew 2, kurt 6
         let t = Transformed::new(base, Affine::new(-1.0, 5.0).unwrap());
-        close(t.mean(), -base.mean() + 5.0, 1e-12);
-        close(t.variance(), base.variance(), 1e-12);
-        close(t.skewness(), -base.skewness(), 1e-12);
-        close(t.kurtosis(), base.kurtosis(), 1e-12);
+        assert_close!(t.mean(), -base.mean() + 5.0, 1e-12);
+        assert_close!(t.variance(), base.variance(), 1e-12);
+        assert_close!(t.skewness(), -base.skewness(), 1e-12);
+        assert_close!(t.kurtosis(), base.kurtosis(), 1e-12);
     }
 }

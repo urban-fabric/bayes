@@ -15,25 +15,25 @@
 //! - [`ChiSquaredDivergence`] — `χ² = ∫(p − q)²/q`, with `D_KL ≤ χ²`.
 //! - [`RenyiDivergence`] — the order-`α` family interpolating KL (`α→1`),
 //!   Hellinger (`α=½`), and χ² (`α=2`).
-//! - [`mutual_information`] / [`joint_entropy`] / [`conditional_entropy`] /
+//! - [`mutual_information`](fn@mutual_information) / [`joint_entropy`] / [`conditional_entropy`] /
 //!   [`variation_of_information`] / [`normalized_mutual_information`] — the full information
 //!   diagram over a joint table: `I(X;Y) ≥ 0`, `H(X,Y)`, `H(Y|X) ≥ 0`, the VI metric, and
 //!   the `[0,1]`-normalized MI.
 //!
 //! KL (and its free Jeffreys symmetrization) has the widest coverage. Hellinger,
 //! Rényi, and χ² are closed-form across the Gaussian
-//! ([`Normal`](crate::Normal), [`HalfNormal`](crate::HalfNormal),
-//! [`LogNormal`](crate::LogNormal)), gamma
-//! ([`Gamma`](crate::Gamma), [`ChiSquared`](crate::ChiSquared),
-//! [`InverseGamma`](crate::InverseGamma)), directional
-//! ([`VonMises`](crate::VonMises)), inverse-Gaussian ([`Wald`](crate::Wald)),
-//! uniform, and finite-support discrete ([`Binomial`](crate::Binomial),
-//! [`NegativeBinomial`](crate::NegativeBinomial), …) families where the relevant
+//! ([`Normal`], [`HalfNormal`],
+//! [`LogNormal`]), gamma
+//! ([`Gamma`], [`ChiSquared`],
+//! [`InverseGamma`]), directional
+//! ([`VonMises`]), inverse-Gaussian ([`Wald`]),
+//! uniform, and finite-support discrete ([`Binomial`],
+//! [`NegativeBinomial`], …) families where the relevant
 //! integral or sum collapses. Jensen–Shannon and total variation stay restricted
-//! to the finite-support discretes ([`Bernoulli`](crate::Bernoulli),
-//! [`Categorical`](crate::Categorical)), where the mixture/sum stays in-family.
-//! Several heavier-tailed families ([`Gumbel`](crate::Gumbel),
-//! [`Frechet`](crate::Frechet)) expose KL only — their other divergences have no
+//! to the finite-support discretes ([`Bernoulli`],
+//! [`Categorical`]), where the mixture/sum stays in-family.
+//! Several heavier-tailed families ([`Gumbel`],
+//! [`Frechet`]) expose KL only — their other divergences have no
 //! general closed form.
 //!
 //! **Every guarantee is machine-checked** in the `riemann` Lean development
@@ -48,7 +48,7 @@
 //!
 //! The per-family closed forms above each instantiate one general object: the
 //! **f-divergence** `D_f(p ‖ q) = Σ qᵢ f(pᵢ/qᵢ)` for a convex generator `f` with
-//! `f(1) = 0`. The [`fdiv`] submodule exposes it generically over probability
+//! `f(1) = 0`. The `fdiv` submodule exposes it generically over probability
 //! vectors — one [`f_divergence`] function with pluggable [`FGenerator`]s
 //! ([`Kl`], [`ReverseKl`], [`ChiSquaredGen`], [`SquaredHellinger`],
 //! [`TotalVariationGen`], [`Jeffreys`], [`Alpha`]) — plus the [`Channel`]
@@ -58,9 +58,9 @@
 //!
 //! ## Information measures over probability vectors
 //!
-//! The [`info`] submodule rounds out the discrete information-theory toolkit on
+//! The `info` submodule rounds out the discrete information-theory toolkit on
 //! the same `&[f64]` representation: [`shannon_entropy`], [`cross_entropy`],
-//! [`jensen_shannon`], and [`bhattacharyya_coefficient`] — entropy/cross-entropy,
+//! [`jensen_shannon`](fn@jensen_shannon), and [`bhattacharyya_coefficient`] — entropy/cross-entropy,
 //! the symmetric bounded JS divergence, and the Hellinger affinity — plus the
 //! **maximum-entropy** surface [`max_entropy`], [`normalized_entropy`] (the
 //! `H/ln n ∈ [0, 1]` equitability index), and the [`is_entropy_admissible`]
@@ -74,7 +74,7 @@
 // Private: not re-exported — divergence's own public surface stays its trait set.
 #[allow(unused_imports)]
 use bayes_distribution::*;
-use euclid::Real;
+use euclid_numeric::Real;
 
 mod chi_squared;
 mod fdiv;
@@ -93,6 +93,25 @@ mod tests;
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests_families;
+
+/// `select(converges, value, inf)` that does **not** turn a `NaN` into an
+/// infinity.
+///
+/// A convergence guard is a comparison, and every comparison against `NaN` is
+/// false — so the plain form reports a confident `inf` for a parameter that was
+/// never a number. `Normal::new(0.0, f64::NAN)` gave a chi-squared divergence
+/// of `inf`, which reads as "disjoint supports" rather than "bad input".
+///
+/// `witness` is the guard's own numeric operand, not the computed value: at the
+/// exact boundary of divergence the value may legitimately be `NaN` while the
+/// right answer is `inf`, so testing the value would trade one wrong answer for
+/// another.
+fn guarded<R: euclid_numeric::Real>(converges: &R::Mask, value: R, witness: R) -> R {
+    // `le` against itself is true for every number and false only for `NaN`.
+    let is_number = witness.le(&witness);
+    let guarded = R::select(converges, value, R::infinity());
+    R::select(&is_number, guarded, R::nan())
+}
 
 pub use chi_squared::ChiSquaredDivergence;
 pub use fdiv::{

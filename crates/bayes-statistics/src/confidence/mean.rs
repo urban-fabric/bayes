@@ -70,10 +70,7 @@ pub fn mean_difference_welch_interval(a: &[f64], b: &[f64], level: f64) -> Confi
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn t_interval_brackets_the_mean() {
@@ -88,7 +85,7 @@ mod tests {
     fn z_interval_known_width() {
         let data = [10.0, 10.0, 10.0, 10.0];
         let ci = mean_z_interval(&data, 2.0, 0.95);
-        close(ci.upper - 10.0, 1.959_963_98, 1e-4);
+        assert_close!(ci.upper - 10.0, 1.959_963_98, 1e-4);
     }
 
     #[test]
@@ -96,6 +93,6 @@ mod tests {
         let a = [10.0, 11.0, 12.0, 13.0];
         let b = [5.0, 6.0, 7.0, 8.0];
         let ci = mean_difference_welch_interval(&a, &b, 0.95);
-        close((ci.lower + ci.upper) / 2.0, mean(&a) - mean(&b), 1e-12);
+        assert_close!((ci.lower + ci.upper) / 2.0, mean(&a) - mean(&b), 1e-12);
     }
 }

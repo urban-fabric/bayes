@@ -5,13 +5,13 @@
 //! residuals. Scalar constants come from [`Real::scalar`] and its helper
 //! methods, while precomputed special-function normalizers remain caller inputs.
 //! Concrete callers such as `f64`/`f32` satisfy the same lazy formulas through
-//! [`euclid::numeric::Real`].
+//! [`euclid_numeric::Real`].
 //!
 //! These mirror selected hot closed forms; the owning distribution types (e.g.
-//! [`Normal`](crate::Normal)) remain the semantic authority, and their scalar
+//! `Normal` in `bayes-distribution`) remain the semantic authority, and their scalar
 //! methods are parity-tested against these generic primitives.
 
-use euclid::numeric::{Complex, Real};
+use euclid_numeric::{Complex, Real};
 
 /// Gaussian quadratic log-kernel `-½·((x-µ)/σ)²`, written over the lazy real
 /// analysis surface.

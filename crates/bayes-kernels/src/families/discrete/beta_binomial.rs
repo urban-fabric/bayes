@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 pub use crate::families::continuous::beta::beta_binomial_log_predictive;
 

@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 /// Lomax log-density on `x >= 0`.
 pub fn lomax_log_pdf_on_support<T: Real>(x: T, shape: T, scale: T) -> T {
@@ -8,7 +8,11 @@ pub fn lomax_log_pdf_on_support<T: Real>(x: T, shape: T, scale: T) -> T {
 
 /// Lomax CDF on `x >= 0`.
 pub fn lomax_cdf_on_support<T: Real>(x: T, shape: T, scale: T) -> T {
-    T::one() - (-(shape * (T::one() + x / scale).ln())).exp()
+    // Two corrections to `1 - (1 + x/scale)^-shape`, both at the bottom of
+    // the range: `ln_1p(x/scale)` keeps the ratio when it is tiny, and
+    // `expm1` keeps the result after the power. Together they take the CDF
+    // near zero from eight significant digits to full precision.
+    -((-(shape * (x / scale).ln_1p())).exp_m1())
 }
 
 /// Lomax CDF with the below-support floor folded in.
@@ -27,7 +31,17 @@ pub fn lomax_ln_sf<T: Real>(x: T, shape: T, scale: T) -> T {
 }
 
 /// Lomax quantile.
-pub fn lomax_quantile<T: Real>(p: T, scale: T, shape: T) -> T {
-    let base = T::one() - p;
-    scale * (((-(T::one() / shape)) * base.ln()).exp() - T::one())
+/// Takes `(shape, scale)`, matching [`lomax_cdf`] and [`lomax_ln_sf`].
+///
+/// It used to take them the other way round — the only kernel in the family
+/// that did. Nothing caught it because both are positive reals, so calling
+/// it by analogy with its own CDF silently returned a Lomax with the shape
+/// and scale exchanged.
+///
+/// `expm1` for the final step: near `p = 0` the quantile is
+/// `scale·(e^t − 1)` for a tiny `t`, and the subtraction loses it.
+pub fn lomax_quantile<T: Real>(p: T, shape: T, scale: T) -> T {
+    // `ln_1p(-p)` rather than `ln(1 - p)`: see `exponential_quantile`.
+    let log_base = (-p).ln_1p();
+    scale * ((-(T::one() / shape)) * log_base).exp_m1()
 }

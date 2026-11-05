@@ -2,6 +2,7 @@
 //! families. Every closed form is checked against a trapezoid integral (continuous)
 //! or a finite pmf sum (discrete), plus the algebraic Rényi-limit identities
 //! (`α→1` is KL, `α=½` is `−2 ln(1−H²)`, `α=2` is `ln(1+χ²)`).
+use bayes_core::assert_close;
 
 #[allow(unused_imports)]
 use super::*;
@@ -13,10 +14,6 @@ use crate::{
 };
 #[allow(unused_imports)]
 use std::f64::consts::PI;
-
-fn close(a: f64, b: f64, tol: f64) {
-    assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-}
 
 /// Trapezoid integral of `f` over `[lo, hi]` with `n` panels.
 fn integ(lo: f64, hi: f64, n: usize, f: impl Fn(f64) -> f64) -> f64 {
@@ -78,13 +75,13 @@ where
         + ChiSquaredDivergence<Output = f64>
         + RenyiDivergence<Output = f64>,
 {
-    close(a.renyi_divergence(b, 1.0), a.kl_divergence(b), 1e-9);
-    close(
+    assert_close!(a.renyi_divergence(b, 1.0), a.kl_divergence(b), 1e-9);
+    assert_close!(
         a.renyi_divergence(b, 0.5),
         -2.0 * (1.0 - a.hellinger_sq(b)).ln(),
         1e-9,
     );
-    close(
+    assert_close!(
         a.renyi_divergence(b, 2.0),
         (1.0 + a.chi_squared_divergence(b)).ln(),
         1e-9,

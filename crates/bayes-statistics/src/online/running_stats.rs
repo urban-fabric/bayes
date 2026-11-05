@@ -2,7 +2,7 @@
 //! skewness, kurtosis, and extrema, via Welford's running-moment recurrences
 //! (Terriberry's extension to the third and fourth moments).
 
-use euclid::{Compare, Real};
+use euclid_numeric::{Compare, Real};
 
 /// A running accumulator of summary statistics over a stream of [`Real`] values.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -235,10 +235,7 @@ where
 mod tests {
     use super::*;
     use crate::summary::{kurtosis, mean, skewness, variance};
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn matches_the_batch_statistics() {
@@ -246,10 +243,10 @@ mod tests {
             .map(|i| (i as f64 * 0.31).sin() * 10.0 + 3.0)
             .collect();
         let rs: RunningStats = data.iter().copied().collect();
-        close(rs.mean(), mean(&data), 1e-9);
-        close(rs.variance(), variance(&data), 1e-7);
-        close(rs.skewness(), skewness(&data), 1e-6);
-        close(rs.kurtosis(), kurtosis(&data), 1e-6);
+        assert_close!(rs.mean(), mean(&data), 1e-9);
+        assert_close!(rs.variance(), variance(&data), 1e-7);
+        assert_close!(rs.skewness(), skewness(&data), 1e-6);
+        assert_close!(rs.kurtosis(), kurtosis(&data), 1e-6);
         assert_eq!(rs.count(), 500);
     }
 
@@ -260,10 +257,10 @@ mod tests {
         let mut a: RunningStats = data[..137].iter().copied().collect();
         let b: RunningStats = data[137..].iter().copied().collect();
         a.merge(&b);
-        close(a.mean(), whole.mean(), 1e-9);
-        close(a.variance(), whole.variance(), 1e-7);
-        close(a.skewness(), whole.skewness(), 1e-6);
-        close(a.kurtosis(), whole.kurtosis(), 1e-6);
+        assert_close!(a.mean(), whole.mean(), 1e-9);
+        assert_close!(a.variance(), whole.variance(), 1e-7);
+        assert_close!(a.skewness(), whole.skewness(), 1e-6);
+        assert_close!(a.kurtosis(), whole.kurtosis(), 1e-6);
     }
 
     #[test]
@@ -278,10 +275,10 @@ mod tests {
             .iter()
             .map(|s| s.iter().copied().collect::<RunningStats>())
             .sum();
-        close(merged.mean(), whole.mean(), 1e-9);
-        close(merged.variance(), whole.variance(), 1e-7); // merge_mean / merge_m2
-        close(merged.skewness(), whole.skewness(), 1e-6);
-        close(merged.kurtosis(), whole.kurtosis(), 1e-6);
+        assert_close!(merged.mean(), whole.mean(), 1e-9);
+        assert_close!(merged.variance(), whole.variance(), 1e-7); // merge_mean / merge_m2
+        assert_close!(merged.skewness(), whole.skewness(), 1e-6);
+        assert_close!(merged.kurtosis(), whole.kurtosis(), 1e-6);
         assert_eq!(merged.count(), 400);
     }
 

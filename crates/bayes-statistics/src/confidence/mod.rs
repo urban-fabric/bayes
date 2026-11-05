@@ -16,8 +16,7 @@
 //! support) and carry a *guaranteed* bound — each backed by a machine-checked theorem in
 //! riemann `RiemannLean/Bayes/Inequalities.lean`.
 
-use euclid::Real;
-use std::f64::consts::SQRT_2;
+use bayes_distribution_ext::{ContinuousCdf, Normal};
 
 mod chi_squared;
 mod concentration;
@@ -56,9 +55,20 @@ impl ConfidenceInterval {
     }
 }
 
-/// Standard-normal quantile `Φ⁻¹(q)` via the inverse error function.
+/// Standard-normal quantile `Φ⁻¹(q)`.
+///
+/// Delegates rather than repeating the formula, because the obvious one —
+/// `√2·erf_inv(2q − 1)` — loses the argument to cancellation for a `q` near
+/// either end: at `q = 1 − 1e-17` the subtraction gives exactly `1` and the
+/// answer comes back infinite. A confidence level of `1 − 1e-12` is not
+/// absurd for a multiplicity-corrected bound, and that is already inside the
+/// range where the subtraction has started eating digits. See
+/// `bayes_kernels::normal_quantile`, which this reaches through [`Normal`].
 fn z_quantile(q: f64) -> f64 {
-    SQRT_2 * (2.0 * q - 1.0).erf_inv()
+    // The only way `new` fails is a non-finite or non-positive scale, and 0
+    // and 1 are neither, so this branch is unreachable by construction.
+    let standard = Normal::new(0.0, 1.0).unwrap_or_else(|_| unreachable!());
+    standard.inverse_cdf(q)
 }
 
 fn invalid(level: f64) -> ConfidenceInterval {

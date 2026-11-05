@@ -6,7 +6,7 @@ use crate::{
     InverseGamma, LogNormal, NegativeBinomial, Normal, Poisson, Uniform, VonMises, Wald,
 };
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Integer, Natural, Real};
+use euclid_numeric::{Boolean, Compare, Integer, Natural, Real};
 
 /// The **chi-squared (Pearson) divergence** `chi2(p || q) = integral (p - q)^2/q`,
 /// in `[0, infinity]`. Implemented where it is a closed form.
@@ -38,9 +38,10 @@ impl<R: Real> ChiSquaredDivergence for Exponential<R> {
 
     fn chi_squared_divergence(&self, other: &Self) -> R {
         let (l1, l2) = (self.rate(), other.rate());
+        let witness = l1.clone() + l2.clone();
         let finite = (R::two() * l1.clone()).gt(&l2);
         let value = kernels::chi_squared_exponential_on_support(l1, l2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -81,9 +82,10 @@ impl<R: Real> ChiSquaredDivergence for Normal<R> {
         let (m1, s1) = self.params();
         let (m2, s2) = other.params();
         let denom = R::two() * s2.clone() * s2.clone() - s1.clone() * s1.clone();
+        let witness = denom.clone();
         let finite = denom.gt(&R::zero());
         let value = kernels::chi_squared_normal_on_support(m1, s1, m2, s2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -93,9 +95,10 @@ impl<R: Real> ChiSquaredDivergence for LogNormal<R> {
     fn chi_squared_divergence(&self, other: &Self) -> R {
         let (s1, s2) = (self.sigma(), other.sigma());
         let denom = R::two() * s2.clone() * s2.clone() - s1.clone() * s1.clone();
+        let witness = denom.clone();
         let finite = denom.gt(&R::zero());
         let value = kernels::chi_squared_normal_on_support(self.mu(), s1, other.mu(), s2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -105,9 +108,10 @@ impl<R: Real> ChiSquaredDivergence for HalfNormal<R> {
     fn chi_squared_divergence(&self, other: &Self) -> R {
         let (s1, s2) = (self.scale(), other.scale());
         let denom = R::two() * s2.clone() * s2.clone() - s1.clone() * s1.clone();
+        let witness = denom.clone();
         let finite = denom.gt(&R::zero());
         let value = kernels::chi_squared_normal_on_support(R::zero(), s1, R::zero(), s2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -119,9 +123,10 @@ impl<R: Real> ChiSquaredDivergence for Gamma<R> {
         let (a2, b2) = (other.shape(), other.rate());
         let a = R::two() * a1.clone() - a2.clone();
         let b = R::two() * b1.clone() - b2.clone();
+        let witness = a.clone() + b.clone();
         let finite = a.gt(&R::zero()).and(&b.gt(&R::zero()));
         let value = kernels::chi_squared_gamma_on_support(a1, b1, a2, b2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -132,9 +137,10 @@ impl<R: Real> ChiSquaredDivergence for ChiSquared<R> {
         let a1 = R::half() * self.freedom();
         let a2 = R::half() * other.freedom();
         let a = R::two() * a1.clone() - a2.clone();
+        let witness = a.clone();
         let finite = a.gt(&R::zero());
         let value = kernels::chi_squared_gamma_on_support(a1, R::half(), a2, R::half());
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -146,9 +152,10 @@ impl<R: Real> ChiSquaredDivergence for InverseGamma<R> {
         let (a2, b2) = (other.shape(), other.scale());
         let a = R::two() * a1.clone() - a2.clone();
         let b = R::two() * b1.clone() - b2.clone();
+        let witness = a.clone() + b.clone();
         let finite = a.gt(&R::zero()).and(&b.gt(&R::zero()));
         let value = kernels::chi_squared_gamma_on_support(a1, b1, a2, b2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -161,9 +168,10 @@ impl<R: Real> ChiSquaredDivergence for Wald<R> {
         let la = R::two() * l1.clone() - l2.clone();
         let aa = R::two() * l1.clone() / (m1.clone() * m1.clone())
             - l2.clone() / (m2.clone() * m2.clone());
+        let witness = la.clone() + aa.clone();
         let finite = la.gt(&R::zero()).and(&aa.gt(&R::zero()));
         let value = kernels::chi_squared_wald_on_support(m1, l1, m2, l2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }
 
@@ -228,8 +236,9 @@ impl<R: Real> ChiSquaredDivergence for NegativeBinomial<R> {
         let (p1, p2) = (self.p(), other.p());
         let q1 = R::one() - p1.clone();
         let z = q1.clone() * q1 / (R::one() - p2.clone());
+        let witness = z.clone();
         let finite = same_successes.and(&z.lt(&R::one()));
         let value = kernels::chi_squared_negative_binomial_on_support(successes, p1, p2);
-        R::select(&finite, value, R::infinity())
+        crate::guarded(&finite, value, witness)
     }
 }

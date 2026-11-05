@@ -7,9 +7,17 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 
 [dependencies]
-euclid.workspace = true
+euclid-numeric.workspace = true
+
+# Dev-only, and a cycle on purpose: `bayes-utils` reaches these kernels through
+# `bayes-distribution-ext`. Cargo permits a cycle that exists only across dev
+# edges, which is what lets the canonical probes serve this crate too — the
+# same arrangement the workspace manifest describes for every other suite.
+[dev-dependencies]
+bayes-utils.workspace = true
 
 [lints]
 workspace = true

@@ -1,5 +1,5 @@
 use crate::families::common::gaussian_bc;
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 pub use crate::primitives::{
     complex_normal_log_prob_with_normalizer, complex_residual_norm_sqr, normal_log_kernel,
@@ -36,9 +36,29 @@ pub fn normal_ln_sf<T: Real>(x: T, mean: T, std_dev: T) -> T {
     T::select(&z.ge(&T::zero()), right, left_ln_cdf.ln_1m_exp())
 }
 
-/// Normal quantile `mean + std_dev * sqrt(2) * erf_inv(2p - 1)`.
+/// Normal quantile, via `erfc_inv` on whichever tail keeps its argument exact.
+///
+/// # Why not `erf_inv(2p − 1)`
+///
+/// The textbook form destroys its own input. At `p = 1e-20` the expression
+/// `2p − 1` is **exactly** `−1.0`, because `1 − 2e-20` is not representable —
+/// so `erf_inv` is handed the endpoint of its domain and returns `−inf` for a
+/// quantile whose true value is `−9.26`. The damage starts far earlier than the
+/// hard failure: by `p = 1e-6` only about ten digits of the deviation from `−1`
+/// survive the subtraction, and `erf_inv` is steep there, which showed up as a
+/// `4e-7` error in the round trip `z → sf → isf` at `z = 6`.
+///
+/// `Φ⁻¹(p) = −√2·erfc_inv(2p)` is the same function without the subtraction.
+/// Doubling is exact for every representable `p` — it only moves the exponent —
+/// so the lower tail is good down to about `1e-308`. The upper tail is taken as
+/// `+√2·erfc_inv(2(1 − p))`, which is the best available there: once a caller
+/// has rounded `p` to `1 − 1e-20`, the information is already gone, and the way
+/// to ask that question is the inverse *survival*, with the small argument
+/// kept intact.
 pub fn normal_quantile<T: Real>(p: T, mean: T, std_dev: T) -> T {
-    mean + std_dev * T::sqrt_2() * (T::two() * p - T::one()).erf_inv()
+    let lower = -(T::two() * p.clone()).erfc_inv();
+    let upper = (T::two() * (T::one() - p.clone())).erfc_inv();
+    mean + std_dev * T::sqrt_2() * T::select(&p.le(&T::half()), lower, upper)
 }
 
 /// Normal entropy `0.5 * ln(2*pi*e*std_dev^2)`.

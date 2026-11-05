@@ -4,12 +4,29 @@ use rand::{Rng, RngExt};
 use crate::normal::standard_normal_polar;
 use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Compare, Real};
+use euclid_numeric::{Boolean, Compare, Real};
 
 /// The gamma distribution with `shape (k) > 0` and `rate (β) > 0` (mean `k/β`),
 /// support `(0, ∞)`. Density `f(x) = βᵏ x^{k-1} e^{-βx} / Γ(k)`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Continuous, Exponential, Gamma, Moments};
+///
+/// // Shape 1 is the exponential; integer shape k is a sum of k of them.
+/// assert!((Gamma::new(1.0, 2.0)?.pdf(1.0_f64) - Exponential::new(2.0)?.pdf(1.0_f64)).abs() < 1e-12);
+///
+/// let g = Gamma::new(3.0, 1.5)?;
+/// assert!((g.mean() - 2.0).abs() < 1e-12);              // shape / rate
+/// assert!((g.variance() - 3.0 / 2.25).abs() < 1e-12);   // shape / rate^2
+///
+/// // Below shape 1 the density diverges at the origin.
+/// assert!(Gamma::new(0.5, 1.0)?.pdf(1e-12_f64) > Gamma::new(0.5, 1.0)?.pdf(1.0_f64));
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Gamma {
     shape: f64,
@@ -18,14 +35,7 @@ pub struct Gamma {
 
 impl Gamma {
     pub fn new(shape: f64, rate: f64) -> Result<Self, BayesError> {
-        for (name, v) in [("shape", shape), ("rate", rate)] {
-            if !v.is_finite() {
-                return Err(BayesError::NonFinite { name, value: v });
-            }
-            if v <= 0.0 {
-                return Err(BayesError::NotPositive { name, value: v });
-            }
-        }
+        validate::positive(&[("shape", shape), ("rate", rate)])?;
         Ok(Self { shape, rate })
     }
 
@@ -108,6 +118,11 @@ impl<T: Real> ContinuousCdf<T> for Gamma {
     fn inverse_cdf(&self, p: T) -> T {
         kernels::inverse_cdf_bisect(|x| self.cdf(x), T::zero(), T::infinity(), p)
     }
+
+    /// `ln Q(k, βx)`, the upper regularized incomplete gamma.
+    fn ln_sf(&self, x: T) -> T {
+        kernels::gamma_ln_sf(x, T::scalar(self.shape()), T::scalar(self.rate()))
+    }
 }
 
 impl Moments for Gamma {
@@ -187,7 +202,10 @@ where
 
     fn ln_pdf(&self, x: T) -> T {
         let zero = T::zero();
-        let valid = x.gt(&zero);
+        // `is_finite` belongs in the support test rather than beside it: at an infinite
+        // argument the kernel evaluates a log term against a linear one, which is
+        // `inf - inf = NaN`, so `pdf(inf)` came back `NaN` when the density there is 0.
+        let valid = x.gt(&zero).and(&x.is_finite());
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }
@@ -196,28 +214,25 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn gamma_reduces_to_exponential_at_shape_one() {
         let g = Gamma::new(1.0, 2.0).unwrap();
-        close(g.cdf(1.0), 1.0 - (-2.0f64).exp(), 1e-10);
-        close(g.pdf(0.5), 2.0 * (-1.0f64).exp(), 1e-10);
+        assert_close!(g.cdf(1.0), 1.0 - (-2.0f64).exp(), 1e-10);
+        assert_close!(g.pdf(0.5), 2.0 * (-1.0f64).exp(), 1e-10);
     }
 
     #[test]
     fn cdf_quantile_round_trip_and_moments() {
         let g = Gamma::new(3.5, 1.5).unwrap();
         for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
-            close(g.cdf(g.inverse_cdf(p)), p, 1e-8);
+            assert_close!(g.cdf(g.inverse_cdf(p)), p, 1e-8);
         }
-        close(g.mean(), 3.5 / 1.5, 1e-12);
-        close(g.variance(), 3.5 / (1.5 * 1.5), 1e-12);
+        assert_close!(g.mean(), 3.5 / 1.5, 1e-12);
+        assert_close!(g.variance(), 3.5 / (1.5 * 1.5), 1e-12);
     }
 
     #[test]
@@ -226,7 +241,7 @@ mod tests {
         let g = Gamma::new(2.7, 0.8).unwrap();
         let n = 60_000;
         let s: f64 = (0..n).map(|_| g.sample(&mut rng)).sum();
-        close(s / n as f64, g.mean(), 0.03);
+        assert_close!(s / n as f64, g.mean(), 0.03);
     }
 
     #[test]
@@ -234,9 +249,9 @@ mod tests {
         let a = Gamma::new(2.0, 3.0).unwrap();
         let b = Gamma::new(5.0, 3.0).unwrap();
         let sum = Gamma::sum_independent_same_rate(&[a, b]).unwrap();
-        close(sum.shape(), 7.0, 1e-12);
-        close(sum.rate(), 3.0, 1e-12);
-        close(sum.mean(), a.mean() + b.mean(), 1e-12);
+        assert_close!(sum.shape(), 7.0, 1e-12);
+        assert_close!(sum.rate(), 3.0, 1e-12);
+        assert_close!(sum.mean(), a.mean() + b.mean(), 1e-12);
         assert!(Gamma::sum_independent_same_rate(&[]).is_err());
         assert!(Gamma::sum_independent_same_rate(&[a, Gamma::new(1.0, 4.0).unwrap()]).is_err());
     }

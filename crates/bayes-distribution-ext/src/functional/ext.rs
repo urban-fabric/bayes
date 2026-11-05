@@ -10,7 +10,7 @@ use bayes_distribution::functional::{
     ContinuousDistributionExt as BaseContinuousDistributionExt,
     DiscreteDistributionExt as BaseDiscreteDistributionExt,
 };
-use euclid::Natural;
+use euclid_numeric::Natural;
 
 /// Functional operations for any continuous distribution.
 pub trait ContinuousDistributionExt:

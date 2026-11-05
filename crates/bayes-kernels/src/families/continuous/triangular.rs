@@ -1,4 +1,4 @@
-use euclid::numeric::{Boolean, Real};
+use euclid_numeric::{Boolean, Real};
 
 /// Triangular PDF on `[lo, hi]` with mode `mode`.
 pub fn triangular_pdf<T: Real>(x: T, lo: T, hi: T, mode: T) -> T {

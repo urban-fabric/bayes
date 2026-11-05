@@ -3,12 +3,28 @@ use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Compare, Real};
+use euclid_numeric::{Compare, Real};
 
 /// The Pareto distribution with `scale x_m > 0` (the minimum) and `shape α > 0`,
 /// support `[x_m, ∞)`. Density `f(x) = α x_mᵅ / x^{α+1}` for `x ≥ x_m`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{ContinuousCdf, Moments, Pareto};
+///
+/// // Scale-free: doubling the argument always removes the same fraction of the
+/// // remaining tail, so F(2 * scale) = 1 - 2^-shape whatever the scale is.
+/// let p = Pareto::new(1.0, 3.0)?;
+/// assert!((p.cdf(2.0_f64) - 0.875).abs() < 1e-12);
+/// assert!((p.mean() - 1.5).abs() < 1e-12);     // scale * shape / (shape - 1)
+///
+/// // The shape is a tail index: below 2 there is no variance.
+/// assert!(Pareto::new(1.0, 1.5)?.variance().is_nan());
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pareto {
     scale: f64,
@@ -17,14 +33,7 @@ pub struct Pareto {
 
 impl Pareto {
     pub fn new(scale: f64, shape: f64) -> Result<Self, BayesError> {
-        for (name, v) in [("scale", scale), ("shape", shape)] {
-            if !v.is_finite() {
-                return Err(BayesError::NonFinite { name, value: v });
-            }
-            if v <= 0.0 {
-                return Err(BayesError::NotPositive { name, value: v });
-            }
-        }
+        validate::positive(&[("scale", scale), ("shape", shape)])?;
         Ok(Self { scale, shape })
     }
 
@@ -62,6 +71,15 @@ impl<T: Real> ContinuousCdf<T> for Pareto {
             T::scalar(self.scale),
             T::scalar(self.shape),
         )
+    }
+
+    /// `α(ln x_m − ln x)`: a power-law survival is exactly linear in logs.
+    fn ln_sf(&self, x: T) -> T {
+        kernels::pareto_ln_sf(x, T::scalar(self.scale()), T::scalar(self.shape()))
+    }
+    /// `x_m p^{−1/α}`.
+    fn isf(&self, p: T) -> T {
+        kernels::pareto_isf(p, T::scalar(self.scale()), T::scalar(self.shape()))
     }
 }
 
@@ -148,20 +166,17 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn cdf_quantile_and_moments() {
         let p = Pareto::new(2.0, 3.0).unwrap();
-        close(p.cdf(2.0), 0.0, 1e-12);
-        close(p.cdf(4.0), 1.0 - (0.5f64).powi(3), 1e-12);
+        assert_close!(p.cdf(2.0), 0.0, 1e-12);
+        assert_close!(p.cdf(4.0), 1.0 - (0.5f64).powi(3), 1e-12);
         for &q in &[0.1, 0.5, 0.9] {
-            close(p.cdf(p.inverse_cdf(q)), q, 1e-10);
+            assert_close!(p.cdf(p.inverse_cdf(q)), q, 1e-10);
         }
-        close(p.mean(), 3.0 * 2.0 / 2.0, 1e-12);
+        assert_close!(p.mean(), 3.0 * 2.0 / 2.0, 1e-12);
         assert!(Pareto::new(1.0, 1.5).unwrap().variance().is_nan());
         assert!(Pareto::new(1.0, 0.8).unwrap().mean().is_nan());
     }

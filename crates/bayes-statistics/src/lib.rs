@@ -28,7 +28,7 @@
 //!   quantile sketch (single-pass and mergeable).
 //!
 //! Summary/order stats are available both as free functions and as the
-//! [`SampleStats`] extension trait on `[f64]`, so `bayes::statistics::mean(data)`
+//! [`SampleStats`] extension trait on `[f64]`, so `bayes_statistics::mean(data)`
 //! and `data.mean()` both work. Degenerate inputs yield `f64::NAN`, never panic.
 
 mod confidence;
@@ -39,6 +39,7 @@ mod estimation;
 pub mod hypothesis;
 mod inequalities;
 mod kde;
+pub mod multiple;
 mod multivariate;
 mod online;
 mod order;

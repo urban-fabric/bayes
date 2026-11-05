@@ -1,7 +1,7 @@
 use crate::{Discrete, DiscreteCdf, Moments, Support};
 use bayes_core::BayesError;
 use bayes_kernels as kernels;
-use euclid::{Compare, Real};
+use euclid_numeric::{Compare, Real};
 
 /// A categorical distribution over integer categories `{0, ..., k - 1}`.
 ///
@@ -200,20 +200,17 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core::assert_close;
 
     #[test]
     fn normalizes_weights_and_pmf_cdf() {
         let c = Categorical::new(&[1.0, 3.0]).unwrap();
-        close(c.pmf(0), 0.25, 1e-12);
-        close(c.pmf(1), 0.75, 1e-12);
-        close(c.cdf(0), 0.25, 1e-12);
-        close(c.cdf(1), 1.0, 1e-12);
+        assert_close!(c.pmf(0), 0.25, 1e-12);
+        assert_close!(c.pmf(1), 0.75, 1e-12);
+        assert_close!(c.cdf(0), 0.25, 1e-12);
+        assert_close!(c.cdf(1), 1.0, 1e-12);
         assert_eq!(c.mode(), 1.0);
-        close(c.mean(), 0.75, 1e-12);
+        assert_close!(c.mean(), 0.75, 1e-12);
     }
 
     #[test]

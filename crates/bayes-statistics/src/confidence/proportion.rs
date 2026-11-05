@@ -35,9 +35,17 @@ pub fn proportion_wilson(successes: u64, n: u64, level: f64) -> ConfidenceInterv
     let denom = 1.0 + z2 / nf;
     let center = (p + z2 / (2.0 * nf)) / denom;
     let half = (z / denom) * (p * (1.0 - p) / nf + z2 / (4.0 * nf * nf)).sqrt();
+    // Clamped to contain `p` as well as to stay in `[0, 1]`.
+    //
+    // The score statistic is zero at `p̂`, so a Wilson interval provably
+    // contains its own point estimate — but at the boundary counts the
+    // arithmetic does not say so. At `p̂ = 0` the lower bound is analytically
+    // `z²/2n / denom − z²/2n / denom`, exactly zero, and `center - half`
+    // returns `5.6e-17` because the two halves reach `z/2n` by different
+    // routes. A caller asking `interval.contains(0.0)` was told no.
     ConfidenceInterval {
-        lower: (center - half).max(0.0),
-        upper: (center + half).min(1.0),
+        lower: (center - half).max(0.0).min(p),
+        upper: (center + half).min(1.0).max(p),
         level,
     }
 }
@@ -133,17 +141,14 @@ pub fn proportion_difference_wald(
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn wilson_stays_in_unit_interval_at_extremes() {
         let w = proportion_wilson(0, 10, 0.95);
         assert!(w.lower >= 0.0 && w.upper > 0.0 && w.upper < 1.0);
         let mid = proportion_wilson(5, 10, 0.95);
-        close((mid.lower + mid.upper) / 2.0, 0.5, 0.02);
+        assert_close!((mid.lower + mid.upper) / 2.0, 0.5, 0.02);
     }
 
     #[test]
@@ -160,7 +165,7 @@ mod tests {
     #[test]
     fn proportion_difference_interval_centers_on_observed_difference() {
         let pd = proportion_difference_wald(7, 10, 4, 10, 0.95);
-        close((pd.lower + pd.upper) / 2.0, 0.3, 1e-12);
+        assert_close!((pd.lower + pd.upper) / 2.0, 0.3, 1e-12);
     }
 
     #[test]
@@ -168,7 +173,7 @@ mod tests {
         let ci = proportion_wald(30, 100, 0.95);
         let z = z_quantile(0.975);
         let half = z * (0.3 * 0.7 / 100.0_f64).sqrt();
-        close(ci.lower, 0.3 - half, 1e-12);
-        close(ci.upper, 0.3 + half, 1e-12);
+        assert_close!(ci.lower, 0.3 - half, 1e-12);
+        assert_close!(ci.upper, 0.3 + half, 1e-12);
     }
 }

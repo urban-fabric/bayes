@@ -5,12 +5,28 @@ use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Compare, Real};
+use euclid_numeric::{Boolean, Compare, Real};
 
 /// The Rayleigh distribution with scale `σ > 0`, support `[0, ∞)`. Density
 /// `f(x) = (x/σ²) exp(−x²/(2σ²))` — the magnitude of a 2-D centered Gaussian vector.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Continuous, ContinuousCdf, Rayleigh, Weibull};
+///
+/// // The length of a 2-D vector with independent standard normal components,
+/// // so F(scale) = 1 - exp(-1/2).
+/// let r = Rayleigh::new(1.0)?;
+/// assert!((r.cdf(1.0_f64) - (1.0 - (-0.5_f64).exp())).abs() < 1e-12);
+///
+/// // It is exactly the Weibull of shape 2, with the scale stretched by sqrt(2).
+/// let w = Weibull::new(2.0_f64.sqrt(), 2.0)?;
+/// assert!((r.pdf(1.3_f64) - w.pdf(1.3_f64)).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rayleigh {
     scale: f64,
@@ -18,18 +34,7 @@ pub struct Rayleigh {
 
 impl Rayleigh {
     pub fn new(scale: f64) -> Result<Self, BayesError> {
-        if !scale.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "scale",
-                value: scale,
-            });
-        }
-        if scale <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "scale",
-                value: scale,
-            });
-        }
+        validate::positive(&[("scale", scale)])?;
         Ok(Self { scale })
     }
 
@@ -60,6 +65,15 @@ impl<T: Real> ContinuousCdf<T> for Rayleigh {
     fn inverse_cdf(&self, p: T) -> T {
         kernels::rayleigh_quantile(p.clamp(T::zero(), T::one()), T::scalar(self.scale))
     }
+
+    /// `−x²/(2σ²)`, exact.
+    fn ln_sf(&self, x: T) -> T {
+        kernels::rayleigh_ln_sf(x, T::scalar(self.scale()))
+    }
+    /// `σ√(−2 ln p)`.
+    fn isf(&self, p: T) -> T {
+        kernels::rayleigh_isf(p, T::scalar(self.scale()))
+    }
 }
 
 impl Moments for Rayleigh {
@@ -76,7 +90,7 @@ impl Moments for Rayleigh {
         self.scale
     }
     fn entropy(&self) -> f64 {
-        1.0 + (self.scale / 2.0_f64.sqrt()).ln() + 0.577_215_664_901_532_9 / 2.0
+        1.0 + (self.scale / 2.0_f64.sqrt()).ln() + std::f64::consts::EULER_GAMMA / 2.0
     }
     fn std_dev(&self) -> f64 {
         self.variance().sqrt()
@@ -127,7 +141,10 @@ where
 
     fn ln_pdf(&self, x: T) -> T {
         let zero = T::zero();
-        let valid = x.ge(&zero);
+        // `is_finite` belongs in the support test rather than beside it: at an infinite
+        // argument the kernel evaluates a log term against a linear one, which is
+        // `inf - inf = NaN`, so `pdf(inf)` came back `NaN` when the density there is 0.
+        let valid = x.ge(&zero).and(&x.is_finite());
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
     }
 }
@@ -136,19 +153,16 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn cdf_quantile_and_moments() {
         let r = Rayleigh::new(2.0).unwrap();
         for &p in &[0.1, 0.5, 0.9] {
-            close(r.cdf(r.inverse_cdf(p)), p, 1e-12);
+            assert_close!(r.cdf(r.inverse_cdf(p)), p, 1e-12);
         }
-        close(r.mean(), 2.0 * (PI / 2.0).sqrt(), 1e-12);
-        close(r.mode(), 2.0, 1e-12);
-        close(r.pdf(2.0), (2.0 / 4.0) * (-0.5f64).exp(), 1e-12);
+        assert_close!(r.mean(), 2.0 * (PI / 2.0).sqrt(), 1e-12);
+        assert_close!(r.mode(), 2.0, 1e-12);
+        assert_close!(r.pdf(2.0), (2.0 / 4.0) * (-0.5f64).exp(), 1e-12);
     }
 }

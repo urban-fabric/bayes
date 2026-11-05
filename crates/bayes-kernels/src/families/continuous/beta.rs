@@ -1,10 +1,19 @@
 use crate::families::common::ln_beta;
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
-/// Beta log-density on `0 < x < 1`.
+/// Beta log-density on the **closed** `0 ≤ x ≤ 1`.
+///
+/// Written with [`Real::xlogy`] rather than as `(α−1)·ln(x)`, which is what extends it to the
+/// closed interval. At `x = 0` with `α = 1` the direct form is `0 · (−∞) = NaN`, so the endpoints
+/// had to be masked away — and the mask returned a density of *zero* there for every shape, which
+/// is only the right limit when `α > 1`. At `α = 1` the density at zero is `β`, not `0`, so
+/// `Beta(1, 1)` disagreed with the `Uniform(0, 1)` it is supposed to equal.
+///
+/// `xlogy` carries the `0·ln 0 = 0` convention, which delivers all three limits without a branch:
+/// `+∞` for `α < 1`, `ln β` for `α = 1`, `−∞` for `α > 1`.
 pub fn beta_log_pdf_on_unit<T: Real>(x: T, alpha: T, beta: T, ln_beta_ab: T) -> T {
     let one = T::one();
-    (alpha - one.clone()) * x.clone().ln() + (beta - one.clone()) * (one - x).ln() - ln_beta_ab
+    (alpha - one.clone()).xlogy(x.clone()) + (beta - one.clone()).xlogy(one - x) - ln_beta_ab
 }
 
 /// Beta CDF on `0 <= x <= 1`.

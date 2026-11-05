@@ -12,7 +12,7 @@
 //!   (`ε²·P(|S̄ − μ| ≥ ε) ≤ σ²/n`, Bienaymé variance scaling);
 //! - the bounded-support variance cap — `variance_le_sq_half_range` (Popoviciu).
 
-use euclid::{Boolean, Real};
+use euclid_numeric::{Boolean, Real};
 
 use super::{ConfidenceInterval, alpha, invalid, valid_level};
 use crate::{mean, variance};
@@ -201,27 +201,24 @@ pub fn chebyshev_sample_size(variance: f64, eps: f64, level: f64) -> u64 {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn tail_bounds_are_probabilities_and_clamp() {
         // Chebyshev: σ²=4, t=4 → 4/16 = 0.25; t=1 → 4 clamps to 1.
-        close(chebyshev_bound(4.0, 4.0), 0.25, 1e-12);
+        assert_close!(chebyshev_bound(4.0, 4.0), 0.25, 1e-12);
         assert_eq!(chebyshev_bound(4.0, 1.0), 1.0);
         // Cantelli is sharper than (and never exceeds) the two-sided Chebyshev.
         assert!(cantelli_bound(4.0, 4.0) < chebyshev_bound(4.0, 4.0));
         assert!(cantelli_bound(4.0, 4.0) <= 1.0);
         // Markov: E[X]=2, a=8 → 0.25; a=1 → 2 clamps to 1.
-        close(markov_bound(2.0, 8.0), 0.25, 1e-12);
+        assert_close!(markov_bound(2.0, 8.0), 0.25, 1e-12);
         assert_eq!(markov_bound(2.0, 1.0), 1.0);
         // Hoeffding: t=0 → 1; decreasing in t.
-        close(hoeffding_bound(0.0, 1.0, 0.0), 1.0, 1e-12);
+        assert_close!(hoeffding_bound(0.0, 1.0, 0.0), 1.0, 1e-12);
         assert!(hoeffding_bound(0.0, 1.0, 0.5) < 1.0);
         // McDiarmid: t=0 → 1; decreasing in t for fixed bounded-difference mass.
-        close(mcdiarmid_bound(4.0, 0.0), 1.0, 1e-12);
+        assert_close!(mcdiarmid_bound(4.0, 0.0), 1.0, 1e-12);
         assert!(mcdiarmid_bound(4.0, 1.0) < 1.0);
     }
 
@@ -232,7 +229,7 @@ mod tests {
         let (a, b, t) = (0.0_f64, 1.0_f64, 0.5_f64);
         let s = 4.0 * t / ((b - a) * (b - a));
         let mgf = (s * s * (b - a) * (b - a) / 8.0).exp();
-        close(chernoff_bound(mgf, s, t), hoeffding_bound(a, b, t), 1e-12);
+        assert_close!(chernoff_bound(mgf, s, t), hoeffding_bound(a, b, t), 1e-12);
         // it is a probability: an over-large mgf/over-small s clamps to 1.
         assert_eq!(chernoff_bound(2.0, 0.1, 0.0), 1.0);
         assert!(chernoff_bound(-1.0_f64, 1.0, 1.0).is_nan());
@@ -245,7 +242,7 @@ mod tests {
         // (b-a)/n, so Σ c_j² = n·((b-a)/n)² = (b-a)²/n.
         let (a, b, n, eps) = (0.0_f64, 1.0_f64, 25.0_f64, 0.2_f64);
         let sum_sq = (b - a) * (b - a) / n;
-        close(
+        assert_close!(
             mcdiarmid_bound(sum_sq, eps),
             (-2.0 * n * eps * eps).exp(),
             1e-12,
@@ -258,9 +255,9 @@ mod tests {
     #[test]
     fn bernstein_is_sharper_than_hoeffding_for_small_variance() {
         // v=1, b=1, t=2 ⇒ exp(−4/(2·3)) = exp(−2/3).
-        close(bernstein_bound(1.0, 1.0, 2.0), (-2.0f64 / 3.0).exp(), 1e-12);
+        assert_close!(bernstein_bound(1.0, 1.0, 2.0), (-2.0f64 / 3.0).exp(), 1e-12);
         // t=0 ⇒ 1; strictly decreasing in t.
-        close(bernstein_bound(1.0, 1.0, 0.0), 1.0, 1e-12);
+        assert_close!(bernstein_bound(1.0, 1.0, 0.0), 1.0, 1e-12);
         assert!(bernstein_bound(1.0, 1.0, 1.0) < 1.0);
         // a small-variance variable in [−1, 1] (v ≪ c²): Bernstein beats Hoeffding near 0.
         // Hoeffding sees only the range (b−a)=2; Bernstein sees the true variance v=0.04.
@@ -273,12 +270,12 @@ mod tests {
     #[test]
     fn paley_zygmund_lower_bounds_the_tail() {
         // mean=1, E[X²]=2 (Var=1), θ=0.5 ⇒ (0.5)²·1/2 = 0.125.
-        close(paley_zygmund_bound(1.0, 2.0, 0.5), 0.125, 1e-12);
+        assert_close!(paley_zygmund_bound(1.0, 2.0, 0.5), 0.125, 1e-12);
         // θ=0 ⇒ E[X]²/E[X²] = 1/2 (≤ 1 by Cauchy–Schwarz); θ=1 ⇒ 0.
-        close(paley_zygmund_bound(1.0, 2.0, 0.0), 0.5, 1e-12);
-        close(paley_zygmund_bound(1.0, 2.0, 1.0), 0.0, 1e-12);
+        assert_close!(paley_zygmund_bound(1.0, 2.0, 0.0), 0.5, 1e-12);
+        assert_close!(paley_zygmund_bound(1.0, 2.0, 1.0), 0.0, 1e-12);
         // a degenerate constant X≡1 (E[X²]=E[X]²) at θ=0 gives the certain tail P=1.
-        close(paley_zygmund_bound(1.0, 1.0, 0.0), 1.0, 1e-12);
+        assert_close!(paley_zygmund_bound(1.0, 1.0, 0.0), 1.0, 1e-12);
         assert!(paley_zygmund_bound(-1.0_f64, 2.0, 0.5).is_nan());
         assert!(paley_zygmund_bound(1.0_f64, 0.0, 0.5).is_nan());
         assert!(paley_zygmund_bound(1.0_f64, 2.0, 1.5).is_nan());
@@ -302,8 +299,8 @@ mod tests {
         let pop_var = variance(&data) * (n - 1.0) / n;
         assert!(pop_var <= max_variance_for_range(0.0, 1.0) + 1e-12);
         // the two-point {0,1} distribution attains the cap exactly.
-        close(pop_var, max_variance_for_range(0.0, 1.0), 1e-12);
-        close(max_variance_for_range(0.0, 10.0), 25.0, 1e-12);
+        assert_close!(pop_var, max_variance_for_range(0.0, 1.0), 1e-12);
+        assert_close!(max_variance_for_range(0.0, 10.0), 25.0, 1e-12);
     }
 
     #[test]
@@ -332,9 +329,9 @@ mod tests {
     fn bounded_interval_is_guaranteed_and_centered() {
         let data = [0.2, 0.8, 0.5, 0.9, 0.1];
         let ci = mean_chebyshev_interval_bounded(&data, 0.0, 1.0, 0.95);
-        close((ci.lower + ci.upper) / 2.0, mean(&data), 1e-12);
+        assert_close!((ci.lower + ci.upper) / 2.0, mean(&data), 1e-12);
         // half-width = (b-a)/(2√(n·α)) = 1/(2√(5·0.05)).
-        close(
+        assert_close!(
             ci.width() / 2.0,
             1.0 / (2.0 * (5.0f64 * 0.05).sqrt()),
             1e-12,

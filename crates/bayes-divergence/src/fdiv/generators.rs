@@ -1,5 +1,5 @@
 use super::*;
-use euclid::{Compare, Real};
+use euclid_numeric::{Compare, Real};
 
 /// `f(t) = t ln t` — the **Kullback–Leibler** generator. `D_f = Σ pᵢ ln(pᵢ/qᵢ)`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -143,7 +143,7 @@ impl<R: Real> RealFGenerator<R> for Jeffreys {
 /// - `α = 2` is `½ χ²` (half [`ChiSquared`]),
 /// - `α = ½` is `4 ×` [`SquaredHellinger`].
 ///
-/// Distinct from the parent module's [`RenyiDivergence`](super::RenyiDivergence),
+/// Distinct from the parent module's [`RenyiDivergence`](crate::RenyiDivergence),
 /// which is a (monotone) *transform* of the order-`α` divergence rather than an
 /// f-divergence itself. Convex with `f_α(1) = 0` for every `α`, so it inherits
 /// all three `fDiv_*` guarantees.

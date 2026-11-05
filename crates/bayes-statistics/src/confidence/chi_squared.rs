@@ -63,10 +63,7 @@ pub fn std_dev_chi_square_interval(data: &[f64], level: f64) -> ConfidenceInterv
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn variance_and_poisson_intervals_are_ordered() {
@@ -74,7 +71,7 @@ mod tests {
         let v = variance_chi_square_interval(&data, 0.95);
         assert!(v.lower > 0.0 && v.lower < variance(&data) && variance(&data) < v.upper);
         let s = std_dev_chi_square_interval(&data, 0.95);
-        close(s.lower * s.lower, v.lower, 1e-12);
+        assert_close!(s.lower * s.lower, v.lower, 1e-12);
         let rate = poisson_rate_interval(5, 2.0, 0.95);
         assert!(rate.lower >= 0.0 && rate.upper > rate.lower);
     }

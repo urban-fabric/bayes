@@ -6,8 +6,8 @@ use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
 use crate::{Moments, Support};
-use bayes_core_ext::BayesError;
-use euclid::Real;
+use bayes_core_ext::{BayesError, validate};
+use euclid_numeric::Real;
 
 /// The von Mises distribution — the circular analogue of the Normal — with mean
 /// direction `μ` and concentration `κ > 0`, on the circle `[−π, π)`. Density
@@ -17,6 +17,24 @@ use euclid::Real;
 /// Being circular, it implements density, sampling, and circular moments, but not
 /// the real-line [`ContinuousCdf`](crate::ContinuousCdf) (there is no closed-form
 /// circular CDF).
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Continuous, VonMises};
+///
+/// // The circular analogue of a normal: symmetric about mu, and most
+/// // concentrated there.
+/// let v = VonMises::new(0.0, 4.0)?;
+/// assert!(v.pdf(0.0_f64) > v.pdf(1.0_f64));
+/// assert!((v.pdf(0.7_f64) - v.pdf(-0.7_f64)).abs() < 1e-12);
+///
+/// // kappa is a concentration, not a spread: larger means tighter, and the
+/// // circular variance runs the other way, from 0 to 1.
+/// assert!(VonMises::new(0.0, 20.0)?.pdf(0.0_f64) > v.pdf(0.0_f64));
+/// assert!(v.circular_variance() < VonMises::new(0.0, 0.5)?.circular_variance());
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VonMises {
     mu: f64,
@@ -31,18 +49,7 @@ impl VonMises {
                 value: mu,
             });
         }
-        if !kappa.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "kappa",
-                value: kappa,
-            });
-        }
-        if kappa <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "kappa",
-                value: kappa,
-            });
-        }
+        validate::positive(&[("kappa", kappa)])?;
         Ok(Self { mu, kappa })
     }
 
@@ -152,16 +159,54 @@ impl<T: Real> Continuous<T> for VonMises {
     }
 }
 
+/// The circular mean, and Fisher's approximation for the concentration.
+///
+/// Angles cannot be averaged arithmetically: the mean of `0.1` and `6.2`
+/// radians is not `3.15`, which points the opposite way. So the observations
+/// are averaged as **unit vectors**, `μ̂ = atan2(S̄, C̄)` with
+/// `C̄ = Σcos xᵢ/n` and `S̄ = Σsin xᵢ/n`.
+///
+/// The resultant length `R̄ = √(C̄² + S̄²)` carries the concentration through
+/// `R̄ = I₁(κ)/I₀(κ)`, a ratio of Bessel functions with no closed inverse. This
+/// uses Fisher's piecewise rational approximation to that inverse
+/// (*Statistical Analysis of Circular Data*, 1993), which keeps the fit a
+/// formula rather than a solver, at the cost of a little accuracy in `κ`.
+///
+/// `R̄ = 0` means the directions cancel exactly and no mean direction exists;
+/// `R̄ = 1` means they coincide and `κ` is unbounded. Both are refused.
+impl crate::Estimate for VonMises {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        if data.len() < 2 || data.iter().any(|x| !x.is_finite()) {
+            return None;
+        }
+        let n = data.len() as f64;
+        let cosine = data.iter().map(|x| x.cos()).sum::<f64>() / n;
+        let sine = data.iter().map(|x| x.sin()).sum::<f64>() / n;
+        let resultant = (cosine * cosine + sine * sine).sqrt();
+        if resultant <= 0.0 || resultant >= 1.0 {
+            return None;
+        }
+        let kappa = if resultant < 0.53 {
+            resultant * (2.0 + resultant * resultant * (1.0 + 5.0 * resultant * resultant / 6.0))
+        } else if resultant < 0.85 {
+            -0.4 + 1.39 * resultant + 0.43 / (1.0 - resultant)
+        } else {
+            1.0 / (resultant * (resultant * (resultant - 4.0) + 3.0))
+        };
+        if !kappa.is_finite() {
+            return None;
+        }
+        VonMises::new(sine.atan2(cosine), kappa).ok()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn density_peaks_at_the_mean_and_integrates_to_one() {
@@ -172,7 +217,7 @@ mod tests {
             let theta = -PI + TAU * (i as f64 + 0.5) / n as f64;
             area += d.pdf(theta) * (TAU / n as f64);
         }
-        close(area, 1.0, 1e-6);
+        assert_close!(area, 1.0, 1e-6);
     }
 
     #[test]
@@ -197,6 +242,6 @@ mod tests {
             sc += t.cos();
             ss += t.sin();
         }
-        close(ss.atan2(sc), mu, 0.02);
+        assert_close!(ss.atan2(sc), mu, 0.02);
     }
 }

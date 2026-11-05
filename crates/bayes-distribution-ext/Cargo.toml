@@ -7,14 +7,20 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 
 [dependencies]
 bayes-distribution.workspace = true
 bayes-kernels.workspace = true
 bayes-core-ext.workspace = true
-euclid.workspace = true
+euclid-numeric.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
+
+[dev-dependencies]
+bayes-divergence.workspace = true
+bayes-utils.workspace = true
+bayes-statistics.workspace = true
 
 [lints]
 workspace = true

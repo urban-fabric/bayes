@@ -1,8 +1,5 @@
 use super::*;
-
-fn close(a: f64, b: f64, tol: f64) {
-    assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-}
+use crate::assert_close;
 
 #[test]
 fn real_membership_returns_masks() {
@@ -28,7 +25,7 @@ fn transforms_round_trip_into_the_domain() {
         for y in [-3.0, -0.5, 0.0, 1.2, 4.0] {
             let x = c.to_constrained(y);
             assert!(c.contains(x), "{c:?}: to_constrained({y})={x}");
-            close(c.to_unconstrained(x), y, 1e-9);
+            assert_close!(c.to_unconstrained(x), y, 1e-9);
         }
     }
 }
@@ -50,7 +47,7 @@ fn jacobian_inverse_corrections_cancel() {
     for c in cases {
         for y in [-2.0, -0.2, 0.0, 1.3, 3.5] {
             let x = c.to_constrained(y);
-            close(
+            assert_close!(
                 c.log_abs_det_jacobian(y) + c.log_abs_det_inverse_jacobian(x),
                 0.0,
                 1e-9,

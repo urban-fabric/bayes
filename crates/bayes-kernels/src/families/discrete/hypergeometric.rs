@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 /// Hypergeometric log-mass for drawing `k` successes.
 pub fn hypergeometric_log_pmf<T: Real>(

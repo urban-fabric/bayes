@@ -1,7 +1,7 @@
 use crate::continuous::Beta;
 use crate::{Discrete, DiscreteMassKernel, Moments};
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Element, Natural, Real};
+use euclid_numeric::{Boolean, Compare, Element, Natural, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BetaBinomial<N: Natural = u64> {

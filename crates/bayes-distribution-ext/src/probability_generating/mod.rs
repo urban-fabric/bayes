@@ -87,10 +87,7 @@ impl ProbabilityGenerating for DiscreteUniform {
 mod tests {
     use super::*;
     use crate::Moments;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn pgf_is_one_at_one() {
@@ -103,19 +100,19 @@ mod tests {
             &DiscreteUniform::new(-2, 5).unwrap(),
         ];
         for d in dists {
-            close(d.pgf(1.0), 1.0, 1e-12);
+            assert_close!(d.pgf(1.0), 1.0, 1e-12);
         }
     }
 
     #[test]
     fn pgf_closed_forms_and_divergence() {
         // Poisson(2): G(0) = e^{−2} = P(X = 0).
-        close(Poisson::new(2.0).unwrap().pgf(0.0), (-2.0_f64).exp(), 1e-12);
+        assert_close!(Poisson::new(2.0).unwrap().pgf(0.0), (-2.0_f64).exp(), 1e-12);
         // Bernoulli(0.3): G(0) = 1 − p = P(X = 0).
-        close(Bernoulli::new(0.3).unwrap().pgf(0.0), 0.7, 1e-12);
+        assert_close!(Bernoulli::new(0.3).unwrap().pgf(0.0), 0.7, 1e-12);
         // Geometric(0.5): G(z) finite below z = 1/(1−p) = 2; diverges at/after.
         let g = Geometric::new(0.5).unwrap();
-        close(g.pgf(0.0), 0.0, 1e-12); // support starts at 1
+        assert_close!(g.pgf(0.0), 0.0, 1e-12); // support starts at 1
         assert_eq!(g.pgf(2.0), f64::INFINITY);
         assert_eq!(
             NegativeBinomial::new(2.0, 0.5).unwrap().pgf(2.0),
@@ -128,7 +125,7 @@ mod tests {
         // G'(1) = E[X], checked by central difference.
         let check = |d: &dyn ProbabilityGenerating, mean: f64| {
             let h = 1e-5;
-            close((d.pgf(1.0 + h) - d.pgf(1.0 - h)) / (2.0 * h), mean, 1e-5);
+            assert_close!((d.pgf(1.0 + h) - d.pgf(1.0 - h)) / (2.0 * h), mean, 1e-5);
         };
         let po = Poisson::new(4.0).unwrap();
         check(&po, po.mean());

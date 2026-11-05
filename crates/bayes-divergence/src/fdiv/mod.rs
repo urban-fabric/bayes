@@ -52,73 +52,7 @@
 //! `+∞` where it does not (KL, χ²).
 
 use bayes_core::{BayesError, validate_row_stochastic};
-use euclid::Real;
-
-/// A convex **generator** `f : (0, ∞) → ℝ` with `f(1) = 0`, defining the
-/// f-divergence `D_f(p ‖ q) = Σ qᵢ f(pᵢ/qᵢ)` via [`f_divergence`].
-///
-/// Implementors supply [`f`](Self::f) (whose value at `0` must be the limit
-/// `f(0⁺)`) and, where the generator stays finite under support mismatch, the
-/// recession constant [`f_infinity`](Self::f_infinity). Convexity and `f(1) = 0`
-/// are the implementor's contract; they are what make every resulting divergence
-/// nonnegative, data-processing-monotone, and jointly convex
-/// (`RiemannLean/Bayes/Divergence.lean`: `fDiv_nonneg`, `fDiv_dataProcessing`,
-/// `fDiv_convex`).
-pub trait FGenerator {
-    /// `f(t)` for `t ≥ 0`. The value at `t = 0` must be the right limit `f(0⁺)`
-    /// (`0` for [`Kl`], `+∞` for [`ReverseKl`]/[`Jeffreys`], `½` for
-    /// [`SquaredHellinger`]/[`TotalVariation`], `1` for [`ChiSquared`]).
-    fn f(&self, t: f64) -> f64;
-
-    /// The **recession constant** `f′(∞) = lim_{t→∞} f(t)/t`, used for the
-    /// `qᵢ = 0 < pᵢ` term `pᵢ · f′(∞)`. Defaults to `+∞` (KL, χ², Jeffreys —
-    /// the second distribution must dominate the first); override with the
-    /// finite value for generators that tolerate disjoint support
-    /// (`½` for total variation and squared Hellinger, `0` for reverse KL).
-    fn f_infinity(&self) -> f64 {
-        f64::INFINITY
-    }
-
-    /// One term `qᵢ f(pᵢ/qᵢ)` of the divergence sum, with the limit conventions
-    /// for the `qᵢ = 0` and `pᵢ = qᵢ = 0` cells.
-    fn term(&self, p: f64, q: f64) -> f64 {
-        if q > 0.0 {
-            q * self.f(p / q)
-        } else if p > 0.0 {
-            p * self.f_infinity()
-        } else {
-            0.0
-        }
-    }
-}
-
-/// A convex generator over an arbitrary [`Real`] carrier.
-///
-/// This is the lazy/backend-generic companion to [`FGenerator`]. It preserves the same
-/// f-divergence limit conventions while expressing support cases with value-level masks rather
-/// than host numeric branching.
-pub trait RealFGenerator<R: Real> {
-    /// `f(t)` for `t >= 0`, with the same right-limit convention at `0` as [`FGenerator::f`].
-    fn f_real(&self, t: R) -> R;
-
-    /// The recession constant `f'(infinity) = lim t->infinity f(t)/t`.
-    fn f_infinity_real(&self) -> R {
-        R::infinity()
-    }
-
-    /// One term `q_i f(p_i/q_i)` of the divergence sum.
-    fn term_real(&self, p: R, q: R) -> R {
-        let q_positive = q.gt(&R::zero());
-        let p_positive = p.gt(&R::zero());
-        let regular = q.clone() * self.f_real(p.clone() / q);
-        let mismatch = p * self.f_infinity_real();
-        R::select(
-            &q_positive,
-            regular,
-            R::select(&p_positive, mismatch, R::zero()),
-        )
-    }
-}
+use euclid_numeric::Real;
 
 /// `D_f(p ‖ q) = Σ qᵢ f(pᵢ/qᵢ)` for the given `generator`, over two probability
 /// vectors aligned by index (the shorter is zero-padded). `≥ 0` for any convex
@@ -165,6 +99,8 @@ where
 }
 
 mod channel;
+mod contract;
+pub use contract::{FGenerator, RealFGenerator};
 mod generators;
 
 pub use channel::Channel;
@@ -177,10 +113,7 @@ pub use generators::{
 mod tests {
     use super::*;
     use crate::{Categorical, KlDivergence};
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core::assert_close;
 
     // A small bank of full-support distribution pairs for the property checks.
     fn pairs() -> Vec<(Vec<f64>, Vec<f64>)> {
@@ -200,7 +133,7 @@ mod tests {
             let cat = Categorical::new(&p)
                 .unwrap()
                 .kl_divergence(&Categorical::new(&q).unwrap());
-            close(f_divergence(&p, &q, &Kl), cat, 1e-12);
+            assert_close!(f_divergence(&p, &q, &Kl), cat, 1e-12);
         }
     }
 
@@ -209,17 +142,17 @@ mod tests {
         for (p, q) in pairs() {
             // χ² = Σ (pᵢ−qᵢ)²/qᵢ.
             let chi2: f64 = p.iter().zip(&q).map(|(&a, &b)| (a - b).powi(2) / b).sum();
-            close(f_divergence(&p, &q, &ChiSquared), chi2, 1e-12);
+            assert_close!(f_divergence(&p, &q, &ChiSquared), chi2, 1e-12);
             // ½ Σ (√pᵢ−√qᵢ)².
             let hel: f64 = 0.5
                 * p.iter()
                     .zip(&q)
                     .map(|(&a, &b)| (a.sqrt() - b.sqrt()).powi(2))
                     .sum::<f64>();
-            close(f_divergence(&p, &q, &SquaredHellinger), hel, 1e-12);
+            assert_close!(f_divergence(&p, &q, &SquaredHellinger), hel, 1e-12);
             // ½ Σ |pᵢ−qᵢ|.
             let tv: f64 = 0.5 * p.iter().zip(&q).map(|(&a, &b)| (a - b).abs()).sum::<f64>();
-            close(f_divergence(&p, &q, &TotalVariation), tv, 1e-12);
+            assert_close!(f_divergence(&p, &q, &TotalVariation), tv, 1e-12);
         }
     }
 
@@ -242,7 +175,7 @@ mod tests {
                     f_divergence(&p, &q, g) >= -1e-12,
                     "f-divergence went negative"
                 );
-                close(f_divergence(&p, &p, g), 0.0, 1e-12);
+                assert_close!(f_divergence(&p, &p, g), 0.0, 1e-12);
             }
         }
     }
@@ -250,12 +183,12 @@ mod tests {
     #[test]
     fn reverse_kl_swaps_arguments_and_jeffreys_is_the_sum() {
         for (p, q) in pairs() {
-            close(
+            assert_close!(
                 f_divergence(&p, &q, &ReverseKl),
                 f_divergence(&q, &p, &Kl),
                 1e-12,
             );
-            close(
+            assert_close!(
                 f_divergence(&p, &q, &Jeffreys),
                 f_divergence(&p, &q, &Kl) + f_divergence(&q, &p, &Kl),
                 1e-12,
@@ -275,25 +208,25 @@ mod tests {
     fn alpha_recovers_the_named_generators_at_special_orders() {
         for (p, q) in pairs() {
             // α → 1 is KL (returned exactly at α = 1).
-            close(
+            assert_close!(
                 f_divergence(&p, &q, &Alpha(1.0)),
                 f_divergence(&p, &q, &Kl),
                 1e-12,
             );
             // α → 0 is reverse KL.
-            close(
+            assert_close!(
                 f_divergence(&p, &q, &Alpha(0.0)),
                 f_divergence(&p, &q, &ReverseKl),
                 1e-12,
             );
             // α = 2 is ½ χ².
-            close(
+            assert_close!(
                 f_divergence(&p, &q, &Alpha(2.0)),
                 0.5 * f_divergence(&p, &q, &ChiSquared),
                 1e-12,
             );
             // α = ½ is 4 × squared Hellinger.
-            close(
+            assert_close!(
                 f_divergence(&p, &q, &Alpha(0.5)),
                 4.0 * f_divergence(&p, &q, &SquaredHellinger),
                 1e-12,
@@ -305,7 +238,7 @@ mod tests {
     fn custom_generator_matches_a_named_one() {
         let chi2 = Custom::new(|t: f64| (t - 1.0).powi(2));
         for (p, q) in pairs() {
-            close(
+            assert_close!(
                 f_divergence(&p, &q, &chi2),
                 f_divergence(&p, &q, &ChiSquared),
                 1e-12,
@@ -323,9 +256,9 @@ mod tests {
         assert!(f_divergence(&p, &q, &TotalVariation).is_finite());
         assert!(f_divergence(&p, &q, &SquaredHellinger).is_finite());
         // TV of disjoint-ish supports: ½(|0.5−1| + |0.5−0|) = 0.5.
-        close(f_divergence(&p, &q, &TotalVariation), 0.5, 1e-12);
+        assert_close!(f_divergence(&p, &q, &TotalVariation), 0.5, 1e-12);
         // Extra category in q that p never touches is harmless for KL.
-        close(
+        assert_close!(
             f_divergence(&[0.5, 0.5], &[0.25, 0.25, 0.5], &Kl),
             f_divergence(&[0.5, 0.5, 0.0], &[0.25, 0.25, 0.5], &Kl),
             1e-12,
@@ -339,9 +272,9 @@ mod tests {
         assert_eq!((k.inputs(), k.outputs()), (2, 2));
         let out = k.apply(&[0.6, 0.4]);
         // (0.6·0.9 + 0.4·0.2, 0.6·0.1 + 0.4·0.8) = (0.62, 0.38).
-        close(out[0], 0.62, 1e-12);
-        close(out[1], 0.38, 1e-12);
-        close(out.iter().sum::<f64>(), 1.0, 1e-12);
+        assert_close!(out[0], 0.62, 1e-12);
+        assert_close!(out[1], 0.38, 1e-12);
+        assert_close!(out.iter().sum::<f64>(), 1.0, 1e-12);
     }
 
     #[test]
@@ -389,10 +322,10 @@ mod tests {
         let q = [0.5, 0.1, 0.4];
         let pk = k.apply(&p);
         let qk = k.apply(&q);
-        close(pk[0], 0.5, 1e-12); // 0.2 + 0.3
-        close(pk[1], 0.5, 1e-12);
-        close(qk[0], 0.6, 1e-12); // 0.5 + 0.1
-        close(qk[1], 0.4, 1e-12);
+        assert_close!(pk[0], 0.5, 1e-12); // 0.2 + 0.3
+        assert_close!(pk[1], 0.5, 1e-12);
+        assert_close!(qk[0], 0.6, 1e-12); // 0.5 + 0.1
+        assert_close!(qk[1], 0.4, 1e-12);
         // klDiv_ge_binary: collapsing onto the two-group partition lowers KL.
         assert!(f_divergence(&pk, &qk, &Kl) <= f_divergence(&p, &q, &Kl) + 1e-12);
     }

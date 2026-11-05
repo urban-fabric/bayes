@@ -1,7 +1,7 @@
 //! Closure-backed discrete adapters.
 
 use crate::{Discrete, DiscreteCdf, Support};
-use euclid::{Compare, Element, Natural, Real};
+use euclid_numeric::{Compare, Element, Natural, Real};
 use std::fmt;
 
 /// A closure-backed discrete mass function over explicit support bounds.

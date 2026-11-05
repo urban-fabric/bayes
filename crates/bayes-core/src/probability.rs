@@ -6,7 +6,7 @@
 //! category.
 
 use crate::BayesError;
-use euclid::Real;
+use euclid_numeric::Real;
 
 /// Default tolerance for probability-vector sum checks.
 pub const PROBABILITY_TOLERANCE: f64 = 1e-9;
@@ -303,10 +303,7 @@ pub fn ranked_probability_score_real<R: Real>(p: &[R], observed: usize) -> R {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use crate::assert_close;
 
     #[test]
     fn probability_vector_validation() {
@@ -322,8 +319,8 @@ mod tests {
     #[test]
     fn probability_weight_normalization() {
         let p = normalize_probability_weights(&[2.0, 6.0, 2.0]);
-        close(p.iter().sum(), 1.0, 1e-12);
-        close(p[1], 0.6, 1e-12);
+        assert_close!(p.iter().sum(), 1.0, 1e-12);
+        assert_close!(p[1], 0.6, 1e-12);
         assert!(normalize_probability_weights(&[0.0, 0.0]).is_empty());
         assert!(normalize_probability_weights(&[1.0, f64::INFINITY]).is_empty());
     }
@@ -337,23 +334,23 @@ mod tests {
         assert!(!is_row_stochastic(&[vec![0.25, 0.8]]));
 
         let normalized = normalize_probability_rows(&[vec![2.0, 8.0], vec![3.0, 3.0]]);
-        close(normalized[0][1], 0.8, 1e-12);
-        close(normalized[1][0], 0.5, 1e-12);
+        assert_close!(normalized[0][1], 0.8, 1e-12);
+        assert_close!(normalized[1][0], 0.5, 1e-12);
         assert!(normalize_probability_rows(&[vec![0.0, 0.0]]).is_empty());
     }
 
     #[test]
     fn proper_scores() {
         let p = [0.2, 0.5, 0.3];
-        close(log_score(&p, 1), 0.5_f64.ln(), 1e-12);
-        close(log_loss(&p, 1), -0.5_f64.ln(), 1e-12);
-        close(brier_score(&p, 1), 0.04 + 0.25 + 0.09, 1e-12);
-        close(
+        assert_close!(log_score(&p, 1), 0.5_f64.ln(), 1e-12);
+        assert_close!(log_loss(&p, 1), -0.5_f64.ln(), 1e-12);
+        assert_close!(brier_score(&p, 1), 0.04 + 0.25 + 0.09, 1e-12);
+        assert_close!(
             spherical_score(&p, 1),
             0.5 / (0.04_f64 + 0.25 + 0.09).sqrt(),
             1e-12,
         );
-        close(ranked_probability_score(&p, 1), 0.04 + 0.09, 1e-12);
+        assert_close!(ranked_probability_score(&p, 1), 0.04 + 0.09, 1e-12);
         assert_eq!(log_loss(&[1.0, 0.0], 1), f64::INFINITY);
         assert!(brier_score(&[0.5, 0.6], 1).is_nan());
         assert!(log_score(&[0.5], 2).is_nan());

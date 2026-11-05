@@ -7,10 +7,11 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 
 [dependencies]
 bayes-core.workspace = true
-euclid.workspace = true
+euclid-numeric.workspace = true
 
 [lints]
 workspace = true

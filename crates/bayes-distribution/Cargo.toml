@@ -7,11 +7,18 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 
 [dependencies]
 bayes-core.workspace = true
 bayes-kernels.workspace = true
-euclid.workspace = true
+euclid-numeric.workspace = true
+euclid-random.workspace = true
+
+# Dev-only, and not a cycle: `bayes-utils` reaches the *eager* families, not
+# these lazy ones, so this crate is not on its path.
+[dev-dependencies]
+bayes-utils.workspace = true
 
 [lints]
 workspace = true

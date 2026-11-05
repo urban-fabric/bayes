@@ -1,5 +1,6 @@
 use super::*;
 use crate::NegativeBinomial;
+use bayes_core_ext::validate;
 
 /// **Gamma–Poisson.** A `Gamma(shape α, rate β)` prior on the Poisson rate;
 /// posterior `Gamma(α + Σk, β + n)`.
@@ -140,18 +141,7 @@ impl GammaPoisson {
         exposures: &[f64],
         future_exposure: f64,
     ) -> Result<NegativeBinomial, BayesError> {
-        if !future_exposure.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "future_exposure",
-                value: future_exposure,
-            });
-        }
-        if future_exposure <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "future_exposure",
-                value: future_exposure,
-            });
-        }
+        validate::positive(&[("future_exposure", future_exposure)])?;
         let post = self.posterior_with_exposure(counts, exposures)?;
         NegativeBinomial::new(post.shape(), post.rate() / (post.rate() + future_exposure))
     }

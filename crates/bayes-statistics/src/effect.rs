@@ -7,7 +7,7 @@
 //! matching the lazy-surface convention.
 
 use super::summary::{mean, mean_real, variance, variance_real};
-use euclid::Real;
+use euclid_numeric::Real;
 
 fn finite_sample(data: &[f64], min_len: usize) -> bool {
     data.len() >= min_len && data.iter().all(|x| x.is_finite())
@@ -265,10 +265,7 @@ pub fn risk_difference_real<R: Real>(
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn standardized_mean_effects_have_expected_direction() {
@@ -291,48 +288,48 @@ mod tests {
 
     #[test]
     fn table_effects_match_definitions() {
-        close(odds_ratio(10, 5, 4, 8), 4.0, 1e-12);
-        close(risk_ratio(10, 10, 5, 15), 2.0, 1e-12);
-        close(risk_difference(10, 10, 5, 15), 0.25, 1e-12);
+        assert_close!(odds_ratio(10, 5, 4, 8), 4.0, 1e-12);
+        assert_close!(risk_ratio(10, 10, 5, 15), 2.0, 1e-12);
+        assert_close!(risk_difference(10, 10, 5, 15), 0.25, 1e-12);
     }
 
     #[test]
     fn real_twins_match_eager_at_f64() {
         let a = [4.0, 5.0, 6.0, 7.0];
         let b = [1.0, 2.0, 3.0, 4.0];
-        close(
+        assert_close!(
             pooled_std_dev_real::<f64>(&a, &b),
             pooled_std_dev(&a, &b),
             1e-12,
         );
-        close(cohen_d_real::<f64>(&a, &b), cohen_d(&a, &b), 1e-12);
-        close(hedges_g_real::<f64>(&a, &b), hedges_g(&a, &b), 1e-12);
-        close(glass_delta_real::<f64>(&a, &b), glass_delta(&a, &b), 1e-12);
+        assert_close!(cohen_d_real::<f64>(&a, &b), cohen_d(&a, &b), 1e-12);
+        assert_close!(hedges_g_real::<f64>(&a, &b), hedges_g(&a, &b), 1e-12);
+        assert_close!(glass_delta_real::<f64>(&a, &b), glass_delta(&a, &b), 1e-12);
 
         let g1 = [1.0, 2.0, 3.0];
         let g2 = [10.0, 11.0, 12.0];
-        close(
+        assert_close!(
             eta_squared_real::<f64>(&[&g1, &g2]),
             eta_squared(&[&g1, &g2]),
             1e-12,
         );
-        close(
+        assert_close!(
             omega_squared_real::<f64>(&[&g1, &g2]),
             omega_squared(&[&g1, &g2]),
             1e-12,
         );
 
-        close(
+        assert_close!(
             odds_ratio_real::<f64>(10, 5, 4, 8),
             odds_ratio(10, 5, 4, 8),
             1e-12,
         );
-        close(
+        assert_close!(
             risk_ratio_real::<f64>(10, 10, 5, 15),
             risk_ratio(10, 10, 5, 15),
             1e-12,
         );
-        close(
+        assert_close!(
             risk_difference_real::<f64>(10, 10, 5, 15),
             risk_difference(10, 10, 5, 15),
             1e-12,

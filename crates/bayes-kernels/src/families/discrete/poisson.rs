@@ -1,4 +1,4 @@
-use euclid::numeric::{Integer, Real};
+use euclid_numeric::{Integer, Real};
 
 pub use crate::families::continuous::gamma::{
     gamma_poisson_log_marginal_likelihood, gamma_poisson_log_predictive,

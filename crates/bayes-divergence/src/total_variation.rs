@@ -3,7 +3,7 @@
 
 use crate::{Bernoulli, Categorical};
 use bayes_kernels as kernels;
-use euclid::Real;
+use euclid_numeric::Real;
 
 /// The **total-variation distance** `TV(p, q) = 1/2 sum |p_i - q_i|`,
 /// in `[0, 1]`. Implemented only where it is a closed-form finite sum.

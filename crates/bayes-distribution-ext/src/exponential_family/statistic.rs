@@ -144,10 +144,7 @@ impl SufficientStatistic for Trials {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn meanvar_merge_is_associative_and_matches_one_pass() {
@@ -160,14 +157,14 @@ mod tests {
         let c = MeanVar::from_sample(&data[150..]);
         let left = a.merge(&b).merge(&c);
         let right = a.merge(&b.merge(&c));
-        close(left.mean(), whole.mean(), 1e-12);
-        close(
+        assert_close!(left.mean(), whole.mean(), 1e-12);
+        assert_close!(
             left.population_variance(),
             whole.population_variance(),
             1e-10,
         );
-        close(right.mean(), whole.mean(), 1e-12);
-        close(
+        assert_close!(right.mean(), whole.mean(), 1e-12);
+        assert_close!(
             right.population_variance(),
             whole.population_variance(),
             1e-10,

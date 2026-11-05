@@ -1,11 +1,30 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::estimation::sample::Summary;
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
 use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Element, Natural, Real};
+use euclid_numeric::{Boolean, Compare, Element, Natural, Real};
 
+/// The **Bernoulli** distribution: one trial with success probability
+/// `p ∈ [0, 1]`. Support `{0, 1}`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Bernoulli, Discrete, Moments};
+///
+/// let b = Bernoulli::new(0.3)?;
+/// assert!((b.pmf(1_u64) - 0.3).abs() < 1e-12);
+/// assert!((b.pmf(0_u64) - 0.7).abs() < 1e-12);
+///
+/// // The variance p(1 - p) peaks at a half, where the outcome is least
+/// // predictable.
+/// assert!((b.variance() - 0.21).abs() < 1e-12);
+/// assert!(Bernoulli::new(0.5)?.variance() > b.variance());
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Bernoulli {
     p: f64,
@@ -102,6 +121,22 @@ impl Moments for Bernoulli {
 
     fn median(&self) -> f64 {
         f64::NAN
+    }
+}
+
+/// `p̂ = x̄`, the maximum likelihood estimator — after checking the sample really
+/// is zeros and ones.
+///
+/// The check is not pedantry. Without it a sample of counts, or of `{1, 2}`
+/// labels, would fit happily and return a `p` above 1 for the constructor to
+/// reject with a message about a probability rather than about the data.
+impl crate::Estimate for Bernoulli {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::new(data)?;
+        if data.iter().any(|&x| x != 0.0 && x != 1.0) {
+            return None;
+        }
+        Bernoulli::new(s.mean).ok()
     }
 }
 

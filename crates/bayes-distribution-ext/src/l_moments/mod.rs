@@ -96,43 +96,40 @@ impl LMoments for Logistic {
 mod tests {
     use super::*;
     use crate::Moments;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn l_location_equals_the_mean() {
-        close(Uniform::new(-1.0, 3.0).unwrap().l_location(), 1.0, 1e-12);
+        assert_close!(Uniform::new(-1.0, 3.0).unwrap().l_location(), 1.0, 1e-12);
         let e = Exponential::new(2.0).unwrap();
-        close(e.l_location(), e.mean(), 1e-12);
-        close(Normal::new(5.0, 2.0).unwrap().l_location(), 5.0, 1e-12);
-        close(Logistic::new(1.5, 0.5).unwrap().l_location(), 1.5, 1e-12);
+        assert_close!(e.l_location(), e.mean(), 1e-12);
+        assert_close!(Normal::new(5.0, 2.0).unwrap().l_location(), 5.0, 1e-12);
+        assert_close!(Logistic::new(1.5, 0.5).unwrap().l_location(), 1.5, 1e-12);
     }
 
     #[test]
     fn l_scale_and_ratios_match_known_constants() {
         // Uniform width 4: L-scale = 4/6, no L-skew/kurt.
         let u = Uniform::new(2.0, 6.0).unwrap();
-        close(u.l_scale(), 4.0 / 6.0, 1e-12);
-        close(u.l_skewness(), 0.0, 1e-12);
-        close(u.l_kurtosis(), 0.0, 1e-12);
+        assert_close!(u.l_scale(), 4.0 / 6.0, 1e-12);
+        assert_close!(u.l_skewness(), 0.0, 1e-12);
+        assert_close!(u.l_kurtosis(), 0.0, 1e-12);
 
         // Exponential: scale-free L-ratios 1/3 and 1/6.
         let e = Exponential::new(3.0).unwrap();
-        close(e.l_scale(), 1.0 / 6.0, 1e-12);
-        close(e.l_skewness(), 1.0 / 3.0, 1e-12);
-        close(e.l_kurtosis(), 1.0 / 6.0, 1e-12);
+        assert_close!(e.l_scale(), 1.0 / 6.0, 1e-12);
+        assert_close!(e.l_skewness(), 1.0 / 3.0, 1e-12);
+        assert_close!(e.l_kurtosis(), 1.0 / 6.0, 1e-12);
 
         // Normal: L-scale σ/√π, L-kurtosis 30·atan(√2)/π − 9 ≈ 0.1226.
         let n = Normal::new(0.0, 1.0).unwrap();
-        close(n.l_scale(), 1.0 / std::f64::consts::PI.sqrt(), 1e-12);
-        close(n.l_skewness(), 0.0, 1e-12);
-        close(n.l_kurtosis(), 0.122_601_719_540_892_16, 1e-12);
+        assert_close!(n.l_scale(), 1.0 / std::f64::consts::PI.sqrt(), 1e-12);
+        assert_close!(n.l_skewness(), 0.0, 1e-12);
+        assert_close!(n.l_kurtosis(), 0.122_601_719_540_892_16, 1e-12);
 
         // Logistic: L-scale = s, L-kurtosis 1/6.
         let l = Logistic::new(0.0, 2.0).unwrap();
-        close(l.l_scale(), 2.0, 1e-12);
-        close(l.l_kurtosis(), 1.0 / 6.0, 1e-12);
+        assert_close!(l.l_scale(), 2.0, 1e-12);
+        assert_close!(l.l_kurtosis(), 1.0 / 6.0, 1e-12);
     }
 }

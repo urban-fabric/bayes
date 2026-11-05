@@ -3,11 +3,28 @@ use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Compare, Real};
+use euclid_numeric::{Compare, Real};
 
 /// The exponential distribution with rate `λ > 0` (mean `1/λ`), support `[0, ∞)`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{ContinuousCdf, Exponential, Moments};
+///
+/// let e = Exponential::new(2.0)?;
+/// assert!((e.mean() - 0.5).abs() < 1e-12);
+///
+/// // Memorylessness, the property that singles this family out:
+/// // P(X > s + t | X > s) = P(X > t), for every s and t.
+/// assert!((e.sf(1.5_f64) / e.sf(0.5_f64) - e.sf(1.0_f64)).abs() < 1e-12);
+///
+/// // Its median is below its mean — ln 2 / rate.
+/// assert!((e.median() - std::f64::consts::LN_2 / 2.0).abs() < 1e-9);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Exponential {
     rate: f64,
@@ -15,18 +32,7 @@ pub struct Exponential {
 
 impl Exponential {
     pub fn new(rate: f64) -> Result<Self, BayesError> {
-        if !rate.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "rate",
-                value: rate,
-            });
-        }
-        if rate <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "rate",
-                value: rate,
-            });
-        }
+        validate::positive(&[("rate", rate)])?;
         Ok(Self { rate })
     }
 
@@ -64,6 +70,11 @@ impl<T: Real> ContinuousCdf<T> for Exponential {
     /// `ln P(X > x) = −λx` exactly — no underflow, unlike `ln(1 − cdf)`.
     fn ln_sf(&self, x: T) -> T {
         kernels::exponential_ln_sf(x, T::scalar(self.rate))
+    }
+
+    /// `−ln(p)/λ`, exact for every representable `p`.
+    fn isf(&self, p: T) -> T {
+        kernels::exponential_isf(p, T::scalar(self.rate()))
     }
 }
 
@@ -131,22 +142,19 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn cdf_pdf_quantile_moments() {
         let e = Exponential::new(2.0).unwrap();
-        close(e.cdf(0.0), 0.0, 1e-12);
-        close(e.cdf(1.0), 1.0 - (-2.0f64).exp(), 1e-12);
-        close(e.pdf(0.0), 2.0, 1e-12);
+        assert_close!(e.cdf(0.0), 0.0, 1e-12);
+        assert_close!(e.cdf(1.0), 1.0 - (-2.0f64).exp(), 1e-12);
+        assert_close!(e.pdf(0.0), 2.0, 1e-12);
         for &p in &[0.1, 0.5, 0.9] {
-            close(e.cdf(e.inverse_cdf(p)), p, 1e-12);
+            assert_close!(e.cdf(e.inverse_cdf(p)), p, 1e-12);
         }
-        close(e.mean(), 0.5, 1e-12);
-        close(e.variance(), 0.25, 1e-12);
-        close(e.median(), std::f64::consts::LN_2 / 2.0, 1e-12);
+        assert_close!(e.mean(), 0.5, 1e-12);
+        assert_close!(e.variance(), 0.25, 1e-12);
+        assert_close!(e.median(), std::f64::consts::LN_2 / 2.0, 1e-12);
     }
 }

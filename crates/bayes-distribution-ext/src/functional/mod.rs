@@ -23,10 +23,7 @@ pub use ext::{ContinuousCdfExt, ContinuousDistributionExt, DiscreteDistributionE
 mod tests {
     use super::*;
     use crate::{Continuous, ContinuousCdf, Discrete, DiscreteCdf};
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn closure_backed_continuous_distribution_implements_the_spine() {
@@ -39,14 +36,14 @@ mod tests {
         )
         .unwrap();
 
-        close(unit.pdf(0.25), 1.0, 1e-12);
-        close(unit.cdf(-1.0), 0.0, 1e-12);
-        close(unit.cdf(0.25), 0.25, 1e-12);
-        close(unit.cdf(2.0), 1.0, 1e-12);
-        close(unit.inverse_cdf(0.75), 0.75, 1e-12);
-        close(unit.ln_likelihood(&[0.2, 0.4, 0.8]), 0.0, 1e-12);
-        close(unit.probability_between(0.2, 0.7), 0.5, 1e-12);
-        close(unit.ln_probability_between(0.2, 0.7).exp(), 0.5, 1e-12);
+        assert_close!(unit.pdf(0.25), 1.0, 1e-12);
+        assert_close!(unit.cdf(-1.0), 0.0, 1e-12);
+        assert_close!(unit.cdf(0.25), 0.25, 1e-12);
+        assert_close!(unit.cdf(2.0), 1.0, 1e-12);
+        assert_close!(unit.inverse_cdf(0.75), 0.75, 1e-12);
+        assert_close!(unit.ln_likelihood(&[0.2, 0.4, 0.8]), 0.0, 1e-12);
+        assert_close!(unit.probability_between(0.2, 0.7), 0.5, 1e-12);
+        assert_close!(unit.ln_probability_between(0.2, 0.7).exp(), 0.5, 1e-12);
     }
 
     #[test]
@@ -69,19 +66,19 @@ mod tests {
         .unwrap();
 
         let shifted = unit.affine(2.0, -1.0).unwrap();
-        close(shifted.pdf(0.0), 0.5, 1e-12);
+        assert_close!(shifted.pdf(0.0), 0.5, 1e-12);
 
         let truncated = unit.truncated(0.25, 0.75).unwrap();
-        close(truncated.pdf(0.5), 2.0, 1e-12);
-        close(truncated.cdf(0.5), 0.5, 1e-12);
+        assert_close!(truncated.pdf(0.5), 2.0, 1e-12);
+        assert_close!(truncated.cdf(0.5), 0.5, 1e-12);
 
         let max = unit.maximum_of(4).unwrap();
-        close(max.cdf(0.5), 0.5_f64.powi(4), 1e-12);
+        assert_close!(max.cdf(0.5), 0.5_f64.powi(4), 1e-12);
         let median = unit.order_statistic(5, 3).unwrap();
-        close(median.pdf(0.5), 1.875, 1e-12);
-        close(unit.cumulative_hazard(0.5), -0.5_f64.ln(), 1e-12);
-        close(unit.hazard(0.5), 2.0, 1e-12);
-        close(unit.ln_hazard(0.5), 2.0_f64.ln(), 1e-12);
+        assert_close!(median.pdf(0.5), 1.875, 1e-12);
+        assert_close!(unit.cumulative_hazard(0.5), -0.5_f64.ln(), 1e-12);
+        assert_close!(unit.hazard(0.5), 2.0, 1e-12);
+        assert_close!(unit.ln_hazard(0.5), 2.0_f64.ln(), 1e-12);
     }
 
     #[test]
@@ -98,11 +95,11 @@ mod tests {
             |p: f64| if p <= 0.25 { 0 } else { 1 },
         );
 
-        close(coin.pmf(1), 0.75, 1e-12);
-        close(coin.cdf(0), 0.25, 1e-12);
-        close(coin.cdf(7), 1.0, 1e-12);
-        close(coin.inverse_cdf(0.9) as f64, 1.0, 1e-12);
-        close(
+        assert_close!(coin.pmf(1), 0.75, 1e-12);
+        assert_close!(coin.cdf(0), 0.25, 1e-12);
+        assert_close!(coin.cdf(7), 1.0, 1e-12);
+        assert_close!(coin.inverse_cdf(0.9) as f64, 1.0, 1e-12);
+        assert_close!(
             coin.ln_likelihood(&[1, 1, 0]).exp(),
             0.75 * 0.75 * 0.25,
             1e-12,

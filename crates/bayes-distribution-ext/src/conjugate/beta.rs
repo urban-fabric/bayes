@@ -2,7 +2,7 @@
 
 use super::{Conjugate, Pair};
 use crate::{Bernoulli, Beta, BetaBinomial};
-use euclid::{Natural, Real};
+use euclid_numeric::{Natural, Real};
 
 /// **Beta–Bernoulli.** A `Beta(α, β)` prior on a Bernoulli success probability;
 /// posterior `Beta(α + #successes, β + #failures)`.
@@ -229,36 +229,33 @@ fn ln_beta_binomial_predictive(alpha: f64, beta: f64, trials: u64, successes: u6
 mod tests {
     use super::*;
     use crate::{Discrete, Moments};
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn beta_bernoulli_counts() {
         let model = BetaBernoulli::new(Beta::new(2.0, 2.0).unwrap());
         let data = [true, true, true, false];
         let post = model.posterior(&data);
-        close(post.alpha(), 5.0, 1e-12);
-        close(post.beta(), 3.0, 1e-12);
-        close(model.posterior_predictive(&data).p(), 5.0 / 8.0, 1e-12);
-        close(model.ln_predictive(true).exp(), 0.5, 1e-12);
-        close(
+        assert_close!(post.alpha(), 5.0, 1e-12);
+        assert_close!(post.beta(), 3.0, 1e-12);
+        assert_close!(model.posterior_predictive(&data).p(), 5.0 / 8.0, 1e-12);
+        assert_close!(model.ln_predictive(true).exp(), 0.5, 1e-12);
+        assert_close!(
             model.ln_posterior_predictive(&data, true).exp(),
             5.0 / 8.0,
             1e-12,
         );
-        close(
+        assert_close!(
             model.ln_marginal_likelihood(&data),
             5.0_f64.ln_beta(3.0) - 2.0_f64.ln_beta(2.0),
             1e-12,
         );
-        close(
+        assert_close!(
             model.ln_sequential_predictive(&data),
             model.ln_marginal_likelihood(&data),
             1e-12,
         );
-        close(
+        assert_close!(
             model.ln_posterior_predictive_likelihood(&data, &[true, false]),
             BetaBernoulli::new(post).ln_marginal_likelihood(&[true, false]),
             1e-12,
@@ -270,17 +267,17 @@ mod tests {
         let model = BetaBinomialModel::new(Beta::new(1.0, 1.0).unwrap(), 10);
         let data = [7u64, 8, 6, 9];
         let post = model.posterior(&data);
-        close(post.alpha(), 31.0, 1e-12);
-        close(post.beta(), 11.0, 1e-12);
+        assert_close!(post.alpha(), 31.0, 1e-12);
+        assert_close!(post.beta(), 11.0, 1e-12);
         assert_eq!(model.trials(), 10);
         let pred = model.posterior_predictive(&data);
-        close(pred.mean(), 10.0 * 31.0 / 42.0, 1e-12);
-        close(
+        assert_close!(pred.mean(), 10.0 * 31.0 / 42.0, 1e-12);
+        assert_close!(
             model.ln_predictive(7).exp(),
             BetaBinomial::from_beta(10, model.prior()).pmf(7_u64),
             1e-12,
         );
-        close(
+        assert_close!(
             model.ln_posterior_predictive(&data, 7).exp(),
             pred.pmf(7_u64),
             1e-12,
@@ -291,13 +288,13 @@ mod tests {
             + 10_u64.ln_binomial(&9))
             + 31.0_f64.ln_beta(11.0)
             - 1.0_f64.ln_beta(1.0);
-        close(model.ln_marginal_likelihood(&data), evidence, 1e-12);
-        close(
+        assert_close!(model.ln_marginal_likelihood(&data), evidence, 1e-12);
+        assert_close!(
             model.ln_sequential_predictive(&data),
             model.ln_marginal_likelihood(&data),
             1e-12,
         );
-        close(
+        assert_close!(
             model.ln_posterior_predictive_likelihood(&data, &[7, 6]),
             BetaBinomialModel::new(post, 10).ln_marginal_likelihood(&[7, 6]),
             1e-12,

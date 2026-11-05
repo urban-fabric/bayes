@@ -9,93 +9,114 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
-name = "bayes"
-version = "0.1.0"
-dependencies = [
- "bayes-core-ext",
- "bayes-distribution",
- "bayes-distribution-ext",
- "bayes-divergence",
- "bayes-kernels",
- "bayes-process",
- "bayes-statistics",
- "euclid",
- "rand",
- "rand_chacha",
-]
-
-[[package]]
 name = "bayes-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
- "euclid",
+ "bayes-utils",
+ "euclid-numeric",
 ]
 
 [[package]]
 name = "bayes-core-ext"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bayes-core",
- "euclid",
+ "euclid-numeric",
 ]
 
 [[package]]
 name = "bayes-distribution"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bayes-core",
  "bayes-kernels",
- "euclid",
+ "bayes-utils",
+ "euclid-numeric",
+ "euclid-random",
 ]
 
 [[package]]
 name = "bayes-distribution-ext"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bayes-core-ext",
  "bayes-distribution",
+ "bayes-divergence",
  "bayes-kernels",
- "euclid",
+ "bayes-statistics",
+ "bayes-utils",
+ "euclid-numeric",
  "rand",
  "rand_chacha",
 ]
 
 [[package]]
 name = "bayes-divergence"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bayes-core",
  "bayes-distribution",
  "bayes-kernels",
- "euclid",
+ "bayes-utils",
+ "euclid-numeric",
+ "euclid-random",
+ "rand",
+ "rand_chacha",
 ]
 
 [[package]]
 name = "bayes-kernels"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
- "euclid",
+ "bayes-utils",
+ "euclid-numeric",
 ]
 
 [[package]]
 name = "bayes-process"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bayes-core-ext",
  "bayes-distribution-ext",
  "bayes-kernels",
  "bayes-statistics",
- "euclid",
+ "bayes-utils",
+ "euclid-numeric",
+ "rand",
+ "rand_chacha",
+]
+
+[[package]]
+name = "bayes-sampling"
+version = "0.2.0"
+dependencies = [
+ "bayes-core",
+ "bayes-distribution-ext",
+ "bayes-utils",
  "rand",
  "rand_chacha",
 ]
 
 [[package]]
 name = "bayes-statistics"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bayes-distribution-ext",
- "euclid",
+ "bayes-divergence",
+ "bayes-kernels",
+ "bayes-utils",
+ "euclid-numeric",
+ "rand",
+ "rand_chacha",
+]
+
+[[package]]
+name = "bayes-utils"
+version = "0.2.0"
+dependencies = [
+ "bayes-distribution",
+ "bayes-distribution-ext",
+ "euclid-numeric",
  "rand",
  "rand_chacha",
 ]
@@ -139,9 +160,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "euclid"
-version = "0.2.0"
-source = "git+ssh://git@github.com/urban-fabric/euclid.git?branch=main#32901b535dacbd4e886e5139ad32c25723f21acb"
+name = "euclid-numeric"
+version = "0.3.0"
+source = "git+ssh://git@github.com/urban-fabric/euclid.git?branch=main#1c502ab248609203da40e29164a67b7e79d3c19f"
+
+[[package]]
+name = "euclid-random"
+version = "0.3.0"
+source = "git+ssh://git@github.com/urban-fabric/euclid.git?branch=main#1c502ab248609203da40e29164a67b7e79d3c19f"
+dependencies = [
+ "euclid-numeric",
+]
 
 [[package]]
 name = "foldhash"

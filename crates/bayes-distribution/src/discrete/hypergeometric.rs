@@ -1,5 +1,5 @@
 use crate::{Discrete, DiscreteMassKernel, Moments};
-use euclid::{Boolean, Compare, Element, Natural, Real};
+use euclid_numeric::{Boolean, Compare, Element, Natural, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Hypergeometric<N: Natural = u64> {

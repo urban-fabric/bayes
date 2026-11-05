@@ -1,7 +1,7 @@
 //! Closure-backed continuous adapters.
 
 use crate::{BayesError, Continuous, ContinuousCdf, Support};
-use euclid::{Boolean, Real};
+use euclid_numeric::{Boolean, Real};
 use std::fmt;
 
 /// A closure-backed continuous density over generic support bounds.

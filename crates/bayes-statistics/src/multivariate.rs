@@ -1,6 +1,6 @@
 //! Scalar/vector sample statistics that do not require a matrix backend.
 
-use euclid::{Boolean, Compare, Real};
+use euclid_numeric::{Boolean, Compare, Real};
 
 /// Dot product of two equal-length real vectors.
 pub fn dot(x: &[f64], y: &[f64]) -> f64 {
@@ -245,10 +245,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn dot_and_norm_match() {
@@ -286,9 +283,9 @@ mod tests {
         let var_x = xs.iter().map(|&x| (x - mean_x).powi(2)).sum::<f64>() / (xs.len() as f64 - 1.0);
         let var_y = ys.iter().map(|&y| (y - mean_y).powi(2)).sum::<f64>() / (ys.len() as f64 - 1.0);
 
-        close(rc.covariance(), cov, 1e-12);
-        close(rc.correlation(), cov / (var_x * var_y).sqrt(), 1e-12);
-        close(rc.slope(), cov / var_x, 1e-12);
+        assert_close!(rc.covariance(), cov, 1e-12);
+        assert_close!(rc.correlation(), cov / (var_x * var_y).sqrt(), 1e-12);
+        assert_close!(rc.slope(), cov / var_x, 1e-12);
 
         let mut a: RunningCovariance = xs[..70]
             .iter()
@@ -301,8 +298,8 @@ mod tests {
             .zip(ys[70..].iter().copied())
             .collect();
         a.merge(&b);
-        close(a.covariance(), rc.covariance(), 1e-12);
-        close(a.correlation(), rc.correlation(), 1e-12);
+        assert_close!(a.covariance(), rc.covariance(), 1e-12);
+        assert_close!(a.correlation(), rc.correlation(), 1e-12);
         assert_eq!(a.count(), 200);
     }
 }

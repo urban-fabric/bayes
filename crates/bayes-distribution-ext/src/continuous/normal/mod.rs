@@ -7,8 +7,27 @@ use rand::{Rng, RngExt};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
 use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::Real;
+use euclid_numeric::Real;
 
+/// The **normal** (Gaussian) distribution with mean `mu` and standard deviation
+/// `sigma > 0`. Support `ℝ`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{ContinuousCdf, Moments, Normal};
+///
+/// let n = Normal::new(0.0, 1.0)?;
+/// assert!((n.cdf(0.0_f64) - 0.5).abs() < 1e-12);
+/// // The number behind every 95% interval.
+/// assert!((n.inverse_cdf(0.975_f64) - 1.959_963_984_540).abs() < 1e-9);
+///
+/// // Shifting and scaling maps the whole family onto the standard one.
+/// let shifted = Normal::new(10.0, 2.0)?;
+/// assert!((shifted.cdf(12.0_f64) - n.cdf(1.0_f64)).abs() < 1e-12);
+/// assert!((shifted.variance() - 4.0).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Normal {
     mean: f64,
@@ -156,6 +175,14 @@ impl<T: Real> ContinuousCdf<T> for Normal {
     /// Stable `ln(1 − Φ((x-μ)/σ))`, the mirror of [`ln_cdf`](Self::ln_cdf).
     fn ln_sf(&self, x: T) -> T {
         kernels::normal_ln_sf(x, T::scalar(self.mean), T::scalar(self.std_dev))
+    }
+
+    /// Inverse survival by **reflection**: a normal is symmetric about its
+    /// mean, so `isf(p) = 2μ − Q(p)` exactly. The generic default forms `1 − p`
+    /// and returns infinity for every `p` below about `1e-16` — which is the
+    /// whole range a small one-sided p-value lives in.
+    fn isf(&self, p: T) -> T {
+        T::two() * T::scalar(self.params().0) - self.inverse_cdf(p)
     }
 }
 
