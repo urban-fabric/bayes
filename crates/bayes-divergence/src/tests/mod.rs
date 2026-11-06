@@ -6,10 +6,6 @@ use crate::{
     Laplace, LogNormal, Moments, Normal, Pareto, Poisson, Rayleigh, Weibull,
 };
 
-fn close(a: f64, b: f64, tol: f64) {
-    assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-}
-
 /// Numerical Bhattacharyya coefficient `∫ √(f·g)` by the trapezoid rule, for
 /// validating the closed-form Hellinger affinities.
 fn bc_integral(f: impl Fn(f64) -> f64, g: impl Fn(f64) -> f64, lo: f64, hi: f64) -> f64 {

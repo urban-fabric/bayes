@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 /// Gumbel log-density.
 pub fn gumbel_log_pdf<T: Real>(x: T, location: T, scale: T) -> T {
@@ -41,4 +41,14 @@ pub fn kl_gumbel<T: Real>(loc_self: T, scale_self: T, loc_other: T, scale_other:
         + (mu0.clone() - mu1.clone()) / b1.clone()
         + ((mu1 - mu0) / b1.clone()).exp() * (T::one() + b0 / b1).ln_gamma().exp()
         - T::one()
+}
+
+/// Gumbel log-survival `ln(1 − e^{−t})` with `t = e^{−z}`.
+///
+/// `ln_1m_exp` is the whole point: in the upper tail `t → 0` and the answer
+/// tends to `ln t = −z`, which the naive `ln(1 − exp(−t))` loses entirely to
+/// cancellation.
+pub fn gumbel_ln_sf<T: Real>(x: T, location: T, scale: T) -> T {
+    let z = (x - location) / scale;
+    (-(-z).exp()).ln_1m_exp()
 }

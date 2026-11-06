@@ -11,7 +11,7 @@ use crate::{
     NegativeBinomial, Normal, Pareto, Poisson, Rayleigh, Uniform, VonMises, Wald, Weibull,
 };
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Integer, Natural, Real};
+use euclid_numeric::{Boolean, Compare, Integer, Natural, Real};
 
 /// Closed-form Kullback-Leibler divergence `D_KL(self || other)`, in nats.
 ///

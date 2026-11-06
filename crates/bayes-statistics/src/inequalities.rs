@@ -1,9 +1,9 @@
 //! **Proof-backed moment inequalities** — certifiers and bounds on raw moments, mirroring
 //! riemann `RiemannLean/Bayes/Inequalities.lean` (3-axiom basis). The tail/concentration
-//! bounds and the variance cap live in [`super::confidence::concentration`]; this module
+//! bounds and the variance cap live in `confidence::concentration`; this module
 //! collects the moment-*relationship* facts: Cauchy–Schwarz and the Jensen gap.
 
-use euclid::Real;
+use euclid_numeric::Real;
 
 /// **Cauchy–Schwarz moment consistency**: whether three (computed) moments satisfy the
 /// inequality that *every* joint distribution obeys, `E[XY]² ≤ E[X²]·E[Y²]`. A `false`
@@ -30,10 +30,7 @@ pub fn jensen_gap_lower_bound<T: Real>(variance: T, convexity_modulus: T) -> T {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn cauchy_schwarz_accepts_consistent_and_rejects_impossible_moments() {
@@ -50,9 +47,9 @@ mod tests {
     #[test]
     fn jensen_gap_scales_with_variance_and_modulus() {
         // strongly-convex φ (m=2), Var=4 ⇒ gap ≥ 4.
-        close(jensen_gap_lower_bound(4.0, 2.0), 4.0, 1e-12);
+        assert_close!(jensen_gap_lower_bound(4.0, 2.0), 4.0, 1e-12);
         // m=0 recovers plain Jensen: only gap ≥ 0.
-        close(jensen_gap_lower_bound(4.0, 0.0), 0.0, 1e-12);
+        assert_close!(jensen_gap_lower_bound(4.0, 0.0), 0.0, 1e-12);
         assert!(jensen_gap_lower_bound(-1.0_f64, 2.0).is_nan());
     }
 }

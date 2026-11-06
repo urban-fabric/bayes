@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 /// Uniform log-density on its support.
 pub fn uniform_log_pdf_on_support<T: Real>(width: T) -> T {
@@ -27,8 +27,11 @@ pub fn kl_uniform_on_support<T: Real>(width_self: T, width_other: T) -> T {
 
 /// Uniform squared Hellinger distance.
 pub fn hellinger_sq_uniform<T: Real>(lo_self: T, hi_self: T, lo_other: T, hi_other: T) -> T {
-    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()))
-        .max(T::zero());
+    // Clamped through `clamp_negative_to_zero`, so a `NaN` bound does not
+    // become an overlap of exactly zero — which would read as disjoint support.
+    let overlap = crate::clamp_negative_to_zero(
+        hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()),
+    );
     let width_self = hi_self - lo_self;
     let width_other = hi_other - lo_other;
     crate::hellinger_sq_from_bc(overlap / (width_self * width_other).sqrt())
@@ -47,8 +50,11 @@ pub fn renyi_uniform_on_support<T: Real>(
     hi_other: T,
     alpha: T,
 ) -> T {
-    let overlap = (hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()))
-        .max(T::zero());
+    // Clamped through `clamp_negative_to_zero`, so a `NaN` bound does not
+    // become an overlap of exactly zero — which would read as disjoint support.
+    let overlap = crate::clamp_negative_to_zero(
+        hi_self.clone().min(hi_other.clone()) - lo_self.clone().max(lo_other.clone()),
+    );
     let width_self = hi_self - lo_self;
     let width_other = hi_other - lo_other;
     let one_minus_alpha = T::one() - alpha.clone();

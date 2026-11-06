@@ -3,13 +3,32 @@ use rand::distr::Distribution;
 
 use super::poisson::Poisson;
 use crate::continuous::Gamma;
+use crate::estimation::sample::Summary;
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
-use bayes_core_ext::BayesError;
-use euclid::{Compare, Element, Natural, Real};
+use bayes_core_ext::{BayesError, validate};
+use euclid_numeric::{Compare, Element, Natural, Real};
 
 /// The negative binomial distribution: the number of failures before the `r`-th
 /// success in independent `Bernoulli(p)` trials (`r > 0` may be real — the
 /// generalized / Pólya form). Support `{0, 1, 2, …}`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Discrete, Moments, NegativeBinomial};
+///
+/// // Failures before the 5th success, so the support starts at 0.
+/// let nb = NegativeBinomial::new(5.0, 0.4)?;
+/// assert!((nb.mean() - 7.5).abs() < 1e-12);    // r (1 - p) / p
+///
+/// // Always *over*-dispersed, which is exactly what separates it from the
+/// // Poisson and makes it the standard remedy for overdispersed counts.
+/// assert!(nb.variance() > nb.mean());
+///
+/// // One required success is the geometric, counted as failures.
+/// assert!((NegativeBinomial::new(1.0, 0.4)?.pmf(0_u64) - 0.4).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NegativeBinomial {
     r: f64,
@@ -18,18 +37,7 @@ pub struct NegativeBinomial {
 
 impl NegativeBinomial {
     pub fn new(r: f64, p: f64) -> Result<Self, BayesError> {
-        if !r.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "r",
-                value: r,
-            });
-        }
-        if r <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "r",
-                value: r,
-            });
-        }
+        validate::positive(&[("r", r)])?;
         if p.is_nan() || !(0.0..=1.0).contains(&p) {
             return Err(BayesError::ProbabilityOutOfRange { value: p });
         }
@@ -158,23 +166,43 @@ where
     }
 }
 
+/// Method of moments, on an **overdispersed** sample.
+///
+/// The variance-to-mean ratio is `1/p` whatever `r` happens to be, so
+/// `p̂ = m/v` and then `r̂ = m²/(v − m)`.
+///
+/// `None` unless `v > m`. A negative binomial always has variance exceeding its
+/// mean — that is exactly what distinguishes it from the Poisson it generalizes
+/// — so an underdispersed sample has no fit in this family, and
+/// [`Poisson`] is the one it is asking for.
+impl crate::Estimate for NegativeBinomial {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::new(data)?;
+        if s.min < 0.0 || data.iter().any(|x| x.fract() != 0.0) {
+            return None;
+        }
+        if s.mean <= 0.0 || s.variance <= s.mean {
+            return None;
+        }
+        let p = s.mean / s.variance;
+        NegativeBinomial::new(s.mean * s.mean / (s.variance - s.mean), p).ok()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn geometric_special_case() {
         let nb = NegativeBinomial::new(1.0, 0.3).unwrap();
-        close(nb.pmf(0_u64), 0.3, 1e-12);
-        close(nb.pmf(1_u64), 0.3 * 0.7, 1e-12);
-        close(nb.mean(), 0.7 / 0.3, 1e-12);
+        assert_close!(nb.pmf(0_u64), 0.3, 1e-12);
+        assert_close!(nb.pmf(1_u64), 0.3 * 0.7, 1e-12);
+        assert_close!(nb.mean(), 0.7 / 0.3, 1e-12);
     }
 
     #[test]
@@ -183,11 +211,11 @@ mod tests {
         let mut cum = 0.0;
         for k in 0..60u64 {
             cum += nb.pmf(k);
-            close(nb.cdf(k), cum, 1e-7);
+            assert_close!(nb.cdf(k), cum, 1e-7);
         }
         let mut rng = ChaCha8Rng::seed_from_u64(9);
         let n = 60_000;
         let s: u64 = (0..n).map(|_| nb.sample(&mut rng)).sum();
-        close(s as f64 / n as f64, nb.mean(), 0.05);
+        assert_close!(s as f64 / n as f64, nb.mean(), 0.05);
     }
 }

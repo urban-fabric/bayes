@@ -2,14 +2,34 @@ use rand::Rng;
 use rand::distr::Distribution;
 
 use super::gamma::sample_standard_gamma;
+use crate::estimation::sample::Summary;
 use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Real};
+use euclid_numeric::{Boolean, Compare, Real};
 
 /// The beta distribution on `(0, 1)` with shape parameters `α, β > 0`. Density
 /// `f(x) = x^{α-1}(1-x)^{β-1} / B(α, β)`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Beta, Continuous, Moments};
+///
+/// // Beta(1, 1) is the uniform distribution on (0, 1): a flat density of 1.
+/// assert!((Beta::new(1.0, 1.0)?.pdf(0.3_f64) - 1.0).abs() < 1e-12);
+///
+/// // Raising `beta` pulls the mass toward 0. The mean is alpha/(alpha + beta).
+/// let skewed = Beta::new(2.0, 5.0)?;
+/// assert!((skewed.mean() - 2.0 / 7.0).abs() < 1e-12);
+/// assert!(skewed.pdf(0.2_f64) > skewed.pdf(0.8_f64));
+///
+/// // Both shapes below 1 turns the density inside out, into a U.
+/// let u_shaped = Beta::new(0.5, 0.5)?;
+/// assert!(u_shaped.pdf(0.05_f64) > u_shaped.pdf(0.5_f64));
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Beta {
     alpha: f64,
@@ -18,14 +38,7 @@ pub struct Beta {
 
 impl Beta {
     pub fn new(alpha: f64, beta: f64) -> Result<Self, BayesError> {
-        for (name, v) in [("alpha", alpha), ("beta", beta)] {
-            if !v.is_finite() {
-                return Err(BayesError::NonFinite { name, value: v });
-            }
-            if v <= 0.0 {
-                return Err(BayesError::NotPositive { name, value: v });
-            }
-        }
+        validate::positive(&[("alpha", alpha), ("beta", beta)])?;
         Ok(Self { alpha, beta })
     }
 
@@ -137,8 +150,43 @@ where
     fn ln_pdf(&self, x: T) -> T {
         let zero = T::zero();
         let one = T::one();
-        let valid = x.gt(&zero).and(&x.lt(&one));
+        // The **closed** interval, matching `Support`. The kernel is written with `xlogy`, so it
+        // carries the correct endpoint limits itself (`+inf` for shape < 1, `ln β` at shape = 1,
+        // `-inf` above); masking the endpoints off instead reported a density of zero there for
+        // every shape, which made `Beta(1, 1)` differ from `Uniform(0, 1)` at both ends.
+        let valid = x.ge(&zero).and(&x.le(&one));
         T::select(&valid, self.ln_pdf_kernel(x), T::neg_infinity())
+    }
+}
+
+/// Method of moments on `(0, 1)`, **delegated** to
+/// [`ExponentialFamily::fit`](crate::ExponentialFamily::fit).
+///
+/// The arithmetic — `t = m(1−m)/v − 1`, then `α = m·t` and `β = (1−m)·t` — is
+/// already written once in this crate, as `Beta`'s
+/// [`from_sufficient`](crate::ExponentialFamily::from_sufficient). A second
+/// copy here would be free to drift away from it, so this adds only what that
+/// one structurally cannot see, and then hands over.
+///
+/// What it adds is the **support**. A sufficient statistic carries a mean and a
+/// variance and nothing else, so `from_sufficient` cannot distinguish
+/// `[0.0, 0.5]` from a sample drawn inside the open interval: it sees
+/// `m = 0.25` and `v = 0.0625`, finds `t = 2`, and returns `Beta(0.5, 1.5)` — a
+/// fit to data containing a point where that density is zero. Only the sample
+/// itself shows the violation.
+///
+/// Note that the other precondition is unreachable rather than merely unmet:
+/// for data strictly inside `(0, 1)` the variance is always below `m(1−m)`,
+/// since that is the supremum attained only by mass at the two endpoints. So a
+/// bimodal sample does not fail to fit — it fits a U-shaped beta with both
+/// shapes below 1, which is the correct answer.
+impl crate::Estimate for Beta {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::with_spread(data)?;
+        if s.min <= 0.0 || s.max >= 1.0 {
+            return None;
+        }
+        <Self as crate::ExponentialFamily>::fit(data)
     }
 }
 
@@ -146,26 +194,23 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn uniform_is_beta_one_one() {
         let b = Beta::new(1.0, 1.0).unwrap();
-        close(b.cdf(0.37), 0.37, 1e-10);
-        close(b.pdf(0.5), 1.0, 1e-10);
+        assert_close!(b.cdf(0.37), 0.37, 1e-10);
+        assert_close!(b.pdf(0.5), 1.0, 1e-10);
     }
 
     #[test]
     fn moments_and_quantile() {
         let b = Beta::new(2.0, 5.0).unwrap();
-        close(b.mean(), 2.0 / 7.0, 1e-12);
+        assert_close!(b.mean(), 2.0 / 7.0, 1e-12);
         for &p in &[0.1, 0.5, 0.9] {
-            close(b.cdf(b.inverse_cdf(p)), p, 1e-8);
+            assert_close!(b.cdf(b.inverse_cdf(p)), p, 1e-8);
         }
     }
 
@@ -175,6 +220,6 @@ mod tests {
         let b = Beta::new(2.0, 5.0).unwrap();
         let n = 60_000;
         let s: f64 = (0..n).map(|_| b.sample(&mut rng)).sum();
-        close(s / n as f64, b.mean(), 0.01);
+        assert_close!(s / n as f64, b.mean(), 0.01);
     }
 }

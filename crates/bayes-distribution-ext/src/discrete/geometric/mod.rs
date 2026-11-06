@@ -1,12 +1,28 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::estimation::sample::Summary;
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
 use bayes_core_ext::BayesError;
-use euclid::{Compare, Element, Natural, Real};
+use euclid_numeric::{Compare, Element, Natural, Real};
 
 /// The geometric distribution: the number of independent `Bernoulli(p)` trials up
 /// to and including the first success. Support `{1, 2, 3, …}`, `p ∈ (0, 1]`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Discrete, Geometric, Moments};
+///
+/// // Trials up to *and including* the first success, so the support starts at
+/// // 1 and the mean is 1/p. The other common convention counts failures and
+/// // starts at 0; this one does not.
+/// let g = Geometric::new(0.25)?;
+/// assert!((g.pmf(1_u64) - 0.25).abs() < 1e-12);
+/// assert_eq!(g.pmf(0_u64), 0.0);
+/// assert!((g.mean() - 4.0).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Geometric {
     p: f64,
@@ -137,14 +153,28 @@ where
     }
 }
 
+/// `p̂ = 1/x̄`, the maximum likelihood estimator for the trial-count
+/// parameterization.
+///
+/// This family counts trials *up to and including* the first success, so its
+/// support starts at 1 and its mean is `1/p`. A sample containing a zero
+/// belongs to the failure-count convention instead, and is refused rather than
+/// fitted as though it were shifted — which would otherwise understate `p`.
+impl crate::Estimate for Geometric {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::new(data)?;
+        if s.min < 1.0 || data.iter().any(|x| x.fract() != 0.0) {
+            return None;
+        }
+        Geometric::new(1.0 / s.mean).ok()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn pmf_cdf_and_moments() {
@@ -152,11 +182,11 @@ mod tests {
         let mut cum = 0.0;
         for k in 1..=50u64 {
             cum += g.pmf(k);
-            close(g.cdf(k), cum, 1e-9);
+            assert_close!(g.cdf(k), cum, 1e-9);
         }
-        close(g.mean(), 4.0, 1e-12);
-        close(g.variance(), 0.75 / 0.0625, 1e-12);
-        close(g.pmf(1_u64), 0.25, 1e-12);
+        assert_close!(g.mean(), 4.0, 1e-12);
+        assert_close!(g.variance(), 0.75 / 0.0625, 1e-12);
+        assert_close!(g.pmf(1_u64), 0.25, 1e-12);
     }
 
     #[test]

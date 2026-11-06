@@ -1,6 +1,6 @@
 use crate::{Continuous, ContinuousDensityKernel, Moments};
 use bayes_kernels as kernels;
-use euclid::Real;
+use euclid_numeric::Real;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StudentT<R: Real = f64> {

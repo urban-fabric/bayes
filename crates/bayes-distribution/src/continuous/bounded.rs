@@ -1,6 +1,6 @@
 use crate::{Continuous, ContinuousDensityKernel, Moments};
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Real};
+use euclid_numeric::{Boolean, Compare, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Beta<R: Real = f64> {

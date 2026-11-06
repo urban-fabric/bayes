@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 /// Von Mises log-density on `[−pi, pi)`.
 pub fn von_mises_log_pdf<T: Real>(x: T, mean: T, kappa: T, log_normalizer: T) -> T {

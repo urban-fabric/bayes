@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 pub use super::gamma::{
     gamma_exponential_log_marginal_likelihood, gamma_exponential_log_predictive,
@@ -15,8 +15,13 @@ pub fn exponential_log_survival_on_support<T: Real>(x: T, rate: T) -> T {
 }
 
 /// Exponential CDF on `x >= 0`.
+/// `−expm1(−t)` rather than `1 − exp(−t)`: for a small `t` the exponential is
+/// `1 − t + …`, and subtracting it from 1 throws away every digit of `t` below
+/// the ulp of 1. `exponential_cdf(4e-9, 2.5)` came back `1.000000005e-8` where
+/// the answer is `9.99999995e-9` — eight digits lost at the bottom of the
+/// range, which is exactly where a quantile has to invert it.
 pub fn exponential_cdf_on_support<T: Real>(x: T, rate: T) -> T {
-    T::one() - (-(rate * x)).exp()
+    -((-(rate * x)).exp_m1())
 }
 
 /// Exponential CDF with the below-support floor folded in.
@@ -48,8 +53,11 @@ pub fn exponential_ln_sf<T: Real>(x: T, rate: T) -> T {
 }
 
 /// Exponential quantile.
+/// `ln(1 − p)` is written `ln_1p(−p)`: for a small `p` the subtraction rounds
+/// `1 − p` to the nearest `f64` below 1 and quantises the answer in steps of
+/// `1.1e-16`, so the lower tail came back about 11% high at `p = 1e-16`.
 pub fn exponential_quantile<T: Real>(p: T, rate: T) -> T {
-    -((T::one() - p).ln()) / rate
+    -((-p).ln_1p()) / rate
 }
 
 /// Exponential entropy `1 - ln(rate)`.
@@ -72,4 +80,12 @@ pub fn hellinger_sq_exponential<T: Real>(rate_self: T, rate_other: T) -> T {
 pub fn chi_squared_exponential_on_support<T: Real>(rate_self: T, rate_other: T) -> T {
     let (l0, l1) = (rate_self, rate_other);
     l0.clone() * l0.clone() / (l1.clone() * (T::two() * l0 - l1)) - T::one()
+}
+
+/// Exponential inverse survival `−ln(p)/λ`, exact for every representable `p`.
+///
+/// The generic `inverse_cdf(1 − p)` route returns infinity for any `p` below
+/// about `1e-16`, because `1 − p` is then `1`.
+pub fn exponential_isf<T: Real>(p: T, rate: T) -> T {
+    -(p.ln()) / rate
 }

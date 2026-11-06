@@ -2,7 +2,7 @@
 //! exact**, the **exact binomial** test, and **McNemar's** test.
 
 use super::{TestResult, binomial_two_sided_p_value, chi2_upper, nan_result};
-use euclid::Natural;
+use euclid_numeric::Natural;
 
 fn valid_table(table: &[Vec<f64>]) -> Option<(usize, usize)> {
     let r = table.len();
@@ -133,10 +133,7 @@ pub fn mcnemar(b: u64, c: u64) -> TestResult {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn chi_squared_fair_die() {
@@ -158,9 +155,9 @@ mod tests {
 
     #[test]
     fn fishers_exact_known_values() {
-        close(fishers_exact(3, 1, 1, 3).p_value, 34.0 / 70.0, 1e-9);
+        assert_close!(fishers_exact(3, 1, 1, 3).p_value, 34.0 / 70.0, 1e-9);
         assert!(fishers_exact(10, 0, 0, 10).p_value < 0.01);
-        close(fishers_exact(5, 5, 5, 5).p_value, 1.0, 1e-9);
+        assert_close!(fishers_exact(5, 5, 5, 5).p_value, 1.0, 1e-9);
     }
 
     #[test]

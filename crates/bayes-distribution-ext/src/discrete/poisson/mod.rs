@@ -1,10 +1,29 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::estimation::sample::Summary;
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
 use bayes_core_ext::BayesError;
-use euclid::{Compare, Element, Natural, Real};
+use euclid_numeric::{Compare, Element, Natural, Real};
 
+/// The **Poisson** distribution with rate `lambda > 0`: the number of
+/// independent events in a fixed interval. Support `{0, 1, 2, …}`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Discrete, Moments, Poisson};
+///
+/// let p = Poisson::new(4.0)?;
+/// // The chance of seeing nothing at all is exp(-lambda).
+/// assert!((p.pmf(0_u64) - (-4.0_f64).exp()).abs() < 1e-12);
+///
+/// // Mean and variance coincide. Comparing the two in a real sample is the
+/// // standard dispersion check: a larger variance means the counts want a
+/// // negative binomial instead.
+/// assert!((p.mean() - p.variance()).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Poisson {
     lambda: f64,
@@ -143,6 +162,22 @@ impl Moments for Poisson {
 
     fn median(&self) -> f64 {
         f64::NAN
+    }
+}
+
+/// `λ̂ = x̄`, the maximum likelihood estimator.
+///
+/// The variance gives a second estimate of the same parameter, and comparing
+/// the two is the standard dispersion check: a sample variance well above the
+/// mean says the data is overdispersed and wants
+/// [`NegativeBinomial`](crate::NegativeBinomial) instead.
+impl crate::Estimate for Poisson {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::new(data)?;
+        if s.min < 0.0 || data.iter().any(|x| x.fract() != 0.0) {
+            return None;
+        }
+        Poisson::new(s.mean).ok()
     }
 }
 

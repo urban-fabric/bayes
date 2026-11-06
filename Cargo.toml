@@ -3,9 +3,9 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
-license = "Proprietary"
+license = "Apache-2.0"
 authors = ["Raymond Mead"]
 repository = "https://github.com/urban-fabric/bayes"
 rust-version = "1.95"
@@ -14,12 +14,22 @@ rust-version = "1.95"
 # external
 rand = "0.10"
 rand_chacha = "0.10"
-# bayes is **numeric-only**: it writes scalar-generic closed forms over `euclid::numeric`
+# bayes is **numeric-only**: it writes scalar-generic closed forms over `euclid-numeric`
 # (`Real`/`Complex`) plus host-`f64` statistics. It does not depend on the container
 # tier — the matrix-coupled multivariate densities now live concretely in the backend
 # (`maxwell::dist`). Verification that bayes' write-once closed forms run on a backend lives
 # in the *backend* crate (see maxwell's `bayes_density` test); the arrow stays backend → content.
-euclid = { git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
+#
+# euclid 0.3 dropped the single `euclid` facade crate in favour of per-tier crates, so the
+# two tiers bayes needs are named directly: `euclid-numeric` for the scalar contracts, and
+# `euclid-random` for the explicit-key sampler contract that `bayes-distribution::sample`
+# writes against. The container (`euclid-tensor`) and units tiers stay out of the graph.
+#
+# `version` alongside `git` is not redundant: euclid is unpublished, so the source is the
+# git branch, but the version acts as a semver assertion — a euclid that moves to 0.4 fails
+# resolution here instead of silently breaking a formula.
+euclid-numeric = { version = "0.3.0", git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
+euclid-random = { version = "0.3.0", git = "ssh://git@github.com/urban-fabric/euclid.git", branch = "main" }
 # internal members
 bayes-core = { path = "crates/bayes-core" }
 bayes-core-ext = { path = "crates/bayes-core-ext" }
@@ -29,6 +39,11 @@ bayes-distribution-ext = { path = "crates/bayes-distribution-ext" }
 bayes-divergence = { path = "crates/bayes-divergence" }
 bayes-statistics = { path = "crates/bayes-statistics" }
 bayes-process = { path = "crates/bayes-process" }
+bayes-sampling = { path = "crates/bayes-sampling" }
+# Dev-only shared test probes; `publish = false`, so it never reaches a consumer. Test
+# targets depend on it and it depends on them, which is a cycle only through dev edges —
+# cargo permits that, and it is what lets one canonical family sweep serve every suite.
+bayes-utils = { path = "crates/bayes-utils" }
 
 [workspace.lints.rust]
 unsafe_code = "warn"

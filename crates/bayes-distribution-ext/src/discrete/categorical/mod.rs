@@ -1,12 +1,28 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::estimation::sample::category_counts;
 use crate::{Discrete, DiscreteCdf, Moments, Support};
 use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
 
 /// The categorical distribution over the integer categories `{0, …, k-1}` with
 /// (normalized) probabilities `p`. Built from non-negative, not-all-zero weights.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Categorical, Discrete};
+///
+/// // Weights are normalized, so they need not sum to one.
+/// let c = Categorical::new(&[2.0, 3.0, 5.0])?;
+/// assert!((c.probabilities()[2] - 0.5).abs() < 1e-12);
+/// assert!((c.pmf(0_u64) - 0.2).abs() < 1e-12);
+///
+/// // Outside the listed categories there is no mass.
+/// assert_eq!(c.pmf(3_u64), 0.0);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct Categorical {
     /// Normalized category probabilities.
@@ -156,26 +172,37 @@ impl Moments for Categorical {
     }
 }
 
+/// The observed frequencies, which are the maximum likelihood estimates.
+///
+/// The number of categories is taken as `max + 1`. So a category that was never
+/// observed *at the top of the range* is simply not in the fit, while one never
+/// observed *in the middle* gets weight zero. That asymmetry cannot be avoided
+/// from a bare sample: nothing in the data distinguishes "there is no such
+/// category" from "that category did not come up". Pass the width explicitly
+/// via [`Categorical::new`] if it is known.
+impl crate::Estimate for Categorical {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        Categorical::new(&category_counts(data)?).ok()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn normalizes_weights_and_pmf_cdf() {
         let c = Categorical::new(&[1.0, 3.0]).unwrap();
-        close(c.pmf(0), 0.25, 1e-12);
-        close(c.pmf(1), 0.75, 1e-12);
-        close(c.cdf(0), 0.25, 1e-12);
-        close(c.cdf(1), 1.0, 1e-12);
+        assert_close!(c.pmf(0), 0.25, 1e-12);
+        assert_close!(c.pmf(1), 0.75, 1e-12);
+        assert_close!(c.cdf(0), 0.25, 1e-12);
+        assert_close!(c.cdf(1), 1.0, 1e-12);
         assert_eq!(c.mode(), 1.0);
-        close(c.mean(), 0.75, 1e-12);
+        assert_close!(c.mean(), 0.75, 1e-12);
     }
 
     #[test]
@@ -187,8 +214,8 @@ mod tests {
         for _ in 0..n {
             counts[c.sample(&mut rng) as usize] += 1;
         }
-        close(counts[0] as f64 / n as f64, 0.2, 0.02);
-        close(counts[2] as f64 / n as f64, 0.5, 0.02);
+        assert_close!(counts[0] as f64 / n as f64, 0.2, 0.02);
+        assert_close!(counts[2] as f64 / n as f64, 0.5, 0.02);
     }
 
     #[test]

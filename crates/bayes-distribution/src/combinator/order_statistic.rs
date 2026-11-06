@@ -1,5 +1,5 @@
 use crate::{BayesError, Beta, Continuous, ContinuousCdf, Support};
-use euclid::{Natural, Real};
+use euclid_numeric::{Natural, Real};
 
 /// Distribution of the `rank`-th order statistic from `sample_size` independent
 /// draws of a continuous base distribution.
@@ -134,25 +134,22 @@ fn ln_power_probability<T: Real>(p: T, exponent: u64) -> T {
 mod tests {
     use super::*;
     use crate::Uniform;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core::assert_close;
 
     #[test]
     fn uniform_order_statistic_matches_beta_formula() {
         let third = OrderStatistic::new(Uniform::new(0.0, 1.0), 5, 3).unwrap();
-        close(third.pdf(0.5), 1.875, 1e-12);
-        close(third.cdf(0.5), 0.5, 1e-12);
-        close(third.inverse_cdf(0.5), 0.5, 1e-9);
+        assert_close!(third.pdf(0.5), 1.875, 1e-12);
+        assert_close!(third.cdf(0.5), 0.5, 1e-12);
+        assert_close!(third.inverse_cdf(0.5), 0.5, 1e-9);
     }
 
     #[test]
     fn min_and_max_have_closed_form_cdfs() {
         let min = OrderStatistic::minimum(Uniform::new(0.0, 1.0), 4).unwrap();
         let max = OrderStatistic::maximum(Uniform::new(0.0, 1.0), 4).unwrap();
-        close(min.cdf(0.25), 1.0 - 0.75_f64.powi(4), 1e-12);
-        close(max.cdf(0.25), 0.25_f64.powi(4), 1e-12);
+        assert_close!(min.cdf(0.25), 1.0 - 0.75_f64.powi(4), 1e-12);
+        assert_close!(max.cdf(0.25), 0.25_f64.powi(4), 1e-12);
         assert!(OrderStatistic::new(Uniform::new(0.0, 1.0), 3, 0).is_err());
     }
 }

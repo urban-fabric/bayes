@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 use crate::glm::sigmoid;
 
@@ -28,7 +28,9 @@ pub fn logistic_ln_sf<T: Real>(x: T, location: T, scale: T) -> T {
 
 /// Logistic quantile.
 pub fn logistic_quantile<T: Real>(p: T, location: T, scale: T) -> T {
-    location + scale * (p.clone() / (T::one() - p)).ln()
+    // `ln p - ln_1p(-p)` rather than `ln(p/(1 - p))`, which loses the lower
+    // tail to the same subtraction described in `exponential_quantile`.
+    location + scale * (p.clone().ln() - (-p).ln_1p())
 }
 
 /// Logistic entropy.

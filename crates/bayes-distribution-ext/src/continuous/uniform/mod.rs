@@ -5,8 +5,26 @@ use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
 use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Real};
+use euclid_numeric::{Boolean, Compare, Real};
 
+/// The **continuous uniform** distribution on `[lo, hi]` with `lo < hi`:
+/// constant density `1/(hi − lo)` across the interval.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Continuous, ContinuousCdf, Moments, Uniform};
+///
+/// let u = Uniform::new(0.0, 10.0)?;
+/// assert!((u.pdf(4.0_f64) - 0.1).abs() < 1e-12);
+/// assert!((u.mean() - 5.0).abs() < 1e-12);
+/// assert!((u.variance() - 100.0 / 12.0).abs() < 1e-12);
+///
+/// // Its CDF is linear between the bounds, which is what makes it the
+/// // inverse-transform starting point for every other family.
+/// assert!((u.cdf(2.5_f64) - 0.25).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Uniform {
     lo: f64,
@@ -115,8 +133,18 @@ impl Moments for Uniform {
 }
 
 impl Estimate for Uniform {
+    /// The sample range.
+    ///
+    /// The finiteness check is load bearing and was once missing. `f64::min`
+    /// and `f64::max` **ignore** a `NaN` rather than propagating it — by IEEE
+    /// design, since they are the `minNum`/`maxNum` operations — so folding
+    /// with them over a sample containing a `NaN` silently skips it and returns
+    /// a confident fit from the remaining points. Every other estimator in the
+    /// crate inherits its rejection from
+    /// [`Summary`](crate::estimation::sample::Summary); this one folds by hand
+    /// and has to say so itself.
     fn from_sample(data: &[f64]) -> Option<Self> {
-        if data.len() < 2 {
+        if data.len() < 2 || data.iter().any(|x| !x.is_finite()) {
             return None;
         }
         let lo = data.iter().copied().fold(f64::INFINITY, f64::min);

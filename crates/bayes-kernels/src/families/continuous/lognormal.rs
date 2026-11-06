@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 use super::normal::{normal_cdf, normal_quantile};
 
@@ -51,4 +51,14 @@ pub fn lognormal_excess_kurtosis<T: Real>(std_log: T) -> T {
 /// Log-normal entropy.
 pub fn lognormal_entropy<T: Real>(mean_log: T, std_log: T) -> T {
     mean_log + T::half() * (T::tau() * T::e() * std_log.clone() * std_log).ln()
+}
+
+/// Log-normal log-survival: the normal's, evaluated at `ln x`.
+///
+/// Delegating is not laziness — it inherits the `erfcx` tail treatment, so a
+/// log-normal's upper tail is as accurate as a normal's.
+pub fn lognormal_ln_sf<T: Real>(x: T, mu: T, sigma: T) -> T {
+    let in_support = x.gt(&T::zero());
+    let safe_x = T::select(&in_support, x, T::one());
+    crate::normal_ln_sf(safe_x.ln(), mu, sigma).mask_invalid(in_support, T::zero())
 }

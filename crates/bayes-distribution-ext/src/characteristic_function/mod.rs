@@ -155,15 +155,12 @@ impl CharacteristicFunction for NegativeBinomial {
 mod tests {
     use super::*;
     use crate::Moments;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     fn cf_origin_is_one(d: &dyn CharacteristicFunction) {
         let (re, im) = d.characteristic_function(0.0);
-        close(re, 1.0, 1e-12);
-        close(im, 0.0, 1e-12);
+        assert_close!(re, 1.0, 1e-12);
+        assert_close!(im, 0.0, 1e-12);
     }
 
     #[test]
@@ -202,11 +199,11 @@ mod tests {
     fn cf_closed_forms_match_known_values() {
         // Standard normal: φ(t) = e^{−t²/2}, purely real.
         let (re, im) = Normal::new(0.0, 1.0).unwrap().characteristic_function(1.0);
-        close(re, (-0.5_f64).exp(), 1e-12);
-        close(im, 0.0, 1e-12);
+        assert_close!(re, (-0.5_f64).exp(), 1e-12);
+        assert_close!(im, 0.0, 1e-12);
 
         // Cauchy(0,1): φ(t) = e^{−|t|}.
-        close(
+        assert_close!(
             Cauchy::new(0.0, 1.0)
                 .unwrap()
                 .characteristic_function(2.0)
@@ -217,15 +214,15 @@ mod tests {
 
         // Exponential(1): φ(1) = 1/(1−i) = (1+i)/2.
         let (re, im) = Exponential::new(1.0).unwrap().characteristic_function(1.0);
-        close(re, 0.5, 1e-12);
-        close(im, 0.5, 1e-12);
+        assert_close!(re, 0.5, 1e-12);
+        assert_close!(im, 0.5, 1e-12);
 
         // Bernoulli(½) at t = π: 1 − p + p·cos π = 0, im = p·sin π = 0.
         let (re, im) = Bernoulli::new(0.5)
             .unwrap()
             .characteristic_function(std::f64::consts::PI);
-        close(re, 0.0, 1e-12);
-        close(im, 0.0, 1e-12);
+        assert_close!(re, 0.0, 1e-12);
+        assert_close!(im, 0.0, 1e-12);
     }
 
     #[test]
@@ -234,7 +231,7 @@ mod tests {
         let check = |d: &dyn CharacteristicFunction, mean: f64| {
             let h = 1e-5;
             let im = d.characteristic_function(h).1;
-            close(im / h, mean, 1e-4);
+            assert_close!(im / h, mean, 1e-4);
         };
         let g = Gamma::new(3.0, 2.0).unwrap();
         check(&g, g.mean());

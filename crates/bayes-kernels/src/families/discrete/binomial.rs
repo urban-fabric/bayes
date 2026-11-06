@@ -1,4 +1,4 @@
-use euclid::numeric::{Integer, Real};
+use euclid_numeric::{Integer, Real};
 
 pub use crate::families::continuous::beta::beta_binomial_log_predictive;
 pub use crate::glm::{binomial_logit_curvature, binomial_logit_score};

@@ -33,7 +33,7 @@
 
 pub mod primitives;
 
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 pub use crate::primitives::{
     complex_normal_log_prob_with_normalizer, complex_residual_norm_sqr, normal_log_kernel,
@@ -46,10 +46,26 @@ fn ln_i0<T: Real>(x: T) -> T {
     x.ln_bessel_i0()
 }
 
-/// `H² = (1 − BC).max(0)` — squared Hellinger from a Bhattacharyya coefficient.
+/// `x` clamped at zero **without swallowing a `NaN`**.
+///
+/// `max` implements IEEE `maxNum`, which *ignores* a `NaN` operand and returns
+/// the other one — so `(NaN).max(0)` is `0`. Wherever a quantity is clamped at
+/// zero because rounding can push it a hair negative, that silently converts
+/// "no information" into "exactly zero", and zero is rarely a neutral answer: a
+/// squared Hellinger distance of `0` means *identical distributions*, and a
+/// mutual information of `0` means *independent*. `hellinger_sq(Normal(0,1),
+/// Normal(0, NaN))` reported `0` for exactly this reason.
+///
+/// `select(x < 0, 0, x)` absorbs the same rounding noise and leaves a `NaN`
+/// alone, because `NaN < 0` is false.
+pub fn clamp_negative_to_zero<T: Real>(x: T) -> T {
+    T::select(&x.lt(&T::zero()), T::zero(), x)
+}
+
+/// `H² = max(1 − BC, 0)` — squared Hellinger from a Bhattacharyya coefficient.
 /// Shared by the per-family Hellinger kernels and the categorical reduction.
 fn hellinger_sq_from_bc<T: Real>(bc: T) -> T {
-    (T::one() - bc).max(T::zero())
+    clamp_negative_to_zero(T::one() - bc)
 }
 
 // `families` is the implementation home (browse by distribution: `families::normal::*`).
@@ -187,3 +203,31 @@ pub use correlation::*;
 pub use glm::*;
 pub use quantile::*;
 pub use transform::*;
+
+/// Upper-tail kernels, grouped because they exist for one reason.
+///
+/// `ContinuousCdf::sf` is **derived** from `ln_sf`, and `ln_sf`'s own default
+/// goes through `1 - cdf` — which is exactly zero for every argument past the
+/// point where the CDF rounds to 1, around a survival of `1e-16`. These are the
+/// stable closed forms that make the region beyond it computable: a chi-squared
+/// p-value of `1e-40`, a Weibull's survival at ten times its scale, a normal's
+/// `sf(9)`. The `*_isf` entries are the same argument for the inverse, which
+/// otherwise has to form `1 - p`.
+pub use crate::families::{
+    cauchy::cauchy_ln_sf,
+    chi_squared::chi_squared_ln_sf,
+    exponential::exponential_isf,
+    fisher_snedecor::fisher_snedecor_ln_sf,
+    frechet::frechet_ln_sf,
+    gamma::gamma_ln_sf,
+    gumbel::gumbel_ln_sf,
+    half_normal::{half_normal_isf, half_normal_ln_sf},
+    inverse_gamma::inverse_gamma_ln_sf,
+    laplace::laplace_ln_sf,
+    lognormal::lognormal_ln_sf,
+    pareto::{pareto_isf, pareto_ln_sf},
+    rayleigh::{rayleigh_isf, rayleigh_ln_sf},
+    student_t::students_t_ln_sf,
+    wald::wald_ln_sf,
+    weibull::{weibull_isf, weibull_ln_sf},
+};

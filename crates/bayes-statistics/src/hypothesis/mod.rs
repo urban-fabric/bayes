@@ -12,7 +12,7 @@
 use std::f64::consts::SQRT_2;
 
 use bayes_distribution_ext::{ChiSquared, ContinuousCdf, StudentT};
-use euclid::{Natural, Real};
+use euclid_numeric::{Natural, Real};
 
 mod contingency;
 mod goodness_of_fit;

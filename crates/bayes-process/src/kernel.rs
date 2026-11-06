@@ -11,7 +11,7 @@
 //! on every backend rather than a host `if`.
 
 use bayes_kernels as kernels;
-use euclid::{Boolean, Real};
+use euclid_numeric::{Boolean, Real};
 
 /// A covariance function `k(a, b)`. Implementations must be symmetric
 /// (`k(a,b) = k(b,a)`) and positive semidefinite. Generic over the carrier `R: Real`.
@@ -188,16 +188,13 @@ impl<R: Real> Kernel<R> for Periodic<R> {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn rbf_peaks_at_zero_distance_and_is_symmetric() {
         let k = Rbf::new(2.0, 1.5);
-        close(k.covariance(&[1.0], &[1.0]), 2.0, 1e-12);
-        close(
+        assert_close!(k.covariance(&[1.0], &[1.0]), 2.0, 1e-12);
+        assert_close!(
             k.covariance(&[0.0], &[3.0]),
             k.covariance(&[3.0], &[0.0]),
             1e-15,
@@ -208,13 +205,13 @@ mod tests {
     #[test]
     fn matern_half_is_the_exponential_kernel() {
         let k = Matern::new(1.0, 1.0, MaternNu::Half);
-        close(k.covariance(&[0.0], &[2.0]), (-2.0f64).exp(), 1e-12);
+        assert_close!(k.covariance(&[0.0], &[2.0]), (-2.0f64).exp(), 1e-12);
     }
 
     #[test]
     fn periodic_repeats() {
         let k = Periodic::new(1.0, 1.0, 4.0);
-        close(
+        assert_close!(
             k.covariance(&[0.0], &[4.0]),
             k.covariance(&[0.0], &[0.0]),
             1e-12,

@@ -3,7 +3,7 @@ use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousCdf, Support};
 use bayes_core_ext::BayesError;
-use euclid::{Boolean, Real};
+use euclid_numeric::{Boolean, Real};
 
 /// A continuous distribution **truncated** to the interval `[lo, hi]` and
 /// renormalized: density `f(x) / (F(hi) − F(lo))` on the interval, zero outside.
@@ -105,19 +105,16 @@ impl<D: ContinuousCdf> Distribution<f64> for Truncated<D> {
 mod tests {
     use super::*;
     use crate::Normal;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn density_renormalizes_and_is_zero_outside() {
         let t = Truncated::new(Normal::new(0.0, 1.0).unwrap(), -1.0, 1.0).unwrap();
         let base = Normal::new(0.0, 1.0).unwrap();
         let z = base.cdf(1.0) - base.cdf(-1.0);
-        close(t.pdf(0.0), base.pdf(0.0) / z, 1e-12);
+        assert_close!(t.pdf(0.0), base.pdf(0.0) / z, 1e-12);
         assert_eq!(t.pdf(2.0), 0.0);
         assert_eq!(t.pdf(-3.0), 0.0);
     }
@@ -125,10 +122,10 @@ mod tests {
     #[test]
     fn cdf_quantile_and_bounded_samples() {
         let t = Truncated::new(Normal::new(0.0, 2.0).unwrap(), -1.0, 3.0).unwrap();
-        close(t.cdf(-1.0), 0.0, 1e-12);
-        close(t.cdf(3.0), 1.0, 1e-12);
+        assert_close!(t.cdf(-1.0), 0.0, 1e-12);
+        assert_close!(t.cdf(3.0), 1.0, 1e-12);
         for &p in &[0.1, 0.5, 0.9] {
-            close(t.cdf(t.inverse_cdf(p)), p, 1e-9);
+            assert_close!(t.cdf(t.inverse_cdf(p)), p, 1e-9);
         }
         let mut rng = ChaCha8Rng::seed_from_u64(3);
         for _ in 0..2000 {

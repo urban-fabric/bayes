@@ -1,6 +1,6 @@
 use crate::{Discrete, DiscreteMassKernel, Moments};
 use bayes_kernels as kernels;
-use euclid::{Natural, Real};
+use euclid_numeric::{Natural, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Poisson<R: Real = f64> {

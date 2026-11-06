@@ -23,7 +23,7 @@
 //! data). The genuinely matrix-coupled conjugates (`dirichlet`,
 //! `multivariate_normal`) — the ones whose posteriors are multivariate-Normal /
 //! Wishart / Dirichlet, all carrying `ramanujan` matrices — live in the sibling
-//! crate `ito`, reusing the [`Conjugate`] trait and the [`natural`]
+//! crate `ito`, reusing the [`Conjugate`] trait and the [`NaturalParams`]
 //! hyperparameter monoid defined here.
 //!
 //! ```
@@ -55,10 +55,7 @@ mod tests {
 
     use super::*;
     use crate::Beta;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     /// Fold `data` into the prior one datum at a time, continuing from a
     /// running natural accumulator — the streaming update. By
@@ -80,13 +77,13 @@ mod tests {
 
         let batch = model.posterior(&all);
         let online = model.posterior_from_natural(streamed(&model, &d1, &d2));
-        close(batch.alpha(), online.alpha(), 1e-12);
-        close(batch.beta(), online.beta(), 1e-12);
+        assert_close!(batch.alpha(), online.alpha(), 1e-12);
+        assert_close!(batch.beta(), online.beta(), 1e-12);
 
         // A permutation of the same multiset (4 successes, 3 failures).
         let shuffled = [false, false, true, true, true, true, false];
         let permuted = model.posterior(&shuffled);
-        close(permuted.alpha(), batch.alpha(), 1e-12);
-        close(permuted.beta(), batch.beta(), 1e-12);
+        assert_close!(permuted.alpha(), batch.alpha(), 1e-12);
+        assert_close!(permuted.beta(), batch.beta(), 1e-12);
     }
 }

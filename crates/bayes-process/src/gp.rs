@@ -13,7 +13,7 @@
 //! marginal-likelihood objective that consumes these covariances lives in the backend
 //! (`maxwell::dist` / `markov`), where the tensor is concrete.
 
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 use bayes_kernels as kernels;
 

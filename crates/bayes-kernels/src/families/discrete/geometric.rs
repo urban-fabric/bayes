@@ -1,4 +1,4 @@
-use euclid::numeric::{Integer, Real};
+use euclid_numeric::{Integer, Real};
 
 /// Geometric log-mass for trial-count parameterization.
 pub fn geometric_log_pmf<I, T>(trials: I, p: T) -> T

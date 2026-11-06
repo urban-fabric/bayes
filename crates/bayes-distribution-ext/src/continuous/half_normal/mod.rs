@@ -5,13 +5,30 @@ use rand::Rng;
 use rand::distr::Distribution;
 
 use super::normal::standard_normal_polar;
+use crate::estimation::sample::Summary;
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Compare, Real};
+use euclid_numeric::{Compare, Real};
 
 /// The half-normal distribution with scale `σ > 0`, support `[0, ∞)` — the
 /// distribution of `|Z|` for `Z ~ N(0, σ²)`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Continuous, HalfNormal, Moments, Normal};
+///
+/// // The absolute value of a centred normal, so its density is twice the
+/// // normal's on the positive half-line.
+/// let h = HalfNormal::new(1.0)?;
+/// let n = Normal::new(0.0, 1.0)?;
+/// assert!((h.pdf(0.7_f64) - 2.0 * n.pdf(0.7_f64)).abs() < 1e-12);
+///
+/// // Folding moves the mean off zero to sigma * sqrt(2/pi).
+/// assert!((h.mean() - (2.0 / std::f64::consts::PI).sqrt()).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HalfNormal {
     scale: f64,
@@ -19,18 +36,7 @@ pub struct HalfNormal {
 
 impl HalfNormal {
     pub fn new(scale: f64) -> Result<Self, BayesError> {
-        if !scale.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "scale",
-                value: scale,
-            });
-        }
-        if scale <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "scale",
-                value: scale,
-            });
-        }
+        validate::positive(&[("scale", scale)])?;
         Ok(Self { scale })
     }
 
@@ -60,6 +66,16 @@ impl<T: Real> ContinuousCdf<T> for HalfNormal {
     }
     fn inverse_cdf(&self, p: T) -> T {
         kernels::half_normal_quantile(p.clamp(T::zero(), T::one()), T::scalar(self.scale))
+    }
+
+    /// `ln erfc(x/(σ√2))`, through `erfcx` so it stays finite past the point
+    /// where `erfc` itself underflows.
+    fn ln_sf(&self, x: T) -> T {
+        kernels::half_normal_ln_sf(x, T::scalar(self.scale()))
+    }
+    /// `σ√2·erfc_inv(p)`, which takes the tail probability directly.
+    fn isf(&self, p: T) -> T {
+        kernels::half_normal_isf(p, T::scalar(self.scale()))
     }
 }
 
@@ -123,21 +139,37 @@ where
     }
 }
 
+/// The maximum likelihood estimator `σ̂ = √(Σx²/n)`.
+///
+/// Matching the mean would also be consistent — `E[X] = σ√(2/π)` — but the
+/// likelihood equation for a half-normal solves explicitly, so there is no
+/// reason to accept the less efficient estimator.
+///
+/// The second moment is taken about **zero**, not about the sample mean. This
+/// family's location is fixed at the origin, so that is the point deviations
+/// are measured from; centring on `x̄` would fit the wrong quantity.
+impl crate::Estimate for HalfNormal {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::new(data)?;
+        if s.min < 0.0 {
+            return None;
+        }
+        HalfNormal::new(s.second_moment().sqrt()).ok()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use std::f64::consts::TAU;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn density_is_twice_the_normal_on_the_positive_axis() {
         let h = HalfNormal::new(1.5).unwrap();
         let normal_pdf = |x: f64| (-0.5 * (x / 1.5).powi(2)).exp() / (1.5 * TAU.sqrt());
-        close(h.pdf(2.0), 2.0 * normal_pdf(2.0), 1e-12);
+        assert_close!(h.pdf(2.0), 2.0 * normal_pdf(2.0), 1e-12);
         assert_eq!(h.pdf(-1.0), 0.0);
     }
 
@@ -145,8 +177,8 @@ mod tests {
     fn cdf_quantile_and_moments() {
         let h = HalfNormal::new(2.0).unwrap();
         for &p in &[0.1, 0.5, 0.9] {
-            close(h.cdf(h.inverse_cdf(p)), p, 1e-9);
+            assert_close!(h.cdf(h.inverse_cdf(p)), p, 1e-9);
         }
-        close(h.mean(), 2.0 * (2.0 / PI).sqrt(), 1e-12);
+        assert_close!(h.mean(), 2.0 * (2.0 / PI).sqrt(), 1e-12);
     }
 }

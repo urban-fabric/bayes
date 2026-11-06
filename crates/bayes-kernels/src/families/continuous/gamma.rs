@@ -1,5 +1,5 @@
 use crate::families::common::gamma_bc;
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 /// Gamma log-density on `x > 0`.
 pub fn gamma_log_pdf_on_support<T: Real>(x: T, shape: T, rate: T, ln_gamma_shape: T) -> T {
@@ -134,4 +134,29 @@ pub fn gamma_exponential_log_marginal_likelihood<T: Real>(
     shape.clone() * rate.clone().ln() - shape.clone().ln_gamma()
         + (shape.clone() + count_n.clone()).ln_gamma()
         - (shape + count_n) * (rate + sum).ln()
+}
+
+/// Gamma log-survival: `ln Q(k, βx)`, the upper regularized incomplete gamma.
+///
+/// Accurate until `Q` itself underflows near `1e-308`, against the `1e-16`
+/// floor of `ln(1 − cdf)`.
+///
+/// The branch is not optional. A survival has two ends and they need opposite
+/// treatments: where it is **small** the complementary special function is the
+/// accurate one, and where it is **near 1** that function returns `1` and
+/// throws the deficit away — there `ln_1p(−cdf)` keeps it. Taking only the
+/// first route made `cdf + sf` come to `1 + 1e-9` for `FisherSnedecor(1, 1)`
+/// just above zero.
+pub fn gamma_ln_sf<T: Real>(x: T, shape: T, rate: T) -> T {
+    let in_support = x.ge(&T::zero());
+    let safe_x = T::select(&in_support, x, T::zero());
+    let z = rate * safe_x;
+    let survival = z.clone().gamma_ur(shape.clone());
+    let cumulative = z.gamma_lr(shape);
+    T::select(
+        &survival.gt(&T::half()),
+        (-cumulative).ln_1p(),
+        survival.ln(),
+    )
+    .mask_invalid(in_support, T::zero())
 }

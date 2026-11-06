@@ -11,7 +11,7 @@
 #[cfg(test)]
 use super::shannon_entropy;
 use super::{kl_term, shannon_entropy_real};
-use euclid::Real;
+use euclid_numeric::Real;
 
 /// The row (X) and column (Y) marginals of a joint distribution table: `p_X[i] = Σ_k J[i][k]`
 /// and `p_Y[k] = Σ_i J[i][k]`. Shared by the joint-distribution measures below.
@@ -105,7 +105,9 @@ pub fn conditional_entropy_real<R: Real>(joint: &[Vec<R>]) -> R {
         return R::zero();
     }
     let (px, _) = marginals_real(joint);
-    (joint_entropy_real(joint) - shannon_entropy_real(&px)).max(R::zero())
+    // Clamped at zero without swallowing a `NaN`: an information of
+    // exactly zero asserts independence, which is not what an unknown is.
+    bayes_kernels::clamp_negative_to_zero(joint_entropy_real(joint) - shannon_entropy_real(&px))
 }
 
 /// The **variation of information** `VI(X, Y) = H(X|Y) + H(Y|X) = 2·H(X,Y) − H(X) − H(Y)`
@@ -123,8 +125,12 @@ pub fn variation_of_information_real<R: Real>(joint: &[Vec<R>]) -> R {
         return R::zero();
     }
     let (px, py) = marginals_real(joint);
-    (R::two() * joint_entropy_real(joint) - shannon_entropy_real(&px) - shannon_entropy_real(&py))
-        .max(R::zero())
+    // Clamped at zero without swallowing a `NaN`: see `clamp_negative_to_zero`.
+    bayes_kernels::clamp_negative_to_zero(
+        R::two() * joint_entropy_real(joint)
+            - shannon_entropy_real(&px)
+            - shannon_entropy_real(&py),
+    )
 }
 
 /// **Normalized mutual information** `NMI(X, Y) = I(X;Y) / min(H(X), H(Y))`, in `[0, 1]` — a
@@ -146,9 +152,15 @@ pub fn normalized_mutual_information_real<R: Real>(joint: &[Vec<R>]) -> R {
     let denom = shannon_entropy_real(&px).min(shannon_entropy_real(&py));
     let small = denom.le(&R::scalar(1e-12));
     let safe_denom = R::select(&small, R::one(), denom.clone());
-    let value = (mutual_information_real(joint) / safe_denom)
-        .max(R::zero())
-        .min(R::one());
+    // `clamp_negative_to_zero` for the lower bound; `min` for the upper is safe
+    // because an unknown ratio stays unknown under it — `NaN.min(1)` is `1` in
+    // IEEE, so the order matters and the clamp goes first.
+    let ratio = mutual_information_real(joint) / safe_denom;
+    let value = R::select(
+        &ratio.gt(&R::one()),
+        R::one(),
+        bayes_kernels::clamp_negative_to_zero(ratio),
+    );
     R::select(&small, R::zero(), value)
 }
 
@@ -156,20 +168,17 @@ pub fn normalized_mutual_information_real<R: Real>(joint: &[Vec<R>]) -> R {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core::assert_close;
 
     #[test]
     fn joint_entropy_matches_the_information_diagram() {
         // Independent fair bits: J = ¼ everywhere ⇒ H(X,Y) = ln 4, I(X;Y) = 0.
         let indep = vec![vec![0.25, 0.25], vec![0.25, 0.25]];
-        close(joint_entropy(&indep), 4.0_f64.ln(), 1e-12);
-        close(mutual_information(&indep), 0.0, 1e-12);
+        assert_close!(joint_entropy(&indep), 4.0_f64.ln(), 1e-12);
+        assert_close!(mutual_information(&indep), 0.0, 1e-12);
         // Perfectly dependent: J on the diagonal ⇒ H(X,Y) = ln 2 = I(X;Y) (= H(X) = H(Y)).
         let dep = vec![vec![0.5, 0.0], vec![0.0, 0.5]];
-        close(joint_entropy(&dep), 2.0_f64.ln(), 1e-12);
+        assert_close!(joint_entropy(&dep), 2.0_f64.ln(), 1e-12);
         // Mutual information never exceeds the joint entropy (I ≤ H(X,Y)).
         for j in [&indep, &dep] {
             assert!(mutual_information(j) <= joint_entropy(j) + 1e-12);
@@ -181,14 +190,14 @@ mod tests {
     fn conditional_entropy_is_the_chain_rule_residual() {
         // Independent fair bits: H(Y|X) = H(Y) = ln 2 (knowing X tells nothing about Y).
         let indep = vec![vec![0.25, 0.25], vec![0.25, 0.25]];
-        close(conditional_entropy(&indep), 2.0_f64.ln(), 1e-12);
+        assert_close!(conditional_entropy(&indep), 2.0_f64.ln(), 1e-12);
         // Perfectly dependent (diagonal): H(Y|X) = 0 (X determines Y).
         let dep = vec![vec![0.5, 0.0], vec![0.0, 0.5]];
-        close(conditional_entropy(&dep), 0.0, 1e-12);
+        assert_close!(conditional_entropy(&dep), 0.0, 1e-12);
         // Chain rule: H(Y|X) = H(X,Y) − H(X), and the riemann floor H(Y|X) ≥ 0 holds.
         let skew = vec![vec![0.1, 0.2], vec![0.3, 0.4]];
         let (px, _) = marginals(&skew);
-        close(
+        assert_close!(
             conditional_entropy(&skew),
             joint_entropy(&skew) - shannon_entropy(&px),
             1e-12,
@@ -203,7 +212,7 @@ mod tests {
         let dep = vec![vec![0.5, 0.0], vec![0.0, 0.5]];
         // VI = H(X,Y) − I(X;Y), and VI = 0 iff the partitions coincide.
         for j in [&indep, &dep] {
-            close(
+            assert_close!(
                 variation_of_information(j),
                 joint_entropy(j) - mutual_information(j),
                 1e-12,
@@ -211,8 +220,8 @@ mod tests {
             assert!(variation_of_information(j) >= 0.0);
         }
         // Identical labelings ⇒ VI = 0; independent fair bits ⇒ VI = 2·ln 2 (maximal here).
-        close(variation_of_information(&dep), 0.0, 1e-12);
-        close(variation_of_information(&indep), 2.0 * 2.0_f64.ln(), 1e-12);
+        assert_close!(variation_of_information(&dep), 0.0, 1e-12);
+        assert_close!(variation_of_information(&indep), 2.0 * 2.0_f64.ln(), 1e-12);
     }
 
     #[test]
@@ -220,8 +229,8 @@ mod tests {
         let indep = vec![vec![0.25, 0.25], vec![0.25, 0.25]];
         let dep = vec![vec![0.5, 0.0], vec![0.0, 0.5]];
         // Independent ⇒ 0; a perfect (deterministic) coupling ⇒ 1.
-        close(normalized_mutual_information(&indep), 0.0, 1e-12);
-        close(normalized_mutual_information(&dep), 1.0, 1e-12);
+        assert_close!(normalized_mutual_information(&indep), 0.0, 1e-12);
+        assert_close!(normalized_mutual_information(&dep), 1.0, 1e-12);
         // Always in [0, 1] (I ≤ min(H(X), H(Y)) — mutualInfo_le_entropy_fst/_snd).
         let skew = vec![vec![0.1, 0.2], vec![0.3, 0.4]];
         let nmi = normalized_mutual_information(&skew);

@@ -26,7 +26,7 @@
 #[cfg(test)]
 use super::f_divergence;
 use super::{Kl, f_divergence_real};
-use euclid::Real;
+use euclid_numeric::Real;
 
 /// **Shannon entropy** `H(p) = −Σ pᵢ ln pᵢ`, in nats (with the convention
 /// `0 ln 0 = 0`). Nonnegative, and at most `ln n` over `n` categories — maximal
@@ -207,7 +207,10 @@ pub fn bhattacharyya_coefficient_real<R: Real>(p: &[R], q: &[R]) -> R {
         .map(|i| {
             let pi = p.get(i).cloned().unwrap_or_else(R::zero);
             let qi = q.get(i).cloned().unwrap_or_else(R::zero);
-            (pi * qi).max(R::zero()).sqrt()
+            // Clamped without swallowing a `NaN`: `max` would turn an
+            // unknown term into a zero contribution and quietly shrink the
+            // Bhattacharyya coefficient, making two distributions look closer.
+            bayes_kernels::clamp_negative_to_zero(pi * qi).sqrt()
         })
         .fold(R::zero(), |sum, term| sum + term)
 }
@@ -218,11 +221,8 @@ mod tests {
     use super::super::{JensenShannon, SquaredHellinger};
     use super::*;
     use crate::{Bernoulli, Categorical};
+    use bayes_core::assert_close;
     use std::f64::consts::LN_2;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     fn pairs() -> Vec<(Vec<f64>, Vec<f64>)> {
         vec![
@@ -236,7 +236,7 @@ mod tests {
     fn entropy_is_maximal_at_the_uniform_and_zero_at_a_point_mass() {
         for n in [2usize, 3, 5, 8] {
             let u = vec![1.0 / n as f64; n];
-            close(shannon_entropy(&u), (n as f64).ln(), 1e-12);
+            assert_close!(shannon_entropy(&u), (n as f64).ln(), 1e-12);
             // Any distribution over n categories is ≤ ln n (entropy_le_log_card).
             let skew = {
                 let mut v = vec![0.1 / (n - 1) as f64; n];
@@ -247,7 +247,7 @@ mod tests {
         }
         let mut point = vec![0.0; 4];
         point[2] = 1.0;
-        close(shannon_entropy(&point), 0.0, 1e-12);
+        assert_close!(shannon_entropy(&point), 0.0, 1e-12);
     }
 
     #[test]
@@ -255,8 +255,8 @@ mod tests {
         for n in [2usize, 3, 5, 8] {
             let u = vec![1.0 / n as f64; n];
             // the uniform attains ln n exactly.
-            close(shannon_entropy(&u), max_entropy(n), 1e-12);
-            close(max_entropy(n), (n as f64).ln(), 1e-12);
+            assert_close!(shannon_entropy(&u), max_entropy(n), 1e-12);
+            assert_close!(max_entropy(n), (n as f64).ln(), 1e-12);
         }
         // a certain / single outcome carries no uncertainty.
         assert_eq!(max_entropy(1), 0.0);
@@ -266,7 +266,7 @@ mod tests {
     #[test]
     fn normalized_entropy_is_one_at_uniform_and_zero_at_a_point_mass() {
         for n in [2usize, 4, 7] {
-            close(normalized_entropy(&vec![1.0 / n as f64; n]), 1.0, 1e-12);
+            assert_close!(normalized_entropy(&vec![1.0 / n as f64; n]), 1.0, 1e-12);
         }
         // point mass ⇒ 0; intermediate spread ⇒ strictly inside (0, 1).
         assert_eq!(normalized_entropy(&[1.0, 0.0, 0.0]), 0.0);
@@ -294,12 +294,12 @@ mod tests {
     fn cross_entropy_decomposes_into_entropy_plus_kl() {
         // crossEntropy_eq_entropy_add_klDiv, and H(p,p) = H(p).
         for (p, q) in pairs() {
-            close(
+            assert_close!(
                 cross_entropy(&p, &q),
                 shannon_entropy(&p) + f_divergence(&p, &q, &Kl),
                 1e-12,
             );
-            close(cross_entropy(&p, &p), shannon_entropy(&p), 1e-12);
+            assert_close!(cross_entropy(&p, &p), shannon_entropy(&p), 1e-12);
             // Gibbs consequence: cross-entropy never below the entropy.
             assert!(cross_entropy(&p, &q) >= shannon_entropy(&p) - 1e-12);
         }
@@ -311,19 +311,19 @@ mod tests {
     fn jensen_shannon_is_symmetric_bounded_and_matches_the_per_family_form() {
         for (p, q) in pairs() {
             let js = jensen_shannon(&p, &q);
-            close(js, jensen_shannon(&q, &p), 1e-12); // symmetric
+            assert_close!(js, jensen_shannon(&q, &p), 1e-12); // symmetric
             assert!((0.0..=LN_2 + 1e-12).contains(&js)); // 0 ≤ JS ≤ ln 2
             // Agrees with the per-family `JensenShannon` trait on Categorical.
             let cat = Categorical::new(&p)
                 .unwrap()
                 .js_divergence(&Categorical::new(&q).unwrap());
-            close(js, cat, 1e-12);
+            assert_close!(js, cat, 1e-12);
         }
         // Self ⇒ 0; disjoint supports ⇒ ln 2.
-        close(jensen_shannon(&[0.3, 0.7], &[0.3, 0.7]), 0.0, 1e-12);
-        close(jensen_shannon(&[1.0, 0.0], &[0.0, 1.0]), LN_2, 1e-12);
+        assert_close!(jensen_shannon(&[0.3, 0.7], &[0.3, 0.7]), 0.0, 1e-12);
+        assert_close!(jensen_shannon(&[1.0, 0.0], &[0.0, 1.0]), LN_2, 1e-12);
         // Two-category vector agrees with Bernoulli (category 0 = "success").
-        close(
+        assert_close!(
             jensen_shannon(&[0.7, 0.3], &[0.4, 0.6]),
             Bernoulli::new(0.7).js_divergence(&Bernoulli::new(0.4)),
             1e-12,
@@ -336,14 +336,14 @@ mod tests {
             let bc = bhattacharyya_coefficient(&p, &q);
             assert!((0.0..=1.0 + 1e-12).contains(&bc));
             // H² = 1 − BC (hellingerSq_eq_one_sub_bhattacharyya).
-            close(f_divergence(&p, &q, &SquaredHellinger), 1.0 - bc, 1e-12);
+            assert_close!(f_divergence(&p, &q, &SquaredHellinger), 1.0 - bc, 1e-12);
         }
-        close(
+        assert_close!(
             bhattacharyya_coefficient(&[0.3, 0.7], &[0.3, 0.7]),
             1.0,
             1e-12,
         ); // self ⇒ 1
-        close(
+        assert_close!(
             bhattacharyya_coefficient(&[1.0, 0.0], &[0.0, 1.0]),
             0.0,
             1e-12,

@@ -16,7 +16,7 @@
 //!   within/between/total sum-of-squares partition behind grouped variance diagnostics.
 //!
 //! The Cramér–Rao functions take the Fisher information as an input — like
-//! [`super::confidence::concentration`] takes a tail/MGF bound — so no per-distribution
+//! `confidence::concentration` takes a tail/MGF bound — so no per-distribution
 //! score machinery is needed; [`fisher_information_from_scores`] supplies it empirically.
 //! [`rao_blackwell`] / [`conditional_variance`] act directly on grouped sample data.
 

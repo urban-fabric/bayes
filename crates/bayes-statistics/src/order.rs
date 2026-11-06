@@ -105,36 +105,33 @@ pub fn tukey_outlier_flags(data: &[f64], k: f64) -> Vec<bool> {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn median_odd_and_even() {
-        close(median(&[3.0, 1.0, 2.0]), 2.0, 1e-12);
-        close(median(&[1.0, 2.0, 3.0, 4.0]), 2.5, 1e-12);
+        assert_close!(median(&[3.0, 1.0, 2.0]), 2.0, 1e-12);
+        assert_close!(median(&[1.0, 2.0, 3.0, 4.0]), 2.5, 1e-12);
     }
 
     #[test]
     fn quantiles_interpolate() {
         let d = [1.0, 2.0, 3.0, 4.0, 5.0];
-        close(quantile(&d, 0.0), 1.0, 1e-12);
-        close(quantile(&d, 1.0), 5.0, 1e-12);
-        close(quantile(&d, 0.5), 3.0, 1e-12);
-        close(percentile(&d, 25.0), 2.0, 1e-12);
-        close(iqr(&d), 2.0, 1e-12);
+        assert_close!(quantile(&d, 0.0), 1.0, 1e-12);
+        assert_close!(quantile(&d, 1.0), 5.0, 1e-12);
+        assert_close!(quantile(&d, 0.5), 3.0, 1e-12);
+        assert_close!(percentile(&d, 25.0), 2.0, 1e-12);
+        assert_close!(iqr(&d), 2.0, 1e-12);
     }
 
     #[test]
     fn five_number_and_mad() {
         let (mn, q1, med, q3, mx) = five_number_summary(&[7.0, 1.0, 3.0, 5.0, 9.0]);
-        close(mn, 1.0, 1e-12);
-        close(q1, 3.0, 1e-12);
-        close(med, 5.0, 1e-12);
-        close(q3, 7.0, 1e-12);
-        close(mx, 9.0, 1e-12);
-        close(median_abs_deviation(&[1.0, 3.0, 5.0, 7.0, 9.0]), 2.0, 1e-12);
+        assert_close!(mn, 1.0, 1e-12);
+        assert_close!(q1, 3.0, 1e-12);
+        assert_close!(med, 5.0, 1e-12);
+        assert_close!(q3, 7.0, 1e-12);
+        assert_close!(mx, 9.0, 1e-12);
+        assert_close!(median_abs_deviation(&[1.0, 3.0, 5.0, 7.0, 9.0]), 2.0, 1e-12);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! Support constraints for the lazy distribution families.
 
 use bayes_core::{Boundary, Constrained, Constraint, IntegerConstraint, NaturalConstraint};
-use euclid::{Compare, Integer, Natural, Real};
+use euclid_numeric::{Compare, Integer, Natural, Real};
 
 use crate::continuous::{
     Beta, Cauchy, ChiSquared, Exponential, FisherSnedecor, Frechet, Gamma, Gumbel, HalfNormal,

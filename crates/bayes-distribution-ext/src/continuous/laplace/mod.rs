@@ -3,9 +3,9 @@ use rand::{Rng, RngExt};
 
 use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Estimate, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::Real;
+use euclid_numeric::Real;
 
 /// Sample median by linear interpolation between order statistics (the "type 7"
 /// estimator), matching `bayes_statistics::median`. Inlined here so the family
@@ -31,6 +31,23 @@ fn median(data: &[f64]) -> f64 {
 
 /// The Laplace (double-exponential) distribution with `location μ` and
 /// `scale b > 0`, support `(-∞, ∞)`. Density `f(x) = 1/(2b) exp(-|x-μ|/b)`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Continuous, ContinuousCdf, Laplace, Moments, Normal};
+///
+/// // Two exponential tails back to back, so the density peaks at 1/(2b) and
+/// // has a corner there rather than a smooth maximum.
+/// let l = Laplace::new(0.0, 1.0)?;
+/// assert!((l.pdf(0.0_f64) - 0.5).abs() < 1e-12);
+/// assert!((l.cdf(0.0_f64) - 0.5).abs() < 1e-12);
+/// assert!((l.variance() - 2.0).abs() < 1e-12);      // 2b^2
+///
+/// // Heavier tailed than a normal with the same variance.
+/// assert!(l.pdf(6.0_f64) > Normal::new(0.0, 2.0_f64.sqrt())?.pdf(6.0_f64));
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Laplace {
     location: f64,
@@ -45,18 +62,7 @@ impl Laplace {
                 value: location,
             });
         }
-        if !scale.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "scale",
-                value: scale,
-            });
-        }
-        if scale <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "scale",
-                value: scale,
-            });
-        }
+        validate::positive(&[("scale", scale)])?;
         Ok(Self { location, scale })
     }
 
@@ -94,6 +100,20 @@ impl<T: Real> ContinuousCdf<T> for Laplace {
             T::scalar(self.location),
             T::scalar(self.scale),
         )
+    }
+
+    /// `−ln 2 − (x − μ)/b` above the location — linear, so exact everywhere.
+    fn ln_sf(&self, x: T) -> T {
+        kernels::laplace_ln_sf(x, T::scalar(self.location()), T::scalar(self.scale()))
+    }
+
+    /// Inverse survival by **reflection**, not by `inverse_cdf(1 − p)`.
+    ///
+    /// A Laplace is symmetric about its location, so `isf(p) = 2·location − Q(p)`
+    /// holds exactly. That keeps `p` itself as the argument, where the generic
+    /// default forms `1 − p` and loses every `p` below about `1e-16`.
+    fn isf(&self, p: T) -> T {
+        T::two() * T::scalar(self.location()) - self.inverse_cdf(p)
     }
 }
 
@@ -161,20 +181,17 @@ impl<T: Real> Continuous<T> for Laplace {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn cdf_quantile_pdf_and_moments() {
         let l = Laplace::new(1.0, 2.0).unwrap();
-        close(l.cdf(1.0), 0.5, 1e-12);
-        close(l.pdf(1.0), 1.0 / (2.0 * 2.0), 1e-12);
+        assert_close!(l.cdf(1.0), 0.5, 1e-12);
+        assert_close!(l.pdf(1.0), 1.0 / (2.0 * 2.0), 1e-12);
         for &p in &[0.05, 0.25, 0.5, 0.75, 0.95] {
-            close(l.cdf(l.inverse_cdf(p)), p, 1e-12);
+            assert_close!(l.cdf(l.inverse_cdf(p)), p, 1e-12);
         }
-        close(l.mean(), 1.0, 1e-12);
-        close(l.variance(), 8.0, 1e-12);
+        assert_close!(l.mean(), 1.0, 1e-12);
+        assert_close!(l.variance(), 8.0, 1e-12);
     }
 }

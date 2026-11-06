@@ -6,6 +6,7 @@
 
 pub mod numeric;
 
+pub use bayes_core::validate;
 pub use bayes_core::{
     BayesError, Boundary, Constrained, Constraint, Continuous, ContinuousCdf,
     ContinuousDensityKernel, Discrete, DiscreteCdf, DiscreteMassKernel, IntegerConstraint,
@@ -21,7 +22,8 @@ pub use bayes_core::{
     ranked_probability_score, ranked_probability_score_real, spherical_score, spherical_score_real,
     validate_probability_vector, validate_row_stochastic, validate_row_stochastic_with_tolerance,
 };
-use euclid::Real;
+pub use bayes_core::{assert_close, assert_close_scaled};
+use euclid_numeric::Real;
 
 /// Fit a distribution's parameters from a sample.
 pub trait Estimate<R: Real = f64>: Sized {

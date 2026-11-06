@@ -117,27 +117,24 @@ pub fn cramers_v(table: &[Vec<f64>]) -> f64 {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn perfect_monotone_relationships() {
         let x = [1.0, 2.0, 3.0, 4.0, 5.0];
         let y = [10.0, 20.0, 30.0, 40.0, 50.0];
-        close(spearman(&x, &y), 1.0, 1e-12);
-        close(kendall_tau(&x, &y), 1.0, 1e-12);
+        assert_close!(spearman(&x, &y), 1.0, 1e-12);
+        assert_close!(kendall_tau(&x, &y), 1.0, 1e-12);
         let z = [5.0, 4.0, 3.0, 2.0, 1.0];
-        close(spearman(&x, &z), -1.0, 1e-12);
-        close(kendall_tau(&x, &z), -1.0, 1e-12);
+        assert_close!(spearman(&x, &z), -1.0, 1e-12);
+        assert_close!(kendall_tau(&x, &z), -1.0, 1e-12);
     }
 
     #[test]
     fn spearman_beats_pearson_on_monotone_nonlinear() {
         let x = [1.0f64, 2.0, 3.0, 4.0, 5.0];
         let y: Vec<f64> = x.iter().map(|v| v.powi(3)).collect();
-        close(spearman(&x, &y), 1.0, 1e-12);
+        assert_close!(spearman(&x, &y), 1.0, 1e-12);
     }
 
     #[test]
@@ -148,7 +145,7 @@ mod tests {
 
     #[test]
     fn cramers_v_bounds() {
-        close(cramers_v(&[vec![10.0, 0.0], vec![0.0, 10.0]]), 1.0, 1e-12);
-        close(cramers_v(&[vec![10.0, 20.0], vec![20.0, 40.0]]), 0.0, 1e-12);
+        assert_close!(cramers_v(&[vec![10.0, 0.0], vec![0.0, 10.0]]), 1.0, 1e-12);
+        assert_close!(cramers_v(&[vec![10.0, 20.0], vec![20.0, 40.0]]), 0.0, 1e-12);
     }
 }

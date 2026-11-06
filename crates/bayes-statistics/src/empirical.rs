@@ -122,18 +122,15 @@ pub fn histogram(data: &[f64], bins: usize) -> Option<Histogram> {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn ecdf_steps_and_quantiles() {
         let e = Ecdf::new(&[3.0, 1.0, 2.0, 4.0]);
-        close(e.eval(0.0), 0.0, 1e-12);
-        close(e.eval(2.0), 0.5, 1e-12);
-        close(e.eval(4.0), 1.0, 1e-12);
-        close(e.eval(100.0), 1.0, 1e-12);
+        assert_close!(e.eval(0.0), 0.0, 1e-12);
+        assert_close!(e.eval(2.0), 0.5, 1e-12);
+        assert_close!(e.eval(4.0), 1.0, 1e-12);
+        assert_close!(e.eval(100.0), 1.0, 1e-12);
         assert_eq!(e.quantile(0.5), 2.0);
         assert_eq!(e.quantile(1.0), 4.0);
         assert_eq!(e.quantile(0.0), 1.0);
@@ -153,7 +150,7 @@ mod tests {
         assert_eq!(h.edges, vec![0.0, 1.0, 2.0]);
         assert_eq!(h.counts, vec![2, 3]);
         let d = h.density();
-        close(d[0] * 1.0 + d[1] * 1.0, 1.0, 1e-12);
+        assert_close!(d[0] * 1.0 + d[1] * 1.0, 1.0, 1e-12);
     }
 
     #[test]

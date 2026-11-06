@@ -1,4 +1,4 @@
-use euclid::numeric::{Integer, Real};
+use euclid_numeric::{Integer, Real};
 
 /// Negative-binomial log-mass in failures-before-r-successes parameterization.
 pub fn negative_binomial_log_pmf<I, T>(

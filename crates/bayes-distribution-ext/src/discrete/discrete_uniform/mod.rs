@@ -1,11 +1,27 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::estimation::sample::Summary;
 use crate::{IntegerDiscrete, IntegerDiscreteCdf, IntegerMassKernel, Moments, Support};
 use bayes_core_ext::BayesError;
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Integer, Real};
+use euclid_numeric::{Boolean, Compare, Integer, Real};
 
+/// The **discrete uniform** distribution on the half-open integer range
+/// `{lo, …, hi − 1}`, each value equally likely.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{DiscreteUniform, IntegerDiscrete, Moments};
+///
+/// // The range is **half-open**, so a six-sided die is `new(1, 7)`.
+/// let die = DiscreteUniform::new(1, 7)?;
+/// assert!((die.pmf(6_i64) - 1.0 / 6.0).abs() < 1e-12);
+/// assert_eq!(die.pmf(7_i64), 0.0);
+/// assert!((die.mean() - 3.5).abs() < 1e-12);
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DiscreteUniform {
     lo: i64,
@@ -14,6 +30,9 @@ pub struct DiscreteUniform {
 
 impl DiscreteUniform {
     pub fn new(lo: i64, hi: i64) -> Result<Self, BayesError> {
+        // `lo >= hi` is correct here, not `lo > hi`: this family's range is the half-open
+        // `[lo, hi)` documented below, so `lo == hi` carries no values at all. Loosening it
+        // would also hand an empty range to `rng.random_range(lo..hi)`, which panics.
         if lo >= hi {
             return Err(BayesError::EmptyIntRange { lo, hi });
         }
@@ -102,6 +121,26 @@ impl Moments for DiscreteUniform {
 
     fn mode(&self) -> f64 {
         f64::NAN
+    }
+}
+
+/// The sample range, mapped onto this family's **half-open** convention.
+///
+/// [`DiscreteUniform::new`] has support `{lo, …, hi − 1}`, so the fit is
+/// `lo = min` and `hi = max + 1`. Passing `max` directly is the obvious thing
+/// and the wrong thing: it would leave the largest observed value outside the
+/// support of the distribution fitted to it, giving that observation zero
+/// probability under its own fit.
+impl crate::Estimate for DiscreteUniform {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::new(data)?;
+        if data.iter().any(|x| x.fract() != 0.0) {
+            return None;
+        }
+        if s.min < i64::MIN as f64 || s.max >= i64::MAX as f64 {
+            return None;
+        }
+        DiscreteUniform::new(s.min as i64, s.max as i64 + 1).ok()
     }
 }
 

@@ -7,9 +7,17 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 
 [dependencies]
-euclid.workspace = true
+euclid-numeric.workspace = true
+
+# Dev-only. `bayes-utils` reaches this crate through the whole stack, so this is
+# a cycle across dev edges — which cargo permits, and which is how the shared
+# `Failures` probe (accumulate every failure, never abort on the first) serves
+# the bottom of the tree as well as the top.
+[dev-dependencies]
+bayes-utils.workspace = true
 
 [lints]
 workspace = true

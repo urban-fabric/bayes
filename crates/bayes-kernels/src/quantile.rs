@@ -4,15 +4,28 @@
 //! crate root). This iterative bisection helper lives here because it is an
 //! algorithm shared by families without elementary inverse CDFs.
 
-use euclid::numeric::{Compare, Element, Natural, Real};
+use euclid_numeric::{Compare, Element, Natural, Real};
 
 /// Fixed bracket-widening steps (the bracket is valid long before this; extra steps are
 /// idempotent because the `select` updates freeze once `cdf(a) ≤ p ≤ cdf(b)`).
 const WIDEN_TRIPS: usize = 64;
-/// Fixed bisection steps — 100 halvings resolves the bracket to machine precision.
+/// Fixed bisection steps. 100 halvings of the search coordinate resolves the quantile to
+/// ~1.2e-27 *relative* to its distance from the nearer bracket endpoint; see
+/// [`inverse_cdf_bisect`] for why the coordinate rather than `x` itself is bisected.
 const BISECT_TRIPS: usize = 100;
-/// Integer-bisection steps for a discrete quantile — 64 spans the whole `u64` count range.
-const DISCRETE_BISECT_TRIPS: usize = 64;
+/// Half-width of the bisection coordinate. `exp(-745)` is the smallest positive `f64`, so this
+/// is the widest range of scales a double can express at all.
+const COORD_HALF_WIDTH: f64 = 745.0;
+/// Integer-bisection steps for a discrete quantile.
+///
+/// 64 *spans* the `u64` count range but does not *resolve* it, which is a different thing. The
+/// loop keeps the invariant `cdf(lo − 1) < p ≤ cdf(hi)` and returns `lo`, so it needs the
+/// bracket closed to `lo == hi`. Starting from `[0, 2^64]`, 64 halvings are all consumed
+/// bringing `hi` down and leave `lo` and `hi` one apart — undecided — so an unbounded family
+/// returned `lo` unchanged: `Poisson(2.5).inverse_cdf(0.1)` gave `0` when `cdf(0) = 0.082 < 0.1`
+/// and the answer is `1`. The extra trips close the bracket; they are idempotent once it has
+/// closed, so overshooting costs only iterations.
+const DISCRETE_BISECT_TRIPS: usize = 68;
 
 /// Inverse CDF for a **discrete** distribution: the smallest count `k ∈ [k_min, k_max]` with
 /// `cdf(k) ≥ p`.
@@ -50,6 +63,31 @@ where
 /// deferred / tensor carrier it unrolls into the computation graph (a host `while` over a tensor
 /// mask can't lower — the predicate is a mask, not a host `bool`). Each step is idempotent once
 /// converged, so a fixed trip count matches the original early-stopping loop.
+///
+/// # Why the coordinate, not `x`, is bisected
+///
+/// Halving `[a, b]` in `x` gives **absolute** resolution `(b−a)/2^n`, which is the wrong kind of
+/// resolution for a quantile. `Gamma(10⁻³, 1)` has `cdf(x) ≈ x^0.001`, so its median sits at
+/// `0.5^1000 ≈ 9.3e-302` while its bracket is `[0, 1]`: 100 halvings reach only `~7.9e-31`, and
+/// *every* `p` from `1e-6` to `0.9` used to come back as the same `~3.9e-31` — a quantile
+/// function that ignored its argument.
+///
+/// So the search runs over a coordinate `v ∈ [−745, 745]` that is exponential at both ends:
+///
+/// ```text
+///     x(v) = a + (w/2)·exp(v)    for v ≤ 0        (w = b − a)
+///     x(v) = b − (w/2)·exp(−v)   for v > 0
+/// ```
+///
+/// This is continuous and monotone — both branches meet at the bracket midpoint `v = 0` — and it
+/// reaches `a` and `b` only in the limits. Near either endpoint `d x / x = d v`, so 100 halvings
+/// of a 1490-wide coordinate give ~1.2e-27 *relative* precision, and `exp(±745)` spans every
+/// scale an `f64` can represent. In the middle of the bracket the resolution is `(w/2)·1.2e-27`,
+/// far below the `w·2.2e-16` ulp there, so well-scaled quantiles are unaffected.
+///
+/// What this cannot fix is a quantile that is not representable: `Beta(0.01, 0.01)` has
+/// `Q(0.75) = 1 − 1e-30`, and `1 − 1e-30` *is* `1.0` in `f64`. Such a quantile returns the
+/// support bound.
 pub fn inverse_cdf_bisect<T, F>(cdf: F, lo: T, hi: T, p: T) -> T
 where
     T: Real,
@@ -70,15 +108,41 @@ where
         b = T::select(&high_bad, b.clone() + span, b);
     }
 
-    // Bisect.
+    // The exponential coordinate described above. Both branches are always evaluated and the
+    // `select` picks one, keeping the mapping usable on a carrier with no host branching.
+    let half_span = (b.clone() - a.clone()) * T::half();
+    let point = |v: T| -> T {
+        let lower = a.clone() + half_span.clone() * v.clone().exp();
+        let upper = b.clone() - half_span.clone() * (-v.clone()).exp();
+        T::select(&v.le(&T::zero()), lower, upper)
+    };
+
+    let mut va = -T::scalar(COORD_HALF_WIDTH);
+    let mut vb = T::scalar(COORD_HALF_WIDTH);
     for _ in 0..BISECT_TRIPS {
-        let mid = (a.clone() + b.clone()) * T::half();
-        let upper_half = cdf(mid.clone()).ge(p);
-        b = T::select(&upper_half, mid.clone(), b);
-        a = T::select(&upper_half, a, mid);
+        let vm = (va.clone() + vb.clone()) * T::half();
+        let upper_half = cdf(point(vm.clone())).ge(p);
+        vb = T::select(&upper_half, vm.clone(), vb);
+        va = T::select(&upper_half, va, vm);
     }
 
-    let quantile = (a + b) * T::half();
+    // If widening never managed to bracket `p`, there is nothing to bisect.
+    //
+    // That happens when the CDF never reaches `p` at all — which it does for
+    // real: a family whose CDF plateaus one ulp below 1 can never satisfy
+    // `cdf(b) >= 1 - 1.1e-16`, so the doubling above runs its full trip count
+    // and leaves `b` at roughly `2^64`. Returning the midpoint of that bracket
+    // reported `1.8446744e19` as the quantile of `InverseGamma(0.5, 1)` and
+    // `FisherSnedecor(1, 1)`, a number with no meaning whatsoever.
+    //
+    // The support bound is the honest answer and the one this routine's own
+    // documentation promises for an unrepresentable quantile.
+    let unbracketed_above = cdf(b.clone()).lt(p);
+    let unbracketed_below = cdf(a.clone()).gt(p);
+
+    let quantile = point((va + vb) * T::half());
+    let quantile = T::select(&unbracketed_above, hi.clone(), quantile);
+    let quantile = T::select(&unbracketed_below, lo.clone(), quantile);
     let at_or_below = T::select(&p.le(&T::zero()), lo, quantile);
     T::select(&p.ge(&T::one()), hi, at_or_below)
 }

@@ -5,7 +5,7 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_distribution_ext::Exponential;
 
 /// A homogeneous Poisson process with constant `rate λ > 0`.
@@ -16,18 +16,7 @@ pub struct PoissonProcess {
 
 impl PoissonProcess {
     pub fn new(rate: f64) -> Result<Self, BayesError> {
-        if !rate.is_finite() {
-            return Err(BayesError::NonFinite {
-                name: "rate",
-                value: rate,
-            });
-        }
-        if rate <= 0.0 {
-            return Err(BayesError::NotPositive {
-                name: "rate",
-                value: rate,
-            });
-        }
+        validate::positive(&[("rate", rate)])?;
         Ok(Self { rate })
     }
 

@@ -1,6 +1,6 @@
 use crate::{Discrete, DiscreteMassKernel, Moments};
 use bayes_kernels as kernels;
-use euclid::{Compare, Element, Natural, Real};
+use euclid_numeric::{Compare, Element, Natural, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NegativeBinomial<R: Real = f64> {

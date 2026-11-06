@@ -4,7 +4,7 @@
 
 use super::kl_term;
 use crate::{Bernoulli, Categorical};
-use euclid::Real;
+use euclid_numeric::Real;
 
 /// The **Jensen-Shannon divergence** `JS(p, q) = 1/2 D_KL(p || m) + 1/2 D_KL(q || m)`,
 /// `m = (p + q)/2`, in nats.

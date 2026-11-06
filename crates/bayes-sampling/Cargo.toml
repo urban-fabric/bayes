@@ -1,0 +1,22 @@
+[package]
+name = "bayes-sampling"
+description = "Efficient exact samplers for irregular distributions: O(1) alias tables, rejection sampling from an envelope, and adaptive rejection sampling for log-concave densities."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+
+[dependencies]
+bayes-core.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+bayes-distribution-ext.workspace = true
+bayes-utils.workspace = true
+rand_chacha.workspace = true
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 use super::*;
-use euclid::Natural;
+use euclid_numeric::Natural;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 

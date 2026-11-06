@@ -3,10 +3,27 @@ use rand::{Rng, RngExt};
 
 use crate::{Discrete, DiscreteCdf, DiscreteMassKernel, Moments, Support};
 use bayes_core_ext::BayesError;
-use euclid::{Compare, Element, Natural, Real};
+use euclid_numeric::{Compare, Element, Natural, Real};
 
 /// The binomial distribution: the number of successes in `n` independent trials,
 /// each with success probability `p ∈ [0, 1]`. Support `{0, …, n}`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{Bernoulli, Binomial, Discrete, Moments};
+///
+/// let b = Binomial::new(10, 0.3)?;
+/// assert!((b.mean() - 3.0).abs() < 1e-12);         // n p
+/// assert!((b.variance() - 2.1).abs() < 1e-12);     // n p (1 - p)
+///
+/// // A single trial is a Bernoulli.
+/// assert!((Binomial::new(1, 0.3)?.pmf(1_u64) - Bernoulli::new(0.3)?.pmf(1_u64)).abs() < 1e-12);
+///
+/// // Always *under*-dispersed: the variance is below the mean for any p > 0.
+/// assert!(b.variance() < b.mean());
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Binomial {
     n: u64,
@@ -152,10 +169,7 @@ where
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn pmf_sums_to_one_and_cdf_agrees() {
@@ -163,17 +177,17 @@ mod tests {
         let mut cum = 0.0;
         for k in 0..=10u64 {
             cum += b.pmf(k);
-            close(b.cdf(k), cum, 1e-9);
+            assert_close!(b.cdf(k), cum, 1e-9);
         }
-        close(cum, 1.0, 1e-10);
-        close(b.mean(), 3.0, 1e-12);
-        close(b.variance(), 10.0 * 0.3 * 0.7, 1e-12);
+        assert_close!(cum, 1.0, 1e-10);
+        assert_close!(b.mean(), 3.0, 1e-12);
+        assert_close!(b.variance(), 10.0 * 0.3 * 0.7, 1e-12);
     }
 
     #[test]
     fn pmf_landmark() {
         let b = Binomial::new(5, 0.4).unwrap();
-        close(b.pmf(0_u64), 0.6f64.powi(5), 1e-12);
-        close(b.pmf(5_u64), 0.4f64.powi(5), 1e-12);
+        assert_close!(b.pmf(0_u64), 0.6f64.powi(5), 1e-12);
+        assert_close!(b.pmf(5_u64), 0.4f64.powi(5), 1e-12);
     }
 }

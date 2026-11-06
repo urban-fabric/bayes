@@ -1,16 +1,32 @@
 use rand::distr::Distribution;
 use rand::{Rng, RngExt};
 
+use crate::estimation::sample::Summary;
 use crate::{Continuous, ContinuousDensityKernel};
 use crate::{ContinuousCdf, Moments, Support};
-use bayes_core_ext::BayesError;
+use bayes_core_ext::{BayesError, validate};
 use bayes_kernels as kernels;
-use euclid::{Compare, Real};
+use euclid_numeric::{Compare, Real};
 
 /// The Lomax (Pareto type II) distribution with shape `α > 0` and scale `λ > 0`,
 /// support `[0, ∞)` — a Pareto shifted to start at 0, and the heavy-tailed
 /// posterior-predictive of the Gamma–Exponential conjugate model. Density
 /// `f(x) = (α/λ)(1 + x/λ)^{-(α+1)}`.
+///
+/// # Examples
+///
+/// ```
+/// use bayes_distribution_ext::{ContinuousCdf, Lomax, Moments};
+///
+/// // A Pareto shifted to start at zero, so F(scale) = 1 - 2^-shape.
+/// let l = Lomax::new(3.0, 1.0)?;
+/// assert!((l.cdf(1.0_f64) - 0.875).abs() < 1e-12);
+/// assert!((l.mean() - 0.5).abs() < 1e-12);     // scale / (shape - 1)
+///
+/// // At shape 1 the mean stops existing — the tail is too heavy to average.
+/// assert!(Lomax::new(1.0, 1.0)?.mean().is_nan());
+/// # Ok::<(), bayes_core_ext::BayesError>(())
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Lomax {
     shape: f64,
@@ -19,14 +35,7 @@ pub struct Lomax {
 
 impl Lomax {
     pub fn new(shape: f64, scale: f64) -> Result<Self, BayesError> {
-        for (name, v) in [("shape", shape), ("scale", scale)] {
-            if !v.is_finite() {
-                return Err(BayesError::NonFinite { name, value: v });
-            }
-            if v <= 0.0 {
-                return Err(BayesError::NotPositive { name, value: v });
-            }
-        }
+        validate::positive(&[("shape", shape), ("scale", scale)])?;
         Ok(Self { shape, scale })
     }
 
@@ -61,8 +70,8 @@ impl<T: Real> ContinuousCdf<T> for Lomax {
     fn inverse_cdf(&self, p: T) -> T {
         kernels::lomax_quantile(
             p.clamp(T::zero(), T::one()),
-            T::scalar(self.scale),
             T::scalar(self.shape),
+            T::scalar(self.scale),
         )
     }
     fn ln_sf(&self, x: T) -> T {
@@ -136,26 +145,45 @@ where
     }
 }
 
+/// Method of moments. With `c = v/m²` the scale cancels out of
+/// `c = α/(α − 2)`, leaving `α = 2c/(c − 1)`, and then `λ = m(α − 1)`.
+///
+/// `None` unless `c > 1` — the sample standard deviation must exceed its mean.
+/// Wherever a Lomax has a variance at all it satisfies `v > m²`, so a less
+/// dispersed sample is evidence against the family rather than a parameter
+/// waiting to be found. The reachable shapes are exactly `α > 2`.
+impl crate::Estimate for Lomax {
+    fn from_sample(data: &[f64]) -> Option<Self> {
+        let s = Summary::with_spread(data)?;
+        if s.min < 0.0 || s.mean <= 0.0 {
+            return None;
+        }
+        let ratio = s.variance / (s.mean * s.mean);
+        if ratio <= 1.0 {
+            return None;
+        }
+        let shape = 2.0 * ratio / (ratio - 1.0);
+        Lomax::new(shape, s.mean * (shape - 1.0)).ok()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
+    use bayes_core_ext::assert_close;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
 
     #[test]
     fn cdf_pdf_quantile_and_moments() {
         let d = Lomax::new(3.0, 2.0).unwrap();
-        close(d.cdf(0.0), 0.0, 1e-12);
+        assert_close!(d.cdf(0.0), 0.0, 1e-12);
         for &p in &[0.1, 0.5, 0.9] {
-            close(d.cdf(d.inverse_cdf(p)), p, 1e-10);
+            assert_close!(d.cdf(d.inverse_cdf(p)), p, 1e-10);
         }
-        close(d.mean(), 2.0 / 2.0, 1e-12);
-        close(d.median(), 2.0 * (2.0_f64.powf(1.0 / 3.0) - 1.0), 1e-12);
+        assert_close!(d.mean(), 2.0 / 2.0, 1e-12);
+        assert_close!(d.median(), 2.0 * (2.0_f64.powf(1.0 / 3.0) - 1.0), 1e-12);
         assert!(Lomax::new(1.5, 1.0).unwrap().variance().is_nan());
     }
 
@@ -165,6 +193,6 @@ mod tests {
         let d = Lomax::new(4.0, 3.0).unwrap();
         let n = 200_000;
         let s: f64 = (0..n).map(|_| d.sample(&mut rng)).sum();
-        close(s / n as f64, d.mean(), 0.05);
+        assert_close!(s / n as f64, d.mean(), 0.05);
     }
 }

@@ -1,5 +1,5 @@
 use crate::{BayesError, Continuous, ContinuousCdf, Discrete, OrderStatistic};
-use euclid::{Boolean, Element, Natural, Real};
+use euclid_numeric::{Boolean, Element, Natural, Real};
 
 /// Functional operations for any continuous distribution.
 pub trait ContinuousDistributionExt<T: Real = f64>: Continuous<T> + Sized {

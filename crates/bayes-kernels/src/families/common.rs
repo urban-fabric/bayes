@@ -1,4 +1,4 @@
-use euclid::numeric::Real;
+use euclid_numeric::Real;
 
 pub(super) fn gaussian_bc<T: Real>(m0: T, s0: T, m1: T, s1: T) -> T {
     let v = s0.clone() * s0.clone() + s1.clone() * s1.clone();

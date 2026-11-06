@@ -83,10 +83,7 @@ impl GeneralizedEntropy for Geometric {
 mod tests {
     use super::*;
     use crate::Moments;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn renyi_limits_to_shannon_entropy_as_order_approaches_one() {
@@ -110,8 +107,8 @@ mod tests {
             ),
         ];
         for (d, shannon) in cases {
-            close(d.renyi_entropy(1.0 + 1e-6), shannon, 1e-4);
-            close(d.tsallis_entropy(1.0 + 1e-6), shannon, 1e-4);
+            assert_close!(d.renyi_entropy(1.0 + 1e-6), shannon, 1e-4);
+            assert_close!(d.tsallis_entropy(1.0 + 1e-6), shannon, 1e-4);
         }
     }
 
@@ -119,13 +116,13 @@ mod tests {
     fn renyi_closed_forms_match_known_values() {
         // Uniform Rényi entropy is ln(width) for every order.
         let u = Uniform::new(2.0, 6.0).unwrap();
-        close(u.renyi_entropy(0.5), 4.0_f64.ln(), 1e-12);
-        close(u.renyi_entropy(3.0), 4.0_f64.ln(), 1e-12);
+        assert_close!(u.renyi_entropy(0.5), 4.0_f64.ln(), 1e-12);
+        assert_close!(u.renyi_entropy(3.0), 4.0_f64.ln(), 1e-12);
 
         // Exponential(λ): H_α = −ln λ + ln α/(α−1).
         let e = Exponential::new(2.0).unwrap();
         let alpha = 2.0;
-        close(
+        assert_close!(
             e.renyi_entropy(alpha),
             -2.0_f64.ln() + alpha.ln() / (alpha - 1.0),
             1e-12,
@@ -133,14 +130,14 @@ mod tests {
 
         // Normal collision entropy (α=2): ½ln(2πσ²) + ln2/2.
         let n = Normal::new(0.0, 1.0).unwrap();
-        close(
+        assert_close!(
             n.renyi_entropy(2.0),
             0.5 * std::f64::consts::TAU.ln() + 0.5 * 2.0_f64.ln(),
             1e-12,
         );
 
         // Bernoulli(½) collision entropy: ln Σ p² = ln(0.5) ⇒ H_2 = ln 2.
-        close(
+        assert_close!(
             Bernoulli::new(0.5).unwrap().renyi_entropy(2.0),
             2.0_f64.ln(),
             1e-12,

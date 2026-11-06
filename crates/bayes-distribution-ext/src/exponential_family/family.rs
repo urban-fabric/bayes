@@ -77,25 +77,22 @@ mod tests {
     use super::*;
     use crate::Moments;
     use crate::exponential_family::SufficientStatistic;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_core_ext::assert_close;
 
     #[test]
     fn normal_fit_recovers_parameters() {
         let data = [-2.0, -1.0, 0.0, 1.0, 2.0];
         let n = Normal::fit(&data).unwrap();
-        close(n.mean(), 0.0, 1e-12);
-        close(n.variance(), 2.0, 1e-12);
+        assert_close!(n.mean(), 0.0, 1e-12);
+        assert_close!(n.variance(), 2.0, 1e-12);
     }
 
     #[test]
     fn poisson_and_bernoulli_fit() {
         let counts = [2u64, 3, 5, 1, 4];
-        close(Poisson::fit(&counts).unwrap().lambda(), 3.0, 1e-12);
+        assert_close!(Poisson::fit(&counts).unwrap().lambda(), 3.0, 1e-12);
         let flips = [true, true, false, true, false, false, true, true];
-        close(Bernoulli::fit(&flips).unwrap().p(), 5.0 / 8.0, 1e-12);
+        assert_close!(Bernoulli::fit(&flips).unwrap().p(), 5.0 / 8.0, 1e-12);
     }
 
     #[test]
@@ -107,8 +104,8 @@ mod tests {
         );
         match (direct, merged) {
             (Some(a), Some(b)) => {
-                close(a.alpha(), b.alpha(), 1e-9);
-                close(a.beta(), b.beta(), 1e-9);
+                assert_close!(a.alpha(), b.alpha(), 1e-9);
+                assert_close!(a.beta(), b.beta(), 1e-9);
             }
             _ => panic!("expected both fits to succeed"),
         }

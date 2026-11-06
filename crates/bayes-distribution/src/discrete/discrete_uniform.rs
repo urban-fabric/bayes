@@ -1,6 +1,6 @@
 use crate::{IntegerDiscrete, IntegerMassKernel, Moments};
 use bayes_kernels as kernels;
-use euclid::{Boolean, Compare, Element, Integer, Real};
+use euclid_numeric::{Boolean, Compare, Element, Integer, Real};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DiscreteUniform<I: Integer = i64> {

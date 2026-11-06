@@ -243,21 +243,18 @@ fn invalid_interval(level: f64) -> ConfidenceInterval {
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
-
-    fn close(a: f64, b: f64, tol: f64) {
-        assert!((a - b).abs() <= tol * b.abs().max(1.0), "{a} vs {b}");
-    }
+    use bayes_distribution_ext::assert_close;
 
     #[test]
     fn recovers_an_exact_line() {
         let x = [0.0, 1.0, 2.0, 3.0, 4.0];
         let y: Vec<f64> = x.iter().map(|v| 3.0 * v + 2.0).collect();
         let fit = LinearRegression::fit(&x, &y).unwrap();
-        close(fit.slope, 3.0, 1e-12);
-        close(fit.intercept, 2.0, 1e-12);
-        close(fit.r_squared, 1.0, 1e-12);
-        close(fit.rss, 0.0, 1e-12);
-        close(fit.predict(10.0), 32.0, 1e-12);
+        assert_close!(fit.slope, 3.0, 1e-12);
+        assert_close!(fit.intercept, 2.0, 1e-12);
+        assert_close!(fit.r_squared, 1.0, 1e-12);
+        assert_close!(fit.rss, 0.0, 1e-12);
+        assert_close!(fit.predict(10.0), 32.0, 1e-12);
     }
 
     #[test]
